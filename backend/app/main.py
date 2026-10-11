@@ -7,6 +7,7 @@ from app.config import settings
 from app.applaut.api.v1.router import router as applaut_v1_router
 from app.applaut.discovery.scheduler import start_scheduler, stop_scheduler
 from app.jobref.api.v1.router import router as jobref_v1_router
+from app.platform.api.v1.router import router as platform_v1_router
 
 
 @asynccontextmanager
@@ -17,7 +18,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Applaut API",
+    title="LVAMO API",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -30,5 +31,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# LVAMO-wide endpoints (no single vertical owns them), then one mount per vertical.
+app.include_router(platform_v1_router, prefix="/api/v1/platform")
 app.include_router(applaut_v1_router, prefix="/api/v1/applaut")
 app.include_router(jobref_v1_router, prefix="/api/v1/jobref")
