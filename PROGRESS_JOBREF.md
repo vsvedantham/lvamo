@@ -76,6 +76,12 @@ adjust going forward.
 
 ### 1. Hub visibility via `applaut.application_settings.verticals_enabled`
 
+> **Superseded 2026-10-11:** the setting moved to `platform.settings`
+> (migrations `0020`/`0021`) and the hub now reads it from
+> `https://api.lvamo.com/api/v1/platform/settings/verticals_enabled` — see
+> `PROGRESS.md` "Platform settings move". The history below is kept as-is,
+> but the re-enable SQL now targets `platform.settings`.
+
 Rather than hardcoding which vertical cards `frontend/src/pages/Hub.tsx`
 (shared, flagged before editing per this session's scoping rules) shows,
 it now fetches a `verticals_enabled` setting and only renders cards whose
@@ -106,8 +112,9 @@ to "Live" to match its actual shipped status.
 
 **To re-enable Applaut on the hub** (for the user personally, or when
 ready for others), no deploy needed — just update the row directly:
-`UPDATE applaut.application_settings SET value = 'applaut,jobref' WHERE
-setting_name = 'verticals_enabled';`
+`UPDATE platform.settings SET value = 'applaut,jobref' WHERE
+setting_name = 'verticals_enabled';` (was `applaut.application_settings`
+until 2026-10-11)
 
 **Verified**: locally via Playwright (hub shows only the Jobref card,
 direct `/applaut` nav still fully renders, zero console errors) and again

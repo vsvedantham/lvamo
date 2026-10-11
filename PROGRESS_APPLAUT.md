@@ -2,6 +2,9 @@
 
 > Vertical-specific progress for Applaut. Platform-level infra/architecture
 > lives in [`PROGRESS.md`](PROGRESS.md) — read that first if you haven't.
+> Applaut's product spec is [`docs/applaut/SPEC.md`](docs/applaut/SPEC.md)
+> (moved there from the repo-root `CLAUDE.md` on 2026-10-11, when `CLAUDE.md`
+> became the LVAMO master spec).
 
 ---
 
@@ -43,8 +46,9 @@ Quick start for next session:
 
 ### Auth
 - JWT-based login / register
-- Registration is currently **locked** (invite-only) via `application_settings` table
-- To open registration: set `allow_new_registrations = '1'` in `application_settings` via DBeaver
+- Registration is currently **locked** (invite-only) via the `applaut.application_settings` table
+- To open registration: set `allow_new_registrations = '1'` in `applaut.application_settings` via DBeaver
+- Applaut is currently **hidden from the LVAMO hub** (still fully usable at `/applaut`). Hub visibility is platform config, not Applaut's: it lives in `platform.settings.verticals_enabled` since 2026-10-11 (migrations `0020`/`0021` moved it out of `applaut.application_settings`). To list Applaut on the hub again: `UPDATE platform.settings SET value = 'applaut,jobref' WHERE setting_name = 'verticals_enabled';`
 - Token key in localStorage: `applaut_access_token` (namespaced per the platform's Multi-Vertical Architecture — see `PROGRESS.md`)
 
 ### User Profile

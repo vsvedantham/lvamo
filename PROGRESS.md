@@ -22,6 +22,52 @@
 
 ---
 
+## Session log — 2026-10-11 (latest)
+
+Picked up after ~7 weeks idle (last commit 2026-08-19). Work moved from the
+Windows laptop to a Mac this session. Done, all deployed and verified in
+production unless noted:
+
+1. **TLS cert auto-renewal fixed** — `api.applaut.lvamo.com` still renewed
+   via `standalone` (fails: nginx holds port 80) and no cert had an nginx
+   reload hook. Re-issued with webroot (now expires 2027-01-09) + hook
+   installed; dry-run renewal passes for every cert. See Deployment.
+2. **Jobref evidence-view feature confirmed live** (it was built and pushed
+   in Aug but never recorded as deployed).
+3. **Platform layer created** — `backend/app/platform/`, schema `platform`,
+   `/api/v1/platform`, hostname `api.lvamo.com`. `verticals_enabled` moved
+   there from `applaut.application_settings`; the hub reads it from
+   `api.lvamo.com`. Migrations `0020`, `0021`. See "Platform settings move".
+4. **`CLAUDE.md` is now the LVAMO master spec** (structure rule table for
+   every vertical + add-a-vertical checklist); Applaut's spec moved to
+   `docs/applaut/SPEC.md`. README, `deploy.sh` header, frontend package
+   name and FastAPI title no longer say Applaut.
+5. **ProSho planned** — third vertical; see `PROGRESS_PROSHO.md` and
+   `docs/prosho/BETA_PLAN.md`.
+6. **Claude's infra access from the Mac** — `ssh lvamo-prod` (alias in
+   `~/.ssh/config`), Cloudflare API token (`~/.cloudflare/token`: DNS for
+   `lvamo.com` + Pages), OCI API key (`~/.oci/`, new key; old Windows key
+   deleted). Claude Code allow rules for `ssh lvamo-prod` and
+   `git push origin main` live in `.claude/settings.local.json`
+   (gitignored, this Mac only).
+7. **Mac local dev**: Docker Desktop; local Postgres volume is fresh (all
+   migrations applied, no data). `.claude/launch.json` starts the frontend
+   dev server for Claude's browser preview.
+
+**Open / next (pick one next session):**
+- ProSho Phase 0 — see `PROGRESS_PROSHO.md` (needs nothing from the user).
+- ProSho §16 open questions — need the user's answers before Phase 1.
+- Repo rename `applaut` → `lvamo` (GitHub, local folder, VM dir) — pin the
+  Docker Compose project name / Postgres volume first or prod data appears
+  "lost" on a new empty volume.
+- `frontend/package-lock.json` (untracked; committing changes Pages to
+  `npm ci`) and `frontend/public/lvamo-logo-1024.png` (untracked, unused).
+- Bare `https://lvamo.com` isn't a CORS origin (only `www`).
+- Vertical primary tasks unchanged: Applaut — scale `company_boards.json`;
+  Jobref — notify seekers when a request is decided.
+
+---
+
 ## Verticals
 
 | Vertical | Status | Progress file |
@@ -59,8 +105,8 @@
 
 ## Multi-Vertical Architecture
 
-LVAMO is explicitly a multi-vertical platform now (Applaut live, Jobref
-next). The pattern, established Aug 2026, for any vertical `<x>`:
+LVAMO is explicitly a multi-vertical platform now (Applaut and Jobref
+live, ProSho planned). The pattern, established Aug 2026, for any vertical `<x>`:
 
 - **Frontend routes** live under `/<x>/*` (e.g. `/applaut/login`,
   `/applaut/dashboard`). The LVAMO hub at `/` lists all verticals and links
