@@ -1,3 +1,9 @@
+# Pinned so the Compose project (and so the container, network and
+# `<project>_postgres_data` volume names) doesn't depend on the folder name.
+# Without this, renaming or re-cloning into a differently-named folder starts
+# Postgres on a new, empty volume and the existing data looks "lost".
+name: lvamo
+
 services:
   postgres:
     image: postgres:16-alpine

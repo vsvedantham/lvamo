@@ -44,12 +44,14 @@ reading it, not guessed). When in doubt, keep it in the vertical and
 promote later if a second vertical needs it. A vertical never imports from
 another vertical.
 
-**Known exceptions, not to copy:** the repo is still named `applaut`
-(GitHub `lvamo-applaut`, VM dir `/home/ubuntu/lvamo-applaut/`) — a rename to
-`lvamo` is planned as its own task (it changes the Docker Compose project
-name, so the Postgres volume must be pinned first). Applaut's early
-migrations (`0001`–`0006`) predate the filename prefix rule and are not
-renamed.
+**Known exceptions, not to copy:** Applaut's early migrations
+(`0001`–`0006`) predate the filename prefix rule and are not renamed.
+
+**Repo / Compose naming:** GitHub repo `vsvedantham/lvamo`, VM dir
+`/home/ubuntu/lvamo/`, Docker Compose project pinned to `lvamo` via `name:` in
+both compose files (so the project, network and `lvamo_postgres_data` volume
+names never depend on the checkout's folder name). Never remove that `name:`
+line. If you do, prod Postgres comes up on a new, empty volume.
 
 ### Adding a new vertical — checklist
 1. `backend/app/<x>/` package; mount its router in `main.py` at `/api/v1/<x>`.

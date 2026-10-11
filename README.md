@@ -21,9 +21,9 @@ current status is in [`PROGRESS.md`](PROGRESS.md) and `PROGRESS_<VERTICAL>.md`.
 ## Quick start (Docker)
 
 ```bash
-# 1. Clone and enter the repo (folder is still named after the repo, lvamo-applaut)
-git clone <repo-url>
-cd lvamo-applaut
+# 1. Clone and enter the repo
+git clone <repo-url> lvamo
+cd lvamo
 
 # 2. Create your .env file
 cp .env.example .env
@@ -116,7 +116,7 @@ There is one migration chain for the whole platform; name new files
 ## Project structure
 
 ```
-lvamo-applaut/
+lvamo/
 ├── CLAUDE.md                 # LVAMO master spec — structure rules for every vertical
 ├── PROGRESS.md               # Platform status; PROGRESS_<VERTICAL>.md per vertical
 ├── docs/<vertical>/          # Per-vertical specs and plans
