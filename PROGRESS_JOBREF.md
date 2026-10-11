@@ -1571,16 +1571,19 @@ full log:
 - ~~Evidence files aren't viewable~~ — built and pushed (`5bb67a7`, Aug
   2026): `GET /referral-requests/{id}/evidence` returns a 5-min presigned
   R2 URL to either party on the request; "See referral evidence" link on
-  the seeker dashboard and employee detail page. Frontend auto-deployed
-  with the push; whether `deploy.sh` was run for the backend half was
-  never recorded — re-verify in production.
+  the seeker dashboard and employee detail page. **Live in production** —
+  confirmed Oct 2026: prod backend container was built 2 min after the
+  commit and contains `get_evidence_url`; unauthenticated hit on the
+  route returns 403 (route exists), not 404.
 - Cert auto-renewal (Oct 2026): `api.applaut.lvamo.com` still used the
   `standalone` authenticator (fails — nginx holds port 80), and **neither**
   cert had a deploy hook to reload nginx after renewal (so even Jobref's
   successful webroot renewal would keep serving the old cert until a
-  container restart). Fix prepared in `nginx/setup-cert-renewal.sh` +
-  `nginx/certbot-deploy-hook.sh` — run once on the VM with
-  `sudo bash nginx/setup-cert-renewal.sh`. See PROGRESS.md Deployment.
+  container restart). **Fixed and applied in production 2026-10-11** via
+  `nginx/setup-cert-renewal.sh` + `nginx/certbot-deploy-hook.sh`: Applaut
+  cert re-issued with webroot (now expires 2027-01-09, confirmed served
+  live via `openssl s_client`), reload hook installed, `certbot renew
+  --dry-run` succeeded for both certs. See PROGRESS.md Deployment.
 
 ---
 
