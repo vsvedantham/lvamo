@@ -51,18 +51,43 @@ production unless noted:
    `git push origin main` live in `.claude/settings.local.json`
    (gitignored, this Mac only).
 7. **Mac local dev**: Docker Desktop; local Postgres volume is fresh (all
-   migrations applied, no data). `.claude/launch.json` starts the frontend
+   migrations applied; only the Applaut `verify2@test.com` test account, see
+   `PROGRESS_APPLAUT.md`). `.claude/launch.json` starts the frontend
    dev server for Claude's browser preview.
+8. **Bare `lvamo.com` fixed**: it never served the site. Its two A records
+   pointed at a registrar parking page and Cloudflare returned 522. Replaced
+   them with a proxied apex CNAME → `lvamo.pages.dev`, added `lvamo.com` as a
+   Pages custom domain (active), and added `https://lvamo.com` to prod
+   `BACKEND_CORS_ORIGINS`. Verified: apex serves the hub (deep links too),
+   CORS header returned for the apex origin, hub's platform call works from
+   the apex in a real browser. Zoho MX/TXT records untouched.
+9. **Compose project + VM dir renamed to `lvamo`**: both compose files pin
+   `name: lvamo`. On the VM: `pg_dump` backup → old stack `down` → data
+   copied `lvamo-applaut_postgres_data` → `lvamo_postgres_data` → dir moved
+   `/home/ubuntu/lvamo-applaut` → `/home/ubuntu/lvamo` → `up -d`. ~17 s of
+   downtime. Verified: row counts identical before/after, alembic at `0021`
+   head, all API hostnames + both frontend hostnames 200, both bad-login
+   checks 401, LinkedIn authorize 307, cert reload hook finds the new nginx
+   container. Local Mac stack moved to the `lvamo` project the same way.
+10. **Housekeeping**: `frontend/package-lock.json` committed (a clean
+    `npm install` leaves it unchanged; build passes), the unused
+    `lvamo-logo-1024.png` gitignored as a local design source, stale notes in
+    the progress files fixed.
+
+**Rollback / cleanup leftovers on the VM:** the old volume
+`lvamo-applaut_postgres_data` (untouched pre-rename copy) and
+`/home/ubuntu/backups/` (`lvamo-pre-rename-20261011.dump` plus the
+pre-CORS-change `.env.production.bak-20261011`). Delete them once the
+new setup has run cleanly for a while. Not urgent.
 
 **Open / next (pick one next session):**
 - ProSho Phase 0 — see `PROGRESS_PROSHO.md` (needs nothing from the user).
 - ProSho §16 open questions — need the user's answers before Phase 1.
-- Repo rename `applaut` → `lvamo` (GitHub, local folder, VM dir) — pin the
-  Docker Compose project name / Postgres volume first or prod data appears
-  "lost" on a new empty volume.
-- `frontend/package-lock.json` (untracked; committing changes Pages to
-  `npm ci`) and `frontend/public/lvamo-logo-1024.png` (untracked, unused).
-- Bare `https://lvamo.com` isn't a CORS origin (only `www`).
+- Finish the repo rename: GitHub `vsvedantham/lvamo-applaut` → `lvamo`
+  (user, via the GitHub UI), then update the `origin` remote locally and on
+  the VM, and confirm Cloudflare Pages still auto-deploys on push. Local Mac
+  folder `~/Projects/lvamo/applaut` can be renamed between sessions (it
+  doesn't matter to Docker any more).
 - Vertical primary tasks unchanged: Applaut — scale `company_boards.json`;
   Jobref — notify seekers when a request is decided.
 
@@ -82,7 +107,7 @@ production unless noted:
 
 | Layer | Status | URL / Location |
 |---|---|---|
-| Frontend | Live | `www.lvamo.com` (Cloudflare Pages, auto-deploys on push to `main`) — root `/` is the **LVAMO hub** (`frontend/src/pages/Hub.tsx`), listing verticals: Applaut at `/applaut/*`, Jobref at `/jobref/*` (landing, LinkedIn-gated register, login, dashboard). |
+| Frontend | Live | `www.lvamo.com` and bare `lvamo.com` (both Cloudflare Pages custom domains, project `lvamo`; auto-deploys on push to `main`) — root `/` is the **LVAMO hub** (`frontend/src/pages/Hub.tsx`), listing verticals: Applaut at `/applaut/*`, Jobref at `/jobref/*` (landing, LinkedIn-gated register, login, dashboard). |
 | Backend API | Live | Oracle Cloud VM `lvamo-backend` (`130.61.106.172`, Ampere A1.Flex, 4 OCPU/24GB, Docker) runs one shared backend process, fronted by nginx on two hostnames: `api.applaut.lvamo.com` (Applaut, `/api/v1/applaut/*`) and `api.jobref.lvamo.com` (Jobref, `/api/v1/jobref/*`, live since Aug 2026). See "Oracle Backend Migration" below for how this VM came to be; see "Multi-Vertical Architecture" below for the per-vertical-hostname pattern. |
 | Database | Live | PostgreSQL 16 in Docker on `lvamo-backend`, DB/role named `lvamo` (renamed from `applaut` Aug 2026 — see below) — one Postgres database, one alembic migration chain (head: `0021`), shared by all verticals but namespaced at the schema level — plus a `platform` schema for LVAMO-wide tables (`platform.settings`, migration `0020`, Oct 2026): Applaut's 10 tables live in an `applaut` Postgres schema (migration `0012`, deployed to prod, see `PROGRESS_APPLAUT.md`). Jobref went further: its 3 tables were merged into a single `jobref.users` table (migration `0013`), plus `jobref.companies` (migration `0014`) and `jobref.referral_requests` (migrations `0015`–`0018`) — the full referral request/routing/limits/employee-decision feature set, deployed to prod, see `PROGRESS_JOBREF.md`. |
 | Storage | Live | Cloudflare R2, real credentials configured in production — confirmed working via a genuine Jobref referral-evidence upload (`head_object`-verified in the actual bucket, Aug 2026). Local dev has no R2 credentials (uploads there fall back to a `local/`-prefixed key, no real upload attempted — see Applaut's `resumes/` and Jobref's `jobref/referral-evidence/` for the two current uploaders). |
@@ -90,7 +115,7 @@ production unless noted:
 **VM access:** `ssh lvamo-prod` from the Mac (see "SSH from the Mac" below). The Aug 2026 Windows-laptop command was `ssh -i C:\Users\vvenk\Downloads\ssh-key-2026-07-10.key ubuntu@130.61.106.172`.
 **Windows-only artifacts:** the `.deploy-backup/` folder (pre-migration DB dump, old `.env.production` copy, launch-attempt log) referenced in "Oracle Backend Migration" below exists only on the Windows laptop (`C:\Projects\lvamo-applaut\`). It is not in git and not on the Mac.
 **Old VM (`applaut-backend`, `130.61.65.131`):** deleted as part of the Aug 2026 migration — do not use.
-**App dir on VM:** `/home/ubuntu/lvamo-applaut/`
+**App dir on VM:** `/home/ubuntu/lvamo/` (was `/home/ubuntu/lvamo-applaut/` until 2026-10-11). Compose project `lvamo`: containers `lvamo-{postgres,backend,nginx}-1`, volume `lvamo_postgres_data`, network `lvamo_default`.
 **Deploy backend:** `sudo docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build backend`
 **Or just run `bash deploy.sh`** on the VM — pulls, rebuilds, migrates, restarts, prunes.
 **OCI API access is set up** (Python SDK + API key at `~/.oci/config` on the dev machine — re-created on the Mac 2026-10-11 as a new key, fingerprint `0c:82:f6…`; the Aug 2026 Windows key `8e:d4:a5…` was never backed up, so it was deleted via the API the same day — this Mac's key is the only one. On the Mac, install the SDK into a throwaway venv with `uv pip install oci` — no system-wide install needed) — instance create/terminate/resize no longer needs manual Console clicks; see "Oracle Backend Migration" below for the one-time setup and gotchas.
@@ -236,10 +261,10 @@ config sitting inside one vertical. Now:
 seeing the *old* config — `nginx -s reload` alone does nothing. After
 pulling an nginx change: test with a throwaway container on the compose
 network, then `docker compose restart nginx` (~2 s blip):
-`sudo docker run --rm --network lvamo-applaut_default -v $PWD/nginx/nginx.conf:/etc/nginx/nginx.conf:ro -v /etc/letsencrypt:/etc/letsencrypt:ro nginx:alpine nginx -t`
+`sudo docker run --rm --network lvamo_default -v $PWD/nginx/nginx.conf:/etc/nginx/nginx.conf:ro -v /etc/letsencrypt:/etc/letsencrypt:ro nginx:alpine nginx -t`
 
-**Known, unchanged**: bare `https://lvamo.com` isn't in the backend's CORS
-origins (only `www.lvamo.com` is) — same as before this change.
+**Fixed 2026-10-11**: bare `https://lvamo.com` is now a Pages custom domain
+and a CORS origin (see session log).
 
 ---
 
