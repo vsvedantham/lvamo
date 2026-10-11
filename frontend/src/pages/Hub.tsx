@@ -4,18 +4,17 @@ import Logo from '../components/Logo'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 
 // Which vertical cards show here is driven by the `verticals_enabled` row in
-// `applaut.application_settings` (comma-separated, lowercase names) rather
-// than hardcoded — lets a vertical be hidden from casual browsing (e.g. kept
+// `platform.settings` (comma-separated, lowercase names) rather than
+// hardcoded — lets a vertical be hidden from casual browsing (e.g. kept
 // private while still used directly by URL) without a code deploy. This is
 // display-only: it never affects whether a vertical's own routes work, only
-// whether its card appears here. The endpoint lives under Applaut's API
-// namespace since that's where the settings table already lives (see
-// PROGRESS.md), even though the setting itself is platform-level.
-const APPLAUT_API_BASE = (import.meta.env.VITE_APPLAUT_API_BASE_URL ?? 'http://localhost:8000') + '/api/v1/applaut'
+// whether its card appears here. The hub belongs to LVAMO itself, not any
+// vertical, so it reads from the platform API (see CLAUDE.md).
+const PLATFORM_API_BASE = (import.meta.env.VITE_PLATFORM_API_BASE_URL ?? 'http://localhost:8000') + '/api/v1/platform'
 
 async function fetchEnabledVerticals(): Promise<string[]> {
   try {
-    const res = await fetch(`${APPLAUT_API_BASE}/settings/verticals_enabled`)
+    const res = await fetch(`${PLATFORM_API_BASE}/settings/verticals_enabled`)
     if (!res.ok) throw new Error(`settings fetch failed: ${res.status}`)
     const data: { value: string } = await res.json()
     return data.value.split(',').map(v => v.trim().toLowerCase()).filter(Boolean)
