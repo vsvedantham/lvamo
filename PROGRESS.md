@@ -38,7 +38,7 @@
 |---|---|---|
 | Frontend | Live | `www.lvamo.com` (Cloudflare Pages, auto-deploys on push to `main`) — root `/` is the **LVAMO hub** (`frontend/src/pages/Hub.tsx`), listing verticals: Applaut at `/applaut/*`, Jobref at `/jobref/*` (landing, LinkedIn-gated register, login, dashboard). |
 | Backend API | Live | Oracle Cloud VM `lvamo-backend` (`130.61.106.172`, Ampere A1.Flex, 4 OCPU/24GB, Docker) runs one shared backend process, fronted by nginx on two hostnames: `api.applaut.lvamo.com` (Applaut, `/api/v1/applaut/*`) and `api.jobref.lvamo.com` (Jobref, `/api/v1/jobref/*`, live since Aug 2026). See "Oracle Backend Migration" below for how this VM came to be; see "Multi-Vertical Architecture" below for the per-vertical-hostname pattern. |
-| Database | Live | PostgreSQL 16 in Docker on `lvamo-backend`, DB/role named `lvamo` (renamed from `applaut` Aug 2026 — see below) — one Postgres database, one alembic migration chain (head: `0020`), shared by all verticals but namespaced at the schema level — plus a `platform` schema for LVAMO-wide tables (`platform.settings`, migration `0020`, Oct 2026): Applaut's 10 tables live in an `applaut` Postgres schema (migration `0012`, deployed to prod, see `PROGRESS_APPLAUT.md`). Jobref went further: its 3 tables were merged into a single `jobref.users` table (migration `0013`), plus `jobref.companies` (migration `0014`) and `jobref.referral_requests` (migrations `0015`–`0018`) — the full referral request/routing/limits/employee-decision feature set, deployed to prod, see `PROGRESS_JOBREF.md`. |
+| Database | Live | PostgreSQL 16 in Docker on `lvamo-backend`, DB/role named `lvamo` (renamed from `applaut` Aug 2026 — see below) — one Postgres database, one alembic migration chain (head: `0021`), shared by all verticals but namespaced at the schema level — plus a `platform` schema for LVAMO-wide tables (`platform.settings`, migration `0020`, Oct 2026): Applaut's 10 tables live in an `applaut` Postgres schema (migration `0012`, deployed to prod, see `PROGRESS_APPLAUT.md`). Jobref went further: its 3 tables were merged into a single `jobref.users` table (migration `0013`), plus `jobref.companies` (migration `0014`) and `jobref.referral_requests` (migrations `0015`–`0018`) — the full referral request/routing/limits/employee-decision feature set, deployed to prod, see `PROGRESS_JOBREF.md`. |
 | Storage | Live | Cloudflare R2, real credentials configured in production — confirmed working via a genuine Jobref referral-evidence upload (`head_object`-verified in the actual bucket, Aug 2026). Local dev has no R2 credentials (uploads there fall back to a `local/`-prefixed key, no real upload attempted — see Applaut's `resumes/` and Jobref's `jobref/referral-evidence/` for the two current uploaders). |
 
 **VM access:** `ssh -i C:\Users\vvenk\Downloads\ssh-key-2026-07-10.key ubuntu@130.61.106.172`
@@ -47,7 +47,8 @@
 **Deploy backend:** `sudo docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build backend`
 **Or just run `bash deploy.sh`** on the VM — pulls, rebuilds, migrates, restarts, prunes.
 **OCI API access is set up** (Python SDK + API key at `~/.oci/config` on the dev machine) — instance create/terminate/resize no longer needs manual Console clicks; see "Oracle Backend Migration" below for the one-time setup and gotchas.
-**Cloudflare API access is set up** too (scoped token, `lvamo.com` zone, DNS edit only, saved at `~/.cloudflare/token` on the dev machine) — DNS record changes for this domain no longer need the dashboard either.
+**Cloudflare API access is set up** (scoped token saved at `~/.cloudflare/token` on the dev machine — re-created on the Mac Oct 2026 with **Zone → DNS → Edit** on `lvamo.com` + **Account → Cloudflare Pages → Edit**). Zone id `fb08020e0634c5add91336af3cb709f6`, account id `7f42edf57b4b76098b5b6efdf1c89bab`, Pages project `lvamo`. DNS records and Pages build env vars no longer need the dashboard. (`GET /accounts` returns empty for this token — read the account id from the zone instead.)
+**SSH from the Mac**: `ssh lvamo-prod` (alias in `~/.ssh/config`, key `~/.ssh/lvamo-oci.key`).
 **TLS cert renewal (fixed 2026-10-11)**: both certs (`api.applaut.lvamo.com`, re-issued, exp 2027-01-09; `api.jobref.lvamo.com`, exp 2026-11-16, auto-renews ~2026-10-17) renew via `certbot.timer` using the **webroot** authenticator (`/var/www/certbot`, served by nginx's port-80 `/.well-known/acme-challenge/` location). A deploy hook at `/etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh` (source: `nginx/certbot-deploy-hook.sh`) reloads the nginx container after any renewal. Set up by `sudo bash nginx/setup-cert-renewal.sh` (idempotent; already run in prod, dry-run renewal passed for both). Note: run non-interactively, certbot adds a random delay of up to ~8 min before renewing — not a hang. Never use `--standalone` for a new cert here — nginx permanently holds port 80.
 **⚠️ `nginx` gotcha**: if the VM is ever rebooted, `nginx`'s `restart: always` policy will bring it back even if it was manually `docker stop`ped before — a host reboot resets Docker's memory of that. Not a problem currently (cert exists, nginx starts fine), just worth knowing if this ever needs debugging again.
 **DB role/database renamed `applaut` → `lvamo` (Aug 2026)**: both the Postgres role and the database itself were named `applaut` purely as a holdover from before Jobref existed, even though the same role/database now serves both verticals (via the `applaut`/`jobref` schemas). Renamed live via `ALTER DATABASE`/`ALTER ROLE RENAME` (a temporary superuser was needed to rename the role, since Postgres won't let a role rename its own session) in both local dev and production — no data migration, password unchanged, `docker-compose.yml`/`.env.example`/`backend/.env.example` updated to match. `.env`/`.env.production` (both gitignored) were updated directly, not committed. If connecting a DB client (e.g. DBeaver) via an SSH tunnel to prod: database name and username are now both `lvamo`, not `applaut`.
@@ -158,7 +159,7 @@ This was a pure reorganization (verified: byte-identical frontend bundle
 hashes before/after, zero backend behavior change) — see `PROGRESS_APPLAUT.md`
 for the file-by-file move log if ever needed for reference.
 
-### Platform settings move (Oct 2026 — backend live, hub cutover pending)
+### Platform settings move (Oct 2026 — complete, live in production)
 
 `verticals_enabled` (which vertical cards the hub lists) lived in
 `applaut.application_settings` and was read from Applaut's API — platform
@@ -169,19 +170,29 @@ config sitting inside one vertical. Now:
   over. Only `is_public` rows are served unauthenticated; private ones 404
   like missing ones. `allow_new_registrations` stays in Applaut — it only
   gates Applaut sign-ups.
-- ✅ `GET /api/v1/platform/settings/{name}` — deployed and verified in prod
-  on both existing hostnames (200 with the live value `jobref`; old
-  Applaut endpoint unchanged).
-- ✅ Hub change written and verified locally (reads `VITE_PLATFORM_API_BASE_URL`
-  + `/api/v1/platform`; toggling the setting toggles cards) — **not pushed
-  yet**: it needs `api.lvamo.com` to exist first.
-- ⏳ **User steps**: Cloudflare DNS A record `api` → `130.61.106.172`
-  (DNS only, grey cloud); Cloudflare Pages build var
-  `VITE_PLATFORM_API_BASE_URL=https://api.lvamo.com`.
-- ⏳ Then: webroot cert for `api.lvamo.com`, nginx `server` block, push the
-  hub change, verify live, then a migration deleting the old
-  `applaut.application_settings` `verticals_enabled` row (kept until then so
-  the live hub never breaks mid-cutover).
+- ✅ `GET /api/v1/platform/settings/{name}` on the new platform hostname
+  **`api.lvamo.com`**: Cloudflare DNS A record (DNS only) → VM, webroot
+  cert (expires 2027-01-09, auto-renews via the timer + reload hook), nginx
+  `server` block.
+- ✅ Hub reads `VITE_PLATFORM_API_BASE_URL` (set in Cloudflare Pages
+  production env vars via the API) + `/api/v1/platform`. Verified live on
+  `www.lvamo.com`: the request goes to
+  `api.lvamo.com/api/v1/platform/settings/verticals_enabled`, Jobref card
+  shown, no console errors.
+- ✅ Migration `0021` deletes the old applaut copy of the row.
+
+**To change which verticals the hub lists** (no deploy needed):
+`UPDATE platform.settings SET value = 'applaut,jobref' WHERE setting_name = 'verticals_enabled';`
+
+**⚠️ nginx gotcha (new)**: `nginx.conf` is a single-file bind mount, and
+`git pull` replaces the file (new inode), so the running container keeps
+seeing the *old* config — `nginx -s reload` alone does nothing. After
+pulling an nginx change: test with a throwaway container on the compose
+network, then `docker compose restart nginx` (~2 s blip):
+`sudo docker run --rm --network lvamo-applaut_default -v $PWD/nginx/nginx.conf:/etc/nginx/nginx.conf:ro -v /etc/letsencrypt:/etc/letsencrypt:ro nginx:alpine nginx -t`
+
+**Known, unchanged**: bare `https://lvamo.com` isn't in the backend's CORS
+origins (only `www.lvamo.com` is) — same as before this change.
 
 ---
 
