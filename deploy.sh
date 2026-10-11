@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Applaut — production deploy script
+# LVAMO — production deploy script (shared backend for every vertical)
 # Run on Oracle Cloud VM: bash deploy.sh
 set -euo pipefail
 

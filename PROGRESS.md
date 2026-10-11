@@ -36,7 +36,7 @@
 |---|---|---|
 | Frontend | Live | `www.lvamo.com` (Cloudflare Pages, auto-deploys on push to `main`) — root `/` is the **LVAMO hub** (`frontend/src/pages/Hub.tsx`), listing verticals: Applaut at `/applaut/*`, Jobref at `/jobref/*` (landing, LinkedIn-gated register, login, dashboard). |
 | Backend API | Live | Oracle Cloud VM `lvamo-backend` (`130.61.106.172`, Ampere A1.Flex, 4 OCPU/24GB, Docker) runs one shared backend process, fronted by nginx on two hostnames: `api.applaut.lvamo.com` (Applaut, `/api/v1/applaut/*`) and `api.jobref.lvamo.com` (Jobref, `/api/v1/jobref/*`, live since Aug 2026). See "Oracle Backend Migration" below for how this VM came to be; see "Multi-Vertical Architecture" below for the per-vertical-hostname pattern. |
-| Database | Live | PostgreSQL 16 in Docker on `lvamo-backend`, DB/role named `lvamo` (renamed from `applaut` Aug 2026 — see below) — one Postgres database, one alembic migration chain (head: `0019`), shared by both verticals but namespaced at the schema level: Applaut's 10 tables live in an `applaut` Postgres schema (migration `0012`, deployed to prod, see `PROGRESS_APPLAUT.md`). Jobref went further: its 3 tables were merged into a single `jobref.users` table (migration `0013`), plus `jobref.companies` (migration `0014`) and `jobref.referral_requests` (migrations `0015`–`0018`) — the full referral request/routing/limits/employee-decision feature set, deployed to prod, see `PROGRESS_JOBREF.md`. |
+| Database | Live | PostgreSQL 16 in Docker on `lvamo-backend`, DB/role named `lvamo` (renamed from `applaut` Aug 2026 — see below) — one Postgres database, one alembic migration chain (head: `0020`), shared by all verticals but namespaced at the schema level — plus a `platform` schema for LVAMO-wide tables (`platform.settings`, migration `0020`, Oct 2026): Applaut's 10 tables live in an `applaut` Postgres schema (migration `0012`, deployed to prod, see `PROGRESS_APPLAUT.md`). Jobref went further: its 3 tables were merged into a single `jobref.users` table (migration `0013`), plus `jobref.companies` (migration `0014`) and `jobref.referral_requests` (migrations `0015`–`0018`) — the full referral request/routing/limits/employee-decision feature set, deployed to prod, see `PROGRESS_JOBREF.md`. |
 | Storage | Live | Cloudflare R2, real credentials configured in production — confirmed working via a genuine Jobref referral-evidence upload (`head_object`-verified in the actual bucket, Aug 2026). Local dev has no R2 credentials (uploads there fall back to a `local/`-prefixed key, no real upload attempted — see Applaut's `resumes/` and Jobref's `jobref/referral-evidence/` for the two current uploaders). |
 
 **VM access:** `ssh -i C:\Users\vvenk\Downloads\ssh-key-2026-07-10.key ubuntu@130.61.106.172`
@@ -76,14 +76,23 @@ next). The pattern, established Aug 2026, for any vertical `<x>`:
   cycles. Jobref's auth now lives on this shared backend/DB too (its own
   tables, own JWTs scoped with a `"vertical": "jobref"` claim so a token
   can't be replayed across verticals — see `PROGRESS_JOBREF.md`).
+- **The full rule set now lives in `CLAUDE.md`** (Oct 2026) — it was the
+  Applaut product spec until then (moved to `docs/applaut/SPEC.md`), and is
+  now the LVAMO master spec: a table of every place verticals are told
+  apart (code folder, API path, hostname, DB schema, migration filename,
+  frontend route/env var, auth, R2 prefix, docs, Claude skill), the
+  platform-level equivalent of each, and an add-a-vertical checklist.
+- **Platform layer** (Oct 2026): LVAMO-wide things that belong to no
+  vertical get `backend/app/platform/`, schema `platform`, API
+  `/api/v1/platform/*`, and hostname `api.lvamo.com`. First resident:
+  `platform.settings` (`verticals_enabled`, previously in
+  `applaut.application_settings`). See "Platform settings move" below.
 - **Database namespacing follows the same per-vertical pattern, one layer
   down** (Aug 2026): within the single shared Postgres database, each
   vertical gets its own Postgres schema (`applaut`, `jobref`) rather than
   all tables sitting unqualified in `public`. Applaut's 10 tables + 4 enum
-  types were moved into the `applaut` schema via migration `0012` (verified
-  locally, not yet deployed — see `PROGRESS_APPLAUT.md`); Jobref's 3 tables
-  still sit in `public` pending the equivalent move (see
-  `PROGRESS_JOBREF.md`). `alembic_version` stays unschemaed in `public` —
+  types were moved into the `applaut` schema via migration `0012`; Jobref's
+  tables live in `jobref` (migrations `0013`+). Both deployed. `alembic_version` stays unschemaed in `public` —
   shared migration bookkeeping, not vertical data. Each SQLAlchemy model
   declares its own `schema=` explicitly (table args, FK targets, enum
   types) rather than relying on the DB connection's `search_path`, so
@@ -146,6 +155,31 @@ if a second vertical actually needs it.
 This was a pure reorganization (verified: byte-identical frontend bundle
 hashes before/after, zero backend behavior change) — see `PROGRESS_APPLAUT.md`
 for the file-by-file move log if ever needed for reference.
+
+### Platform settings move (Oct 2026 — backend live, hub cutover pending)
+
+`verticals_enabled` (which vertical cards the hub lists) lived in
+`applaut.application_settings` and was read from Applaut's API — platform
+config sitting inside one vertical. Now:
+
+- ✅ Migration `0020`: schema `platform`, table `platform.settings`
+  (`setting_name`, `value`, `description`, `is_public`), live value copied
+  over. Only `is_public` rows are served unauthenticated; private ones 404
+  like missing ones. `allow_new_registrations` stays in Applaut — it only
+  gates Applaut sign-ups.
+- ✅ `GET /api/v1/platform/settings/{name}` — deployed and verified in prod
+  on both existing hostnames (200 with the live value `jobref`; old
+  Applaut endpoint unchanged).
+- ✅ Hub change written and verified locally (reads `VITE_PLATFORM_API_BASE_URL`
+  + `/api/v1/platform`; toggling the setting toggles cards) — **not pushed
+  yet**: it needs `api.lvamo.com` to exist first.
+- ⏳ **User steps**: Cloudflare DNS A record `api` → `130.61.106.172`
+  (DNS only, grey cloud); Cloudflare Pages build var
+  `VITE_PLATFORM_API_BASE_URL=https://api.lvamo.com`.
+- ⏳ Then: webroot cert for `api.lvamo.com`, nginx `server` block, push the
+  hub change, verify live, then a migration deleting the old
+  `applaut.application_settings` `verticals_enabled` row (kept until then so
+  the live hub never breaks mid-cutover).
 
 ---
 

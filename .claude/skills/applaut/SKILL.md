@@ -35,7 +35,7 @@ This matches the project's own documented session-start convention — see
   `audit_logs`, `application_settings`)
 - Applaut-specific scripts under `backend/scripts/` (e.g.
   `discover_company_slugs.py`, its seed files)
-- `PROGRESS_APPLAUT.md`
+- `PROGRESS_APPLAUT.md`, `docs/applaut/**`
 
 ## Out of scope — flag before touching
 
@@ -43,13 +43,16 @@ Stop, explain exactly what needs to change and why, and wait for explicit
 go-ahead before editing any of these:
 
 - `backend/app/jobref/**`, `frontend/src/jobref/**` — Jobref's own code
-- Shared platform files: `backend/app/main.py`, `backend/app/config.py`,
+- Shared platform files: `CLAUDE.md` (LVAMO master spec), `backend/app/platform/**`,
+  `backend/app/main.py`, `backend/app/config.py`,
   `backend/app/core/security.py`, `backend/app/core/storage.py`,
   `backend/app/db/*`, `frontend/src/App.tsx`,
   `frontend/src/components/*`, `frontend/src/pages/Hub.tsx`,
   `frontend/src/hooks/*`, `nginx/nginx.conf`, `docker-compose*.yml`, root
   `.env*`
-- `PROGRESS.md` (platform-level doc) and `PROGRESS_JOBREF.md`
+- `PROGRESS.md` (platform-level doc), any other vertical's `PROGRESS_*.md`,
+  `docs/<other vertical>/**`, `backend/app/<other vertical>/**`,
+  `frontend/src/<other vertical>/**` (e.g. ProSho's)
 
 The one exception: read-only access to any of the above (to understand
 context, verify something, check for conflicts) never needs flagging —

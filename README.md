@@ -1,6 +1,17 @@
-# Applaut — by LVAMO
+# LVAMO
 
-AI-powered job application automation platform.
+A platform of career tools ("verticals") sharing one backend, one database
+and one frontend app:
+
+| Vertical | Frontend | API | Status |
+|---|---|---|---|
+| **Applaut** — AI job discovery and tailored applications | `/applaut` | `/api/v1/applaut` | Live (hidden from hub) |
+| **Jobref** — employee referrals for job seekers | `/jobref` | `/api/v1/jobref` | Live |
+| **ProSho** — evidence-backed capstone project pages | `/prosho` | `/api/v1/prosho` | Planned — see `docs/prosho/BETA_PLAN.md` |
+
+Platform-wide endpoints (e.g. hub settings) live under `/api/v1/platform`.
+The structure rules every vertical follows are in [`CLAUDE.md`](CLAUDE.md);
+current status is in [`PROGRESS.md`](PROGRESS.md) and `PROGRESS_<VERTICAL>.md`.
 
 ## Prerequisites
 
@@ -10,7 +21,7 @@ AI-powered job application automation platform.
 ## Quick start (Docker)
 
 ```bash
-# 1. Clone and enter the repo
+# 1. Clone and enter the repo (folder is still named after the repo, lvamo-applaut)
 git clone <repo-url>
 cd lvamo-applaut
 
@@ -27,12 +38,12 @@ docker compose exec backend alembic upgrade head
 
 Services will be available at:
 
-| Service  | URL                        |
-|----------|----------------------------|
-| Frontend | http://localhost:5173      |
-| Backend  | http://localhost:8000      |
+| Service  | URL |
+|----------|-----|
+| Frontend (LVAMO hub) | http://localhost:5173 |
+| Backend  | http://localhost:8000 |
 | API docs | http://localhost:8000/docs |
-| Health   | http://localhost:8000/api/v1/health |
+| Health   | http://localhost:8000/api/v1/applaut/health, http://localhost:8000/api/v1/jobref/health |
 
 ---
 
@@ -43,9 +54,12 @@ Services will be available at:
 Create a database and user matching your `.env`:
 
 ```sql
-CREATE USER applaut WITH PASSWORD 'applaut_dev';
-CREATE DATABASE applaut OWNER applaut;
+CREATE USER lvamo WITH PASSWORD 'applaut_dev';
+CREATE DATABASE lvamo OWNER lvamo;
 ```
+
+Migrations create one Postgres schema per vertical (`applaut`, `jobref`, …)
+plus `platform` for LVAMO-wide tables.
 
 ### Backend
 
@@ -71,7 +85,8 @@ cd frontend
 npm install
 
 # Create a local .env (Vite reads .env in the frontend/ directory)
-echo "VITE_APPLAUT_API_BASE_URL=http://localhost:8000
+echo "VITE_PLATFORM_API_BASE_URL=http://localhost:8000
+VITE_APPLAUT_API_BASE_URL=http://localhost:8000
 VITE_JOBREF_API_BASE_URL=http://localhost:8000" > .env.local
 
 npm run dev
@@ -93,6 +108,8 @@ alembic revision --autogenerate -m "describe your change"
 ```
 
 Run these from the `backend/` directory (or via `docker compose exec backend`).
+There is one migration chain for the whole platform; name new files
+`NNNN_<vertical>_<what>.py` or `NNNN_platform_<what>.py`.
 
 ---
 
@@ -100,23 +117,28 @@ Run these from the `backend/` directory (or via `docker compose exec backend`).
 
 ```
 lvamo-applaut/
+├── CLAUDE.md                 # LVAMO master spec — structure rules for every vertical
+├── PROGRESS.md               # Platform status; PROGRESS_<VERTICAL>.md per vertical
+├── docs/<vertical>/          # Per-vertical specs and plans
 ├── backend/
 │   ├── app/
-│   │   ├── main.py          # FastAPI app factory
-│   │   ├── config.py        # Settings (loaded from .env)
-│   │   ├── api/v1/          # Versioned routers
-│   │   ├── models/          # SQLAlchemy ORM models
-│   │   ├── schemas/         # Pydantic request/response schemas
-│   │   ├── services/        # Business logic
-│   │   └── db/              # Async DB session
-│   ├── migrations/          # Alembic migrations
+│   │   ├── main.py           # FastAPI app; mounts /api/v1/platform and each vertical
+│   │   ├── config.py         # Settings (loaded from .env)
+│   │   ├── db/, core/        # Shared infra: DB session, security, R2 storage
+│   │   ├── platform/         # LVAMO-wide models + API (schema `platform`)
+│   │   ├── applaut/          # Applaut vertical (schema `applaut`)
+│   │   └── jobref/           # Jobref vertical (schema `jobref`)
+│   ├── migrations/           # One shared Alembic chain
 │   └── requirements.txt
 ├── frontend/
 │   └── src/
-│       ├── App.tsx           # React Router root
-│       ├── pages/            # Page components
-│       ├── components/       # Shared UI components
-│       └── api/client.ts     # Axios instance
+│       ├── App.tsx           # React Router root — /, /applaut/*, /jobref/*
+│       ├── pages/Hub.tsx     # LVAMO hub
+│       ├── components/, hooks/   # Shared UI
+│       ├── applaut/          # Applaut vertical UI
+│       └── jobref/           # Jobref vertical UI
+├── nginx/                    # Reverse proxy + TLS cert renewal scripts
+├── deploy.sh                 # Production deploy (run on the VM)
 ├── docker-compose.yml
 └── .env.example
 ```
@@ -132,4 +154,5 @@ See `.env.example` for the full list. Required variables to get started:
 | `DATABASE_URL` | asyncpg connection string              |
 | `SECRET_KEY`   | JWT signing secret (min 32 chars)      |
 
-All other variables (R2, OpenAI, Google OAuth) can be left empty during initial development.
+All other variables (R2, OpenAI, Google OAuth, LinkedIn OAuth) can be left
+empty during initial development.
