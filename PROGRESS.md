@@ -4,14 +4,15 @@
 > This is the **platform-level** file — shared infra, cross-vertical
 > architecture, and ground rules. Vertical-specific work (features, DB
 > schema, roadmap) lives in its own file: `PROGRESS_APPLAUT.md`,
-> `PROGRESS_JOBREF.md`.
+> `PROGRESS_JOBREF.md`, `PROGRESS_PROSHO.md`. Platform-wide structure rules
+> live in `CLAUDE.md`.
 >
 > At the start of a session: read **this file first**, then whichever
 > vertical file(s) are relevant to the work at hand.
 > At the end of a session: "save progress" — update this file if anything
 > platform-level changed, and/or the relevant vertical file(s), then commit.
 >
-> **Scoping a session to one vertical**: invoke `/applaut` or `/jobref` at
+> **Scoping a session to one vertical**: invoke `/applaut`, `/jobref` or `/prosho` at
 > the start of a session (`.claude/skills/applaut/`,
 > `.claude/skills/jobref/`) to restrict that session to one vertical's own
 > files only — touching the other vertical's code or shared platform files
@@ -26,6 +27,7 @@
 | Vertical | Status | Progress file |
 |---|---|---|
 | **Applaut** | Live, in active development | [`PROGRESS_APPLAUT.md`](PROGRESS_APPLAUT.md) — primary task: keep scaling `company_boards.json` |
+| **ProSho** | Planning (Oct 2026) — Project Showcase: evidence-backed capstone project pages; beta targeted mid-Jan 2027 | [`PROGRESS_PROSHO.md`](PROGRESS_PROSHO.md) — primary task: Phase 0 foundation; full plan in [`docs/prosho/BETA_PLAN.md`](docs/prosho/BETA_PLAN.md) |
 | **Jobref** | Live — auth, companies, and the full referral request lifecycle (routing, employee inbox, seeker limits, accept/reject with evidence) deployed Aug 2026 | [`PROGRESS_JOBREF.md`](PROGRESS_JOBREF.md) — primary task: notifying a seeker when their request is decided |
 
 ---
