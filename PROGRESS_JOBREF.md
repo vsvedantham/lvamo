@@ -201,7 +201,10 @@ zero checkboxes left in the form, both toggle buttons functional, Applaut
 regression clean each round. See "Referral capacity" and "New employee
 field + disclaimer reword" sections below for full detail.
 
-**Still outstanding, unchanged**: nobody has completed a real *job-seeker*
+**Closed later (Aug 2026)**: a real job-seeker registration has since been
+completed through the actual LinkedIn consent screen (see `PROGRESS.md`,
+"Jobref: full referral request feature"). The original note follows.
+Nobody had completed a real *job-seeker*
 registration through the actual LinkedIn consent screen and final form
 submission — only the OAuth handshake itself (real) and a mocked-token
 submission have exercised that path. The employee path is fully verified
@@ -492,12 +495,9 @@ Confirmed the CV/cover-letter links are gone from the dashboard tile
 itself. `tsc --noEmit` clean. Applaut/Jobref regression clean. Cascade
 delete confirmed clean.
 
-**Not yet done**: not deployed — committed locally pending go-ahead (see
-banner at the top of this file). Evidence files can't actually be
-downloaded/viewed anywhere yet (only the filename is shown as
-confirmation) — deliberately out of scope until R2 is actually
-configured, since a download flow would be untestable either way right
-now.
+**Deployed** (Aug 2026, see "Status" at the top of this file).
+Originally committed locally pending go-ahead. Evidence viewing was built
+later (`5bb67a7`, presigned R2 URL — see "Next steps" at the bottom).
 
 ## Seeker request limits (Aug 2026, verified locally)
 

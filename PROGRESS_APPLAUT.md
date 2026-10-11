@@ -26,7 +26,7 @@ pre-qualifies a candidate as both "has a board on a supported adapter" and
 Phase 1" below for the full write-up and the exact query pattern.
 
 Quick start for next session:
-1. `cd C:\Projects\lvamo-applaut && docker compose up -d postgres backend` (rebuild if images were pruned)
+1. `cd ~/Projects/lvamo/applaut && docker compose up -d postgres backend` (rebuild if images were pruned). The Mac's local DB is fresh (no data, no test account), so register a test user first. See "How to verify" below.
 2. Search `site:<ats-domain> "<target role>" <German city>` across all 7
    adapter domains × the target role list × major German cities (see
    "Discovery Scaling — Phase 1" for the full method and domain list). Skip
@@ -137,7 +137,9 @@ at the top of this file references running that script.
 
 ## Database
 
-**7 migrations applied** (`backend/migrations/versions/`):
+Applaut's own migrations (`backend/migrations/versions/`). The chain is shared
+with Jobref and the platform layer (head `0021` as of 2026-10-11, see
+`PROGRESS.md`). Only the Applaut-relevant ones are listed here:
 - `0001` — initial schema (users, profiles, resumes, opportunities, scores, applications, generated_documents, notifications, audit_logs)
 - `0002` — scoring columns
 - `0003` — document columns
@@ -149,6 +151,8 @@ at the top of this file references running that script.
   below). Jobref's own migrations (`0007`–`0011`) are interleaved in the
   same linear alembic chain since both verticals still share one DB/one
   migration history — see `PROGRESS_JOBREF.md`.
+- `0019` — added `verticals_enabled` to `application_settings`; `0021`
+  removed it again after it moved to `platform.settings` (`0020`).
 
 **Key DB notes:**
 - Scoring thresholds currently set to **GOOD=50, NEAR_MISS=35** in the DB for testing
@@ -217,9 +221,8 @@ restart:
   (not a crash) — Jobref unaffected, still reading/writing `public.jobref_*`
   tables as before.
 
-**Not yet done**: not pushed/deployed to production — committed to local
-`main` only, pending the user's go-ahead to deploy. Moving Jobref's own
-tables into the `jobref` schema is the deliberately-deferred next step (see
+**Deployed to production** (Aug 2026, see `PROGRESS.md` Deployment). Jobref's
+tables were later moved into the `jobref` schema too (migration `0013`, see
 `PROGRESS_JOBREF.md`).
 
 ---
@@ -438,12 +441,16 @@ public ATS board yet. Expect to need several hundred *candidate* names to
 net a few hundred *working* companies — budget for that ratio.
 
 ### How to verify (clean single-country test recipe)
-Test/user account from this session still exists in the local dev DB:
-`verify2@test.com` / `TestPass123!`, profile already has target_roles set to
-the "Data Engineer + 6 tech-stack roles" scenario. To re-run cleanly:
+The test account `verify2@test.com` / `TestPass123!` exists in the **Mac's**
+local dev DB (re-created 2026-10-11; the DB/role is `lvamo`, and Applaut's
+tables are in the `applaut` schema). Its profile is the "Data Engineer + 6
+tech-stack roles, Germany (`DE`) only" scenario. If the local volume is ever
+wiped, re-create the account: set `allow_new_registrations` to `'1'`, then
+`POST /auth/register`, then set it back to `'0'`, then `POST /profiles` with
+those roles and `target_countries: ["DE"]`. To re-run cleanly:
 ```bash
 # wipe accumulated opportunities so results reflect only the current company pool
-docker compose exec -T postgres psql -U applaut -d applaut -c "TRUNCATE opportunities, scores CASCADE;"
+docker compose exec -T postgres psql -U lvamo -d lvamo -c "TRUNCATE applaut.opportunities, applaut.scores CASCADE;"
 # log in, get a fresh token (prior token may have expired)
 curl -s -X POST http://localhost:8000/api/v1/applaut/auth/login -H "Content-Type: application/json" \
   -d '{"email":"verify2@test.com","password":"TestPass123!"}'
@@ -452,6 +459,11 @@ curl -s -X POST http://localhost:8000/api/v1/applaut/discovery/run -H "Authoriza
 # breakdown by match category
 curl -s "http://localhost:8000/api/v1/applaut/opportunities?match=good&page_size=1" -H "Authorization: Bearer <token>"
 ```
+**Baseline as of 2026-10-11 (Mac, 500 companies):** 43 raw, 4 good (@85), 30
+near-miss. That's down from 48 raw at the end of the Aug session with the
+same company list, most likely because postings turned over. Compare new
+batches against this number, not 48.
+
 (All API paths live under `/api/v1/applaut/*`.) If testing country/role
 breadth, `PATCH /api/v1/applaut/profiles/me` with new
 `target_roles` / `target_countries` first — but re-truncate between tests, or

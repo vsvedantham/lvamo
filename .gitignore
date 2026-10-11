@@ -36,3 +36,6 @@ Thumbs.db
 # .claude/skills/ IS committed — that's shared project tooling.
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# Local design source (1024px app-icon render of the LVAMO mark) — not shipped
+frontend/public/lvamo-logo-1024.png
