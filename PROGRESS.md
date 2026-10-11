@@ -69,6 +69,12 @@ production unless noted:
    head, all API hostnames + both frontend hostnames 200, both bad-login
    checks 401, LinkedIn authorize 307, cert reload hook finds the new nginx
    container. Local Mac stack moved to the `lvamo` project the same way.
+   GitHub repo renamed `vsvedantham/lvamo-applaut` → `vsvedantham/lvamo`
+   (by the user); `origin` updated on the Mac (SSH) and on the VM (**HTTPS**:
+   the VM has no GitHub SSH key and pulls the public repo anonymously).
+   Cloudflare Pages tracks the repo by id (`1274747641`) and kept deploying
+   after the rename. Its API still reports the old `repo_name`, which is
+   harmless.
 10. **Housekeeping**: `frontend/package-lock.json` committed (a clean
     `npm install` leaves it unchanged; build passes), the unused
     `lvamo-logo-1024.png` gitignored as a local design source, stale notes in
@@ -83,11 +89,9 @@ new setup has run cleanly for a while. Not urgent.
 **Open / next (pick one next session):**
 - ProSho Phase 0 — see `PROGRESS_PROSHO.md` (needs nothing from the user).
 - ProSho §16 open questions — need the user's answers before Phase 1.
-- Finish the repo rename: GitHub `vsvedantham/lvamo-applaut` → `lvamo`
-  (user, via the GitHub UI), then update the `origin` remote locally and on
-  the VM, and confirm Cloudflare Pages still auto-deploys on push. Local Mac
-  folder `~/Projects/lvamo/applaut` can be renamed between sessions (it
-  doesn't matter to Docker any more).
+- Optional: rename the local Mac folder `~/Projects/lvamo/applaut` between
+  sessions (Docker no longer cares; Claude's per-project memory is keyed by
+  the path, so expect a fresh memory dir).
 - Vertical primary tasks unchanged: Applaut — scale `company_boards.json`;
   Jobref — notify seekers when a request is decided.
 
