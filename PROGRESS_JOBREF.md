@@ -1568,16 +1568,19 @@ full log:
   notification mechanism exists yet in either vertical (email, in-app, or
   otherwise) — the natural next feature now that there's a real decision
   to notify about. See "Employee actions on a referral request" above.
-- Evidence files aren't downloadable/viewable anywhere yet (only the
-  filename is shown as confirmation) — R2 *is* actually configured and
-  storing them for real in production (confirmed by a real upload +
-  `head_object` check — see "Employee actions on a referral request"
-  above for the correction to an earlier wrong note here), so a
-  view/download endpoint would be genuinely usable whenever it's wanted,
-  unlike when this was first written.
-- The latent `api.applaut.lvamo.com` cert auto-renewal risk noted in
-  "Dedicated hostname" above (due ~mid-Oct 2026) is still unfixed — worth
-  doing before then, low effort (switch to `--webroot` like Jobref's cert).
+- ~~Evidence files aren't viewable~~ — built and pushed (`5bb67a7`, Aug
+  2026): `GET /referral-requests/{id}/evidence` returns a 5-min presigned
+  R2 URL to either party on the request; "See referral evidence" link on
+  the seeker dashboard and employee detail page. Frontend auto-deployed
+  with the push; whether `deploy.sh` was run for the backend half was
+  never recorded — re-verify in production.
+- Cert auto-renewal (Oct 2026): `api.applaut.lvamo.com` still used the
+  `standalone` authenticator (fails — nginx holds port 80), and **neither**
+  cert had a deploy hook to reload nginx after renewal (so even Jobref's
+  successful webroot renewal would keep serving the old cert until a
+  container restart). Fix prepared in `nginx/setup-cert-renewal.sh` +
+  `nginx/certbot-deploy-hook.sh` — run once on the VM with
+  `sudo bash nginx/setup-cert-renewal.sh`. See PROGRESS.md Deployment.
 
 ---
 
