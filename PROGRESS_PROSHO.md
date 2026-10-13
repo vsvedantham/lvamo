@@ -14,10 +14,12 @@
 confirmation, audit log. Exit check: HeatRisk EU page live as *unlisted*,
 built from its real repo.
 
-**Blocked on the user first:**
-1. Answers to the plan's §16 open questions (sign-in method, mentor naming,
-   pilot #2, supervisor contact, URL). Still unanswered as of 2026-10-13.
-2. ~~GitHub App~~ **Done 2026-10-13**, see "GitHub App" below.
+**Unblocked (2026-10-13).** The GitHub App is created and wired (see
+"GitHub App" below), and all five §16 questions are answered:
+GitHub-only sign-in; the public badge says just "Mentored via LVAMO" (no
+mentor name); pilot #2 isn't recruited yet (only Phase 4's exit check
+needs them); the student decides about telling their supervisor (the
+founder doesn't reach out); pages live at `lvamo.com/prosho/<slug>`.
 
 First code task once unblocked: GitHub OAuth sign-in. That will also be
 the first real use of `frontend/src/prosho/api/client.ts`, which confirms

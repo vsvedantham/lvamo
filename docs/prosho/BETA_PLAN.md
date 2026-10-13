@@ -106,7 +106,7 @@ find it useful, and the core really generalises beyond data science.
 | Role | Who | Can |
 |---|---|---|
 | Student (owner) | Signs in with GitHub | Create projects, connect repos, manage ingest tokens, set visibility, add milestones, reply to feedback |
-| Mentor | LVAMO mentors (the founder first); assigned per project by an admin | View private projects they mentor, leave feedback, mark milestones reviewed; their name appears in the "Mentored via LVAMO" badge |
+| Mentor | LVAMO mentors (the founder first); assigned per project by an admin | View private projects they mentor, leave feedback, mark milestones reviewed; the public badge says only "Mentored via LVAMO", never the mentor's name (§16.2) |
 | Admin | Founder | Assign mentors, deactivate users/projects (`is_active`, same pattern as Jobref), view audit log |
 | Visitor | Examiners, supervisors, recruiters — no account | View unlisted/public pages |
 
@@ -355,8 +355,8 @@ Dates are targets, not commitments.
 
 ## 16. Open questions for the founder
 
-1. Is GitHub-only sign-in OK, or do some students use GitLab / university Git servers?
-2. Should "Mentored via LVAMO" name the individual mentor, or just LVAMO?
-3. Who is pilot #2 — is there a frontend (or non-data) student in the same cohort?
-4. Do you want to approach the HeatRisk EU supervisor about ProSho early, or let the student decide?
-5. Public page URL: `lvamo.com/prosho/<slug>` (current plan) or a shorter domain later?
+1. ~~Is GitHub-only sign-in OK, or do some students use GitLab / university Git servers?~~ **Answered 2026-10-13: yes, GitHub-only.**
+2. ~~Should "Mentored via LVAMO" name the individual mentor, or just LVAMO?~~ **Answered 2026-10-13: just LVAMO.** No mentor name on public pages in beta.
+3. ~~Who is pilot #2 — is there a frontend (or non-data) student in the same cohort?~~ **Answered 2026-10-13: nobody yet; recruit later.** Phase 4's exit check waits on this. Phases 1–3 don't depend on it.
+4. ~~Do you want to approach the HeatRisk EU supervisor about ProSho early, or let the student decide?~~ **Answered 2026-10-13: the student decides.** The founder does not contact supervisors.
+5. ~~Public page URL: `lvamo.com/prosho/<slug>` (current plan) or a shorter domain later?~~ **Answered 2026-10-13: `lvamo.com/prosho/<slug>`.**
