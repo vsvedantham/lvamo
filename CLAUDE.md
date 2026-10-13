@@ -7,7 +7,7 @@ LVAMO is the master product. It is a platform of independent tools
 |---|---|---|---|
 | **Applaut** | AI job discovery, scoring, tailored resumes and cover letters | [`docs/applaut/SPEC.md`](docs/applaut/SPEC.md) | [`PROGRESS_APPLAUT.md`](PROGRESS_APPLAUT.md) |
 | **Jobref** | Referrals from employees to job seekers | none yet — `PROGRESS_JOBREF.md` is the source of truth | [`PROGRESS_JOBREF.md`](PROGRESS_JOBREF.md) |
-| **ProSho** | Project Showcase — turns student capstone repos into evidence-backed project pages | [`docs/prosho/BETA_PLAN.md`](docs/prosho/BETA_PLAN.md) | [`PROGRESS_PROSHO.md`](PROGRESS_PROSHO.md) |
+| **ProSho** | Project Showcase — turns student capstone repos into evidence-backed project pages (Phase 0 live, hidden) | [`docs/prosho/BETA_PLAN.md`](docs/prosho/BETA_PLAN.md) | [`PROGRESS_PROSHO.md`](PROGRESS_PROSHO.md) |
 
 This file holds the rules that apply to **every** vertical. Each vertical's
 own spec covers its product behaviour; where the two overlap, this file wins.
