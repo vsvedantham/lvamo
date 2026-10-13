@@ -34,6 +34,17 @@ class Settings(BaseSettings):
     jobref_linkedin_client_secret: str = ""
     jobref_linkedin_redirect_uri: str = "http://localhost:8000/api/v1/jobref/auth/linkedin/callback"
 
+    # ProSho — one GitHub App for sign-in (user OAuth), reading prosho.yaml
+    # (installation tokens) and push webhooks. The private key is the App's
+    # PEM, base64-encoded onto one line so it fits in an env file.
+    prosho_github_app_id: str = ""
+    prosho_github_app_slug: str = ""
+    prosho_github_client_id: str = ""
+    prosho_github_client_secret: str = ""
+    prosho_github_private_key_b64: str = ""
+    prosho_github_webhook_secret: str = ""
+    prosho_github_redirect_uri: str = "http://localhost:8000/api/v1/prosho/auth/github/callback"
+
     # Server
     backend_cors_origins: List[str] = ["http://localhost:5173"]
     backend_port: int = 8000
