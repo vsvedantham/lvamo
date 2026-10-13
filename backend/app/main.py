@@ -8,6 +8,7 @@ from app.applaut.api.v1.router import router as applaut_v1_router
 from app.applaut.discovery.scheduler import start_scheduler, stop_scheduler
 from app.jobref.api.v1.router import router as jobref_v1_router
 from app.platform.api.v1.router import router as platform_v1_router
+from app.prosho.api.v1.router import router as prosho_v1_router
 
 
 @asynccontextmanager
@@ -35,3 +36,4 @@ app.add_middleware(
 app.include_router(platform_v1_router, prefix="/api/v1/platform")
 app.include_router(applaut_v1_router, prefix="/api/v1/applaut")
 app.include_router(jobref_v1_router, prefix="/api/v1/jobref")
+app.include_router(prosho_v1_router, prefix="/api/v1/prosho")

@@ -12,6 +12,7 @@ import JobrefDashboard from './jobref/pages/Dashboard'
 import JobrefReferralRequest from './jobref/pages/ReferralRequest'
 import JobrefReferralRequestDetail from './jobref/pages/ReferralRequestDetail'
 import JobrefProtectedRoute from './jobref/components/ProtectedRoute'
+import Prosho from './prosho/pages/Prosho'
 import Login from './applaut/pages/Login'
 import Register from './applaut/pages/Register'
 import Dashboard from './applaut/pages/Dashboard'
@@ -60,6 +61,7 @@ export default function App() {
               </JobrefProtectedRoute>
             }
           />
+          <Route path="prosho" element={<Prosho />} />
           <Route path="applaut" element={<Layout />}>
             <Route index element={<Landing />} />
             <Route path="login" element={<Login />} />
