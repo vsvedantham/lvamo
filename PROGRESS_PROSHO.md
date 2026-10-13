@@ -17,10 +17,7 @@ built from its real repo.
 **Blocked on the user first:**
 1. Answers to the plan's §16 open questions (sign-in method, mentor naming,
    pilot #2, supervisor contact, URL). Still unanswered as of 2026-10-13.
-2. A GitHub **OAuth App** (sign-in) and a GitHub **App** (repo read +
-   push webhooks), both created by the user in GitHub settings. Claude
-   then needs the client id/secret, App id, private key and webhook secret,
-   added straight to `.env` / `.env.production` (never committed).
+2. ~~GitHub App~~ **Done 2026-10-13**, see "GitHub App" below.
 
 First code task once unblocked: GitHub OAuth sign-in. That will also be
 the first real use of `frontend/src/prosho/api/client.ts`, which confirms
@@ -34,6 +31,42 @@ the first real use of `frontend/src/prosho/api/client.ts`, which confirms
 `GET https://api.prosho.lvamo.com/api/v1/prosho/health` → 200
 (`{"status":"ok","service":"prosho-api"}`), served with a valid
 `CN=api.prosho.lvamo.com` cert.
+
+### GitHub App (2026-10-13, ready for Phase 1)
+
+There's **one GitHub App, not an OAuth App plus a GitHub App**. A GitHub
+App also does user sign-in, and GitHub recommends Apps over OAuth Apps.
+This means fewer secrets and a single consent screen. The beta plan was
+updated to match.
+
+- `lvamo-prosho` (https://github.com/apps/lvamo-prosho), App ID `5295836`,
+  client ID `Iv23liqTfRG7KW3CswoE`, owner `vsvedantham`. Installable by
+  **any account** (confirmed public via an unauthenticated API lookup).
+- Callback URLs: `https://api.prosho.lvamo.com/api/v1/prosho/auth/github/callback`
+  and the `http://localhost:8000/...` equivalent. Setup URL (after install):
+  `https://www.lvamo.com/prosho/projects/new`, with redirect-on-update
+  turned on. Authorization during installation is **off**, so sign-in and
+  install stay separate steps.
+- Webhook: `https://api.prosho.lvamo.com/api/v1/prosho/github/webhook`,
+  JSON, SSL verification on, secret set. That route doesn't exist until
+  Phase 1, so GitHub's initial ping failed, which is expected.
+- Permissions: Contents read, Metadata read, Email addresses read. Event:
+  push.
+- **Secrets**: the masters are in `~/.config/lvamo/prosho/` on the Mac
+  (`client-secret`, `private-key.pem`, `webhook-secret`; dir 700, files
+  600). They're loaded into the local `.env` and prod `.env.production` as
+  `PROSHO_GITHUB_*` (private key base64 on one line), file to file, never
+  printed. Settings fields are in `backend/app/config.py`. The prod
+  `.env.production` was tightened from 644 to 600 at the same time.
+  Backup: `/home/ubuntu/backups/.env.production.bak-20261013`.
+- **Verified** against GitHub's API: the private key authenticates as the
+  App and the client id matches; permissions and events are exactly as
+  above; the webhook config is as above; the client secret is accepted
+  (via the bogus-token check on `POST /applications/{client_id}/token`,
+  which returns 404 for valid credentials, not 401). Inside both the local
+  and the **prod** backend containers, Settings load all 7 values, the key
+  decodes to a PEM, and `python-jose` RS256 + `httpx` get `GET /app` →
+  200 as `lvamo-prosho`.
 
 ### Phase 0 — what was built
 

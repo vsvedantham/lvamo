@@ -202,7 +202,7 @@ All tables carry `id UUID`, `created_at`, `updated_at` (the shared
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `users` | `github_id` (unique), `github_login`, `name`, `email`, `avatar_url`, `role` (`student`/`mentor`/`admin`), `is_active` | Identity from GitHub OAuth |
+| `users` | `github_id` (unique), `github_login`, `name`, `email`, `avatar_url`, `role` (`student`/`mentor`/`admin`), `is_active` | Identity from GitHub sign-in (the GitHub App's user authorization flow) |
 | `projects` | `owner_id`, `slug` (unique), `title`, `summary`, `problem`, `project_type`, `university`, `programme`, `visibility` (`private`/`unlisted`/`public`), `supervisor_ok_at`, `repo_full_name`, `github_installation_id`, `demo_kind`, `demo_url`, `manifest_sha`, `manifest_synced_at`, `manifest_error`, `is_active`, `published_at` | `supervisor_ok_at` must be set before `public` (see §11) |
 | `project_mentors` | `project_id`, `mentor_id` | Unique pair |
 | `claims` | `project_id`, `key` (from manifest), `text`, `metric_key`, `target_op`, `target_value`, `target_value_hi`, `manual_status`, `position` | Unique (`project_id`, `key`); upserted on manifest sync, removed claims soft-archived |
@@ -220,7 +220,7 @@ model, as Applaut's do).
 ## 9. API contracts (`/api/v1/prosho`)
 
 **Auth**
-- `GET /auth/github/authorize` → 302 to GitHub OAuth
+- `GET /auth/github/authorize` → 302 to GitHub's authorize page (the GitHub App's client id; no separate OAuth App)
 - `GET /auth/github/callback` → upsert user, 302 to frontend with token
 - `GET /auth/me`
 
@@ -277,9 +277,14 @@ Mobile-first per platform rules.
   `supervisor_ok_at`, audit-logged). Default visibility is `private`.
   LVAMO branding stays small: a badge and a footer — the page must read as
   the student's work.
-- **GitHub App, least privilege:** repository *Contents: read* (only to
-  read `prosho.yaml`), *Metadata: read*, push webhooks. Webhook secret and
-  App private key in env vars, never in code.
+- **One GitHub App, least privilege** (`lvamo-prosho`, App ID 5295836,
+  created 2026-10-13, installable by any account). It handles sign-in
+  (user authorization), repo reads and webhooks, so there is no separate
+  OAuth App. Repository *Contents: read* (only to read `prosho.yaml`) and
+  *Metadata: read*; account *Email addresses: read* (sign-in email);
+  push webhooks only (installation events arrive automatically). Client
+  secret, webhook secret and private key in env vars (`PROSHO_GITHUB_*`),
+  never in code.
 - **Ingest tokens:** random 32-byte, shown once, stored as SHA-256, scoped
   to one project, revocable, `last_used_at` tracked.
 - **SSRF guard for server-side fetching** (source checks, uptime,
@@ -302,7 +307,7 @@ Dates are targets, not commitments.
 | Phase | Dates (2026–27) | Deliverables | Exit check |
 |---|---|---|---|
 | **0. Foundation** | Oct 12 – Oct 18 | Finish the `api.lvamo.com` platform cutover; `/prosho` skill; `backend/app/prosho` + `frontend/src/prosho` skeletons; migration creating schema `prosho` + `users`; health endpoint; `api.prosho.lvamo.com` (DNS, webroot cert, nginx); `VITE_PROSHO_API_BASE_URL` in Pages; hub card wired but hidden | `GET https://api.prosho.lvamo.com/api/v1/prosho/health` → 200 |
-| **1. Core page** | Oct 19 – Nov 1 | GitHub OAuth sign-in; projects CRUD; GitHub App + webhook + manifest sync with validation errors; claims (manual status); public page with claims tracker and demo; visibility + supervisor confirmation; audit log | HeatRisk EU page live as *unlisted*, built from its real repo |
+| **1. Core page** | Oct 19 – Nov 1 | GitHub sign-in (via the GitHub App); projects CRUD; GitHub App install + webhook + manifest sync with validation errors; claims (manual status); public page with claims tracker and demo; visibility + supervisor confirmation; audit log | HeatRisk EU page live as *unlisted*, built from its real repo |
 | **2. Evidence + data module** | Nov 2 – Nov 15 | Ingest tokens + `/ingest/evidence` + CI snippet; computed claim status; data module: source health checker (scheduler), metrics-vs-target panel, pipeline-run panel | HeatRisk EU's CI pushes evidence; a source going down shows on the page within a day |
 | **3. Work over time** | Nov 16 – Nov 29 | Push-webhook commit timeline; milestones; mentor role + feedback; admin mentor assignment; page-view aggregates | Founder mentors HeatRisk EU through ProSho for 1 week |
 | **4. Frontend module** | Nov 30 – Dec 20 | Playwright screenshots (3 sizes) to R2; uptime pings; Lighthouse ingest + panel; artifact upload; **no core/schema changes** | Pilot #2 (a frontend project) live as *unlisted* |
@@ -346,7 +351,7 @@ Dates are targets, not commitments.
 4. The founder is the only mentor and admin during beta.
 5. Supervisors view pages via unlisted links; no supervisor accounts in beta.
 6. Manifest filename `prosho.yaml` (the concept deck's earlier `lvamo.yaml` is renamed to match the vertical).
-7. PyYAML and a GitHub App client library (or plain `httpx` + `PyJWT`) are added to `requirements.txt`; Playwright + Chromium added to the backend image in Phase 4.
+7. PyYAML is added to `requirements.txt`. GitHub calls use the existing `httpx` + `python-jose` (App JWT signing with RS256 confirmed working in prod 2026-10-13), so no GitHub client library is needed. Playwright + Chromium added to the backend image in Phase 4.
 
 ## 16. Open questions for the founder
 
