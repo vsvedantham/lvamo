@@ -22,3 +22,20 @@ class DemoKind(str, enum.Enum):
     streamlit = "streamlit"
     url = "url"
     video = "video"
+
+
+class ClaimTargetOp(str, enum.Enum):
+    gte = "gte"          # value >= target
+    lte = "lte"          # value <= target
+    abs_lte = "abs_lte"  # |value| <= target  (e.g. prediction error within ±25%)
+    between = "between"  # target <= value <= target_hi
+    eq = "eq"
+
+
+class ClaimManualStatus(str, enum.Enum):
+    """Only for claims without a metric — shown as self-reported."""
+
+    not_started = "not_started"
+    in_progress = "in_progress"
+    met = "met"
+    not_met = "not_met"

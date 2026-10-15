@@ -26,11 +26,13 @@ export interface Project {
   demo_url: string | null
   manifest_sha: string | null
   manifest_synced_at: string | null
+  manifest_checked_at: string | null
   manifest_errors: ManifestError[] | null
   published_at: string | null
   created_at: string
   updated_at: string
   manifest_managed: boolean
+  repo_access_lost: boolean
 }
 
 export interface ProjectUpdate {

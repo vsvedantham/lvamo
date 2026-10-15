@@ -60,6 +60,8 @@ class ProshoProject(Base, UUIDPrimaryKey, TimestampMixin):
     demo_url: Mapped[Optional[str]] = mapped_column(String(500))
     manifest_sha: Mapped[Optional[str]] = mapped_column(String(40))
     manifest_synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Every sync attempt, successful or not.
+    manifest_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     # List of {"line": int | None, "path": str, "message": str} from the last sync.
     manifest_errors: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSONB)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=sa.true())

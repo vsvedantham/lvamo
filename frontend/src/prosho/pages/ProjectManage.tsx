@@ -5,7 +5,9 @@ import {
   apiErrorMessage, getProject, PROJECT_TYPE_LABEL, updateProject,
   type DemoKind, type Project, type ProjectUpdate, type Visibility,
 } from '../api/projects'
+import ClaimsCard from '../components/ClaimsCard'
 import ProshoShell from '../components/ProshoShell'
+import RepositoryCard from '../components/RepositoryCard'
 import { Banner, Button, Card, Field, hintStyle, publicPagePath, publicPageUrl, VisibilityPill } from '../components/ui'
 
 const VISIBILITY_OPTIONS: { value: Visibility; label: string; help: string }[] = [
@@ -62,14 +64,11 @@ export default function ProshoProjectManage() {
         <Banner kind="info">Title, summary, problem and demo come from <code>prosho.yaml</code> in your repo — edit them there and push.</Banner>
       )}
 
+      <RepositoryCard project={project} onChange={setProject} />
+      <ClaimsCard project={project} />
       <VisibilityCard project={project} onSaved={setProject} />
       <DetailsCard project={project} onSaved={setProject} />
       <DemoCard project={project} onSaved={setProject} />
-      <Card title="GitHub repository">
-        <p style={{ color: 'var(--text-2)', fontSize: '0.875rem' }}>
-          {project.repo_full_name ?? 'Connecting a repo is coming next — it will read your prosho.yaml on every push.'}
-        </p>
-      </Card>
     </ProshoShell>
   )
 }

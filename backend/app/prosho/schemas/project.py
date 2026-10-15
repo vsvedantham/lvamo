@@ -88,6 +88,7 @@ class ProjectResponse(BaseModel):
     demo_url: Optional[str]
     manifest_sha: Optional[str]
     manifest_synced_at: Optional[datetime]
+    manifest_checked_at: Optional[datetime]
     manifest_errors: Optional[list[dict[str, Any]]]
     published_at: Optional[datetime]
     created_at: datetime
@@ -95,10 +96,15 @@ class ProjectResponse(BaseModel):
     # True once prosho.yaml has synced: title/summary/problem/type/demo are
     # then read-only on ProSho (edit them in the repo instead).
     manifest_managed: bool
+    # Connected, but the App lost access (uninstalled / repo removed from it).
+    repo_access_lost: bool
 
     model_config = {"from_attributes": True}
 
     @classmethod
     def from_project(cls, p: Any) -> "ProjectResponse":
-        return cls.model_validate({**{k: getattr(p, k) for k in cls.model_fields if k != "manifest_managed"},
-                                   "manifest_managed": p.manifest_synced_at is not None})
+        computed = {
+            "manifest_managed": p.manifest_synced_at is not None,
+            "repo_access_lost": p.repo_id is not None and p.github_installation_id is None,
+        }
+        return cls.model_validate({**{k: getattr(p, k) for k in cls.model_fields if k not in computed}, **computed})

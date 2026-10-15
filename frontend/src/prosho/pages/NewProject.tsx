@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { apiErrorMessage, createProject, PROJECT_TYPE_LABEL, type ProjectType } from '../api/projects'
 import ProshoShell from '../components/ProshoShell'
@@ -8,9 +8,12 @@ import { Banner, Button, Card, Field, labelStyle } from '../components/ui'
 const slugify = (s: string) =>
   s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '')
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export default function ProshoNewProject() {
   useDocumentTitle('New project | ProSho')
   const navigate = useNavigate()
+  const [params] = useSearchParams()
   const [title, setTitle] = useState('')
   const [slug, setSlug] = useState('')
   const [slugEdited, setSlugEdited] = useState(false)
@@ -32,6 +35,15 @@ export default function ProshoNewProject() {
       setError(apiErrorMessage(err))
       setSaving(false)
     }
+  }
+
+  // This is also the GitHub App's Setup URL: after installing, GitHub sends
+  // the student here with installation_id and the `state` we passed (the
+  // project id). Nothing here is trusted — the project page asks the backend,
+  // which checks the installation with GitHub itself.
+  if (params.get('installation_id')) {
+    const state = params.get('state') ?? ''
+    return <Navigate to={UUID_RE.test(state) ? `/prosho/projects/${state}` : '/prosho/dashboard'} replace />
   }
 
   return (
