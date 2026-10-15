@@ -22,7 +22,29 @@
 
 ---
 
-## Session log — 2026-10-13 (latest)
+## Session log — 2026-10-15 (latest)
+
+**ProSho Phase 1 built and live** (details in `PROGRESS_PROSHO.md`):
+GitHub sign-in, projects/visibility/audit log, GitHub repo connection +
+`prosho.yaml` sync + push webhook + claims, and the public page at
+`lvamo.com/prosho/<slug>`. Migrations `0023`, `0024` (head now `0024`).
+Platform-level changes:
+- **pytest** now exists for the backend: `backend/requirements-dev.txt` +
+  `pytest.ini` + `backend/tests/`; the dev `Dockerfile` installs the dev
+  requirements (prod `Dockerfile.prod` unchanged). Run
+  `docker compose exec backend python -m pytest`. Only ProSho has tests so
+  far.
+- `PyYAML` added to `requirements.txt`.
+- Shared `frontend/src/index.css`: native checkbox/radio controls (they
+  rendered as empty boxes everywhere; fixes Applaut's Opportunities page
+  too).
+- `App.tsx` gained `ProshoAuthProvider` and the `/prosho/*` routes.
+- Prod `.env.production`: `PROSHO_GITHUB_*` (App credentials, added
+  2026-10-13) and `PROSHO_SIGNUP_ALLOWLIST=vsvedantham`.
+
+---
+
+## Session log — 2026-10-13
 
 **ProSho Phase 0 shipped** (details in `PROGRESS_PROSHO.md`): a third
 vertical on the shared backend, following the `CLAUDE.md` add-a-vertical
@@ -115,7 +137,7 @@ new setup has run cleanly for a while. Not urgent.
 | Vertical | Status | Progress file |
 |---|---|---|
 | **Applaut** | Live, in active development | [`PROGRESS_APPLAUT.md`](PROGRESS_APPLAUT.md) — primary task: keep scaling `company_boards.json` |
-| **ProSho** | Phase 0 live (Oct 2026): skeleton + `api.prosho.lvamo.com`, hidden from the hub. Project Showcase, evidence-backed capstone project pages; beta targeted mid-Jan 2027 | [`PROGRESS_PROSHO.md`](PROGRESS_PROSHO.md) — primary task: Phase 1 (needs §16 answers first); full plan in [`docs/prosho/BETA_PLAN.md`](docs/prosho/BETA_PLAN.md) |
+| **ProSho** | Phase 1 live (Oct 2026): GitHub sign-in, projects, repo sync, public pages; still hidden from the hub, closed beta. Project Showcase, evidence-backed capstone project pages; beta targeted mid-Jan 2027 | [`PROGRESS_PROSHO.md`](PROGRESS_PROSHO.md) — primary task: Phase 1 exit check (HeatRisk EU page from its real repo); full plan in [`docs/prosho/BETA_PLAN.md`](docs/prosho/BETA_PLAN.md) |
 | **Jobref** | Live — auth, companies, and the full referral request lifecycle (routing, employee inbox, seeker limits, accept/reject with evidence) deployed Aug 2026 | [`PROGRESS_JOBREF.md`](PROGRESS_JOBREF.md) — primary task: notifying a seeker when their request is decided |
 
 ---
@@ -126,7 +148,7 @@ new setup has run cleanly for a while. Not urgent.
 |---|---|---|
 | Frontend | Live | `www.lvamo.com` and bare `lvamo.com` (both Cloudflare Pages custom domains, project `lvamo`; auto-deploys on push to `main`) — root `/` is the **LVAMO hub** (`frontend/src/pages/Hub.tsx`), listing verticals: Applaut at `/applaut/*`, Jobref at `/jobref/*` (landing, LinkedIn-gated register, login, dashboard). |
 | Backend API | Live | Oracle Cloud VM `lvamo-backend` (`130.61.106.172`, Ampere A1.Flex, 4 OCPU/24GB, Docker) runs one shared backend process, fronted by nginx on one hostname per vertical plus the platform: `api.applaut.lvamo.com` (Applaut, `/api/v1/applaut/*`), `api.jobref.lvamo.com` (Jobref, `/api/v1/jobref/*`, live since Aug 2026), `api.prosho.lvamo.com` (ProSho, `/api/v1/prosho/*`, Oct 2026) and `api.lvamo.com` (platform, `/api/v1/platform/*`). See "Oracle Backend Migration" below for how this VM came to be; see "Multi-Vertical Architecture" below for the per-vertical-hostname pattern. |
-| Database | Live | PostgreSQL 16 in Docker on `lvamo-backend`, DB/role named `lvamo` (renamed from `applaut` Aug 2026 — see below) — one Postgres database, one alembic migration chain (head: `0022`), shared by all verticals but namespaced at the schema level — plus a `platform` schema for LVAMO-wide tables (`platform.settings`, migration `0020`, Oct 2026): Applaut's 10 tables live in an `applaut` Postgres schema (migration `0012`, deployed to prod, see `PROGRESS_APPLAUT.md`). Jobref went further: its 3 tables were merged into a single `jobref.users` table (migration `0013`), plus `jobref.companies` (migration `0014`) and `jobref.referral_requests` (migrations `0015`–`0018`) — the full referral request/routing/limits/employee-decision feature set, deployed to prod, see `PROGRESS_JOBREF.md`. |
+| Database | Live | PostgreSQL 16 in Docker on `lvamo-backend`, DB/role named `lvamo` (renamed from `applaut` Aug 2026 — see below) — one Postgres database, one alembic migration chain (head: `0024`), shared by all verticals but namespaced at the schema level — plus a `platform` schema for LVAMO-wide tables (`platform.settings`, migration `0020`, Oct 2026): Applaut's 10 tables live in an `applaut` Postgres schema (migration `0012`, deployed to prod, see `PROGRESS_APPLAUT.md`). Jobref went further: its 3 tables were merged into a single `jobref.users` table (migration `0013`), plus `jobref.companies` (migration `0014`) and `jobref.referral_requests` (migrations `0015`–`0018`) — the full referral request/routing/limits/employee-decision feature set, deployed to prod, see `PROGRESS_JOBREF.md`. |
 | Storage | Live | Cloudflare R2, real credentials configured in production — confirmed working via a genuine Jobref referral-evidence upload (`head_object`-verified in the actual bucket, Aug 2026). Local dev has no R2 credentials (uploads there fall back to a `local/`-prefixed key, no real upload attempted — see Applaut's `resumes/` and Jobref's `jobref/referral-evidence/` for the two current uploaders). |
 
 **VM access:** `ssh lvamo-prod` from the Mac (see "SSH from the Mac" below). The Aug 2026 Windows-laptop command was `ssh -i C:\Users\vvenk\Downloads\ssh-key-2026-07-10.key ubuntu@130.61.106.172`.

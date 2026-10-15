@@ -8,26 +8,130 @@
 
 ## 🎯 NEXT SESSION PRIMARY TASK
 
-**Phase 1 — Core page** of [`docs/prosho/BETA_PLAN.md`](docs/prosho/BETA_PLAN.md)
-§12 (target Oct 19 – Nov 1): GitHub OAuth sign-in, projects CRUD, GitHub App
-+ webhook + `prosho.yaml` sync, claims, public page, visibility + supervisor
-confirmation, audit log. Exit check: HeatRisk EU page live as *unlisted*,
-built from its real repo.
+**Finish Phase 1's exit check: the HeatRisk EU page live as *unlisted*,
+built from its real repo.** All Phase 1 code is built, tested and live
+(2026-10-15, see "Phase 1" under Status). What's left needs real people and
+a real repo, in this order:
 
-**Unblocked (2026-10-13).** The GitHub App is created and wired (see
-"GitHub App" below), and all five §16 questions are answered:
-GitHub-only sign-in; the public badge says just "Mentored via LVAMO" (no
-mentor name); pilot #2 isn't recruited yet (only Phase 4's exit check
-needs them); the student decides about telling their supervisor (the
-founder doesn't reach out); pages live at `lvamo.com/prosho/<slug>`.
+1. **Founder signs in for real** at https://www.lvamo.com/prosho/login
+   (`vsvedantham` is the only invited login). First real GitHub consent →
+   confirms the production OAuth round trip. Then make the account admin:
+   `UPDATE prosho.users SET role = 'admin' WHERE github_login = 'vsvedantham';`
+2. **Invite the HeatRisk EU student**: add their GitHub login to
+   `PROSHO_SIGNUP_ALLOWLIST` in `/home/ubuntu/lvamo/.env.production`
+   (comma-separated), then `sudo docker compose --env-file .env.production
+   -f docker-compose.prod.yml up -d backend` to reload it.
+3. **The student**: signs in → New project → "Install on GitHub" (their
+   *personal* account; pick the HeatRisk repo) → back on the project page,
+   picks the repo → adds `prosho.yaml` (the page offers a starter) →
+   pushes → page updates via the webhook → sets visibility to Unlisted.
+4. Verify: the push webhook delivery shows 200 in the App's "Advanced"
+   tab, the page renders the real claims and Streamlit demo, and a
+   logged-out browser sees it. Record it here.
 
-First code task once unblocked: GitHub OAuth sign-in. That will also be
-the first real use of `frontend/src/prosho/api/client.ts`, which confirms
-`VITE_PROSHO_API_BASE_URL` reaches the build (see below).
+Then Phase 2 (evidence + data module, plan §12).
+
+**Not in Phase 1, by design:** the "Mentored via LVAMO" badge (needs
+Phase 3's mentor assignment; showing it on every page would claim
+mentoring that didn't happen); page-view counts (Phase 3); gallery and
+rate limits (Phase 5).
 
 ---
 
 ## Status
+
+**Phase 1 (Core page) — code complete and live, 2026-10-15.** Exit check
+pending real users (see the banner above). Shipped in four slices, each
+tested locally, deployed and re-verified in production before the next.
+
+### Phase 1 — what was built
+
+**1. GitHub sign-in** (`5d94fdf`). `/auth/github/authorize` → GitHub →
+`/auth/github/callback` (signed 10-min `state`; upsert by GitHub's numeric
+id; display fields refreshed every sign-in) → redirect to
+`/prosho/auth/callback#code=…` with a **2-minute login code in the URL
+fragment** → frontend POSTs it to `/auth/exchange` for the access token
+(`vertical: prosho`). The access token never appears in a URL; the
+fragment is never sent to a server. Closed beta: new accounts need their
+GitHub login in **`PROSHO_SIGNUP_ALLOWLIST`** (env var, comma-separated;
+prod value `vsvedantham`); existing accounts can always sign in unless
+deactivated. A 401 anywhere signs the user out. *Known limit:* the login
+code is time-limited, not single-use.
+
+**2. Projects, visibility, audit log** (`1825a10`, migration `0023`).
+`prosho.projects` + `prosho.audit_logs`. `GET/POST /projects`,
+`GET/PATCH /projects/{id}`; someone else's project → 404. Slugs: 3–60
+chars, lowercase/digits/hyphens, reserved words (`schemas/project.py`),
+**locked once the page has ever been shared** (`published_at`). Public
+needs supervisor confirmation (API **and** DB CHECK); approval can't be
+withdrawn while public. Every change is audited with before/after. UI:
+project list, new-project form (slug from title), manage page.
+Shared `index.css` fix: checkboxes/radios were rendered as empty text-field
+boxes app-wide (also fixes Applaut's Opportunities keyword checkboxes).
+
+**3. GitHub repo connection, `prosho.yaml` sync, claims** (`c71f68f`,
+migration `0024`). `prosho.claims` (+ `projects.manifest_checked_at`).
+- Parser (`services/manifest.py`): pydantic v1 schema + YAML node tree →
+  every error has a line number and path; catches duplicate YAML keys,
+  misspelt fields, duplicate claim ids, the wrong module section for the
+  type; 64 KB cap. Module sections live in `app/prosho/modules/`
+  (`data_science.DataSection`, `frontend.FrontendSection`).
+- Connect: the backend asks GitHub for the App installation on the
+  signed-in user's **own personal account** (matched by numeric id) and
+  only offers repos from it; nothing from the browser is trusted. One
+  project per repo (partial unique index). Orgs not supported in beta.
+- Sync on connect, "Sync now", and the **HMAC-verified push webhook**
+  (default branch only, background task). A failed sync records the error
+  and keeps the last good story. The manifest owns title/summary/problem/
+  type/demo/claims; claims upsert by id, archived when dropped (and
+  restored if re-added), manual status kept. Uninstall/repo-removed events
+  mark access lost; disconnect unlocks the story fields and archives claims.
+- Claims: status set by hand only for claims without a metric; measured
+  claims say "awaiting evidence" until Phase 2.
+- UI: repository card (install → pick → status with **line numbers linked
+  to the file on GitHub**, starter `prosho.yaml`, Sync now, Disconnect),
+  claims card. The App's Setup URL (`/prosho/projects/new`) forwards to the
+  project via the install `state`.
+
+**4. Public page** (`8470ede`). `GET /public/projects/{slug}`:
+unlisted/public for anyone; private only as an **owner preview** (optional
+auth — a junk token just means anonymous); inactive project/owner → 404.
+`Cache-Control: no-cache` (`private, no-store` for previews) so making a
+page private takes effect at once. Page at `/prosho/:slug`: type chip,
+title, summary, student byline (links to their GitHub), problem, claims
+tracker with status pills, Streamlit embed (`?embed=true`, sandboxed) plus
+a wake-up note and open-in-new-tab fallback, small "Built with LVAMO
+ProSho" footer, `noindex` unless public, not-found page.
+
+**Tests:** pytest added (`backend/requirements-dev.txt`, installed only in
+the dev image; run `docker compose exec backend python -m pytest`).
+**38 tests**: sign-in 8, projects 8, manifest 11, GitHub/sync/webhook 8,
+public page 3. GitHub's HTTP calls are faked; everything else (DB, JWTs,
+routing) is real.
+
+**Verified locally** each slice in a real browser at desktop and phone
+widths (no horizontal scroll, no console errors), plus migrations
+`0023`/`0024` up/down/up with zero model-vs-DB diffs.
+
+**Verified in production:**
+- Sign-in: authorize → github.com with the prod client id and redirect
+  URI; denied/forged-state callbacks redirect to `/prosho/login?error=…`;
+  junk code 400; `/me` without a token 401; CORS for `www.lvamo.com`.
+  `VITE_PROSHO_API_BASE_URL` now confirmed in the live bundle (closes
+  Phase 0's open item).
+- Projects: create 201, duplicate slug 409, reserved slug 422, someone
+  else's project 404, public without supervisor 409, with it 200.
+- Webhook: unsigned → 401; **GitHub's own ping, redelivered via the App
+  API, signed with the real secret → 200 `pong`**.
+- Public page: private anonymous 404, owner preview flag, unlisted 200
+  with `no-cache`; the page rendered on `www.lvamo.com` with claims, demo
+  link and `noindex`, no console errors; unknown slug shows not-found.
+- All throwaway prod data deleted afterwards (ProSho tables back to 0
+  rows). Applaut/Jobref unaffected (health 200 after every deploy).
+
+**Not verified yet (needs a real person):** the real GitHub consent
+screen, a real App installation, and a real `prosho.yaml` fetch + push —
+that's the exit check in the banner.
 
 **Phase 0 (Foundation) — done and live, 2026-10-13.** Exit check passed:
 `GET https://api.prosho.lvamo.com/api/v1/prosho/health` → 200
@@ -157,6 +261,16 @@ first API call is the check.
   project (TransitBuddy). All example values in it are illustrative.
 
 ## Session log
+
+### 2026-10-15 — Phase 1 built and deployed
+- Four slices, each live and production-verified: GitHub sign-in;
+  projects + visibility + audit log (`0023`); repo connection + manifest
+  sync + claims + webhook (`0024`); the public page. 38 tests.
+- Bugs caught along the way: sync error paths read an expired
+  `updated_at` after commit (async lazy-load crash) → always
+  commit-and-refresh; the public API first sent `Cache-Control: public,
+  max-age=60`, which would have kept a just-made-private page visible for
+  a minute → `no-cache`.
 
 ### 2026-10-13 — Phase 0 shipped
 - Built and deployed the foundation listed under "Status" above, in one
