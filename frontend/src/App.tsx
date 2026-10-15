@@ -12,7 +12,12 @@ import JobrefDashboard from './jobref/pages/Dashboard'
 import JobrefReferralRequest from './jobref/pages/ReferralRequest'
 import JobrefReferralRequestDetail from './jobref/pages/ReferralRequestDetail'
 import JobrefProtectedRoute from './jobref/components/ProtectedRoute'
+import { ProshoAuthProvider } from './prosho/context/AuthContext'
 import Prosho from './prosho/pages/Prosho'
+import ProshoLogin from './prosho/pages/Login'
+import ProshoAuthCallback from './prosho/pages/AuthCallback'
+import ProshoDashboard from './prosho/pages/Dashboard'
+import ProshoProtectedRoute from './prosho/components/ProtectedRoute'
 import Login from './applaut/pages/Login'
 import Register from './applaut/pages/Register'
 import Dashboard from './applaut/pages/Dashboard'
@@ -30,6 +35,7 @@ export default function App() {
   return (
     <AuthProvider>
     <JobrefAuthProvider>
+    <ProshoAuthProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Hub />} />
@@ -62,6 +68,16 @@ export default function App() {
             }
           />
           <Route path="prosho" element={<Prosho />} />
+          <Route path="prosho/login" element={<ProshoLogin />} />
+          <Route path="prosho/auth/callback" element={<ProshoAuthCallback />} />
+          <Route
+            path="prosho/dashboard"
+            element={
+              <ProshoProtectedRoute>
+                <ProshoDashboard />
+              </ProshoProtectedRoute>
+            }
+          />
           <Route path="applaut" element={<Layout />}>
             <Route index element={<Landing />} />
             <Route path="login" element={<Login />} />
@@ -136,6 +152,7 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
+    </ProshoAuthProvider>
     </JobrefAuthProvider>
     </AuthProvider>
   )

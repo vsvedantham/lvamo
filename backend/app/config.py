@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     prosho_github_private_key_b64: str = ""
     prosho_github_webhook_secret: str = ""
     prosho_github_redirect_uri: str = "http://localhost:8000/api/v1/prosho/auth/github/callback"
+    # Closed beta: GitHub logins (comma-separated) allowed to create a ProSho
+    # account. Existing accounts can always sign in. Empty = nobody new.
+    prosho_signup_allowlist: str = ""
 
     # Server
     backend_cors_origins: List[str] = ["http://localhost:5173"]

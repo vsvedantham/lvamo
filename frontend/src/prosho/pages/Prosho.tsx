@@ -22,7 +22,7 @@ export default function Prosho() {
           letterSpacing: '0.04em',
           marginBottom: '1.75rem',
         }}>
-          Project Showcase · In development
+          Project Showcase · Closed beta
         </div>
 
         <h1 style={{
@@ -41,8 +41,17 @@ export default function Prosho() {
           and how the work came together over time.
         </p>
 
-        <p style={{ fontSize: '0.9rem', color: 'var(--text-3)' }}>
-          Not open for sign-ups yet.
+        <Link
+          to="/prosho/login"
+          style={{
+            display: 'inline-block', padding: '0.7rem 1.75rem', background: 'var(--accent)', color: '#fff',
+            borderRadius: 'var(--radius-sm)', fontWeight: 600, fontSize: '0.9rem', textDecoration: 'none',
+          }}
+        >
+          Sign in with GitHub
+        </Link>
+        <p style={{ marginTop: '0.9rem', fontSize: '0.82rem', color: 'var(--text-3)' }}>
+          Closed beta — invited students only for now.
         </p>
 
         <p style={{ marginTop: '1.75rem' }}>
