@@ -17,6 +17,8 @@ import Prosho from './prosho/pages/Prosho'
 import ProshoLogin from './prosho/pages/Login'
 import ProshoAuthCallback from './prosho/pages/AuthCallback'
 import ProshoDashboard from './prosho/pages/Dashboard'
+import ProshoNewProject from './prosho/pages/NewProject'
+import ProshoProjectManage from './prosho/pages/ProjectManage'
 import ProshoProtectedRoute from './prosho/components/ProtectedRoute'
 import Login from './applaut/pages/Login'
 import Register from './applaut/pages/Register'
@@ -75,6 +77,22 @@ export default function App() {
             element={
               <ProshoProtectedRoute>
                 <ProshoDashboard />
+              </ProshoProtectedRoute>
+            }
+          />
+          <Route
+            path="prosho/projects/new"
+            element={
+              <ProshoProtectedRoute>
+                <ProshoNewProject />
+              </ProshoProtectedRoute>
+            }
+          />
+          <Route
+            path="prosho/projects/:id"
+            element={
+              <ProshoProtectedRoute>
+                <ProshoProjectManage />
               </ProshoProtectedRoute>
             }
           />

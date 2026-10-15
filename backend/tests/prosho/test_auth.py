@@ -3,7 +3,7 @@
 from urllib.parse import parse_qs, urlparse
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import select
 
 from app.config import settings
 from app.core.security import create_access_token
@@ -13,15 +13,7 @@ from app.prosho.services import auth as auth_service
 from app.prosho.services import github
 
 BASE = "/api/v1/prosho/auth"
-GH_ID = 9_100_000_001  # far above real GitHub ids; cleaned up after each test
-
-
-@pytest.fixture(autouse=True)
-async def _cleanup():
-    yield
-    async with AsyncSessionLocal() as db:
-        await db.execute(delete(ProshoUser).where(ProshoUser.github_id.between(GH_ID, GH_ID + 99)))
-        await db.commit()
+GH_ID = 9_100_000_001  # in the test id range; conftest cleans up after each test
 
 
 @pytest.fixture

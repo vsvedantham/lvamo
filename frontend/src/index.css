@@ -134,6 +134,21 @@ input[type="range"]:focus {
   box-shadow: none;
 }
 
+/* The text-field rule above (appearance: none, padding, 100% width) turns
+   checkboxes and radios into empty boxes with no visible checked state.
+   Give them their native controls back, in the accent colour. */
+input[type="checkbox"],
+input[type="radio"] {
+  appearance: auto;
+  -webkit-appearance: auto;
+  width: 1.1rem;
+  height: 1.1rem;
+  padding: 0;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 input[type="checkbox"] {
   width: auto;
   accent-color: var(--accent);

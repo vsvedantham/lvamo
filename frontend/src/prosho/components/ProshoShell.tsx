@@ -30,7 +30,7 @@ export default function ProshoShell({ children }: { children: ReactNode }) {
               onClick={logout}
               style={{
                 padding: '0.4rem 0.75rem', background: 'transparent', color: 'var(--text-2)',
-                border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-xs)', fontSize: '0.8rem', cursor: 'pointer',
+                border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-xs)', fontSize: '0.8rem', cursor: 'pointer', whiteSpace: 'nowrap',
               }}
             >
               Sign out
