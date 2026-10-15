@@ -36,7 +36,7 @@ export const MANUAL_STATUS_LABEL: Record<ManualStatus, string> = {
   not_met: 'Not met',
 }
 
-export function describeTarget(c: Claim): string {
+export function describeTarget(c: Pick<Claim, 'target_op' | 'target_value' | 'target_value_hi'>): string {
   const v = c.target_value
   switch (c.target_op) {
     case 'gte': return `≥ ${v}`

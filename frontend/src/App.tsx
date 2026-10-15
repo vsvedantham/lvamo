@@ -19,6 +19,7 @@ import ProshoAuthCallback from './prosho/pages/AuthCallback'
 import ProshoDashboard from './prosho/pages/Dashboard'
 import ProshoNewProject from './prosho/pages/NewProject'
 import ProshoProjectManage from './prosho/pages/ProjectManage'
+import ProshoProjectPage from './prosho/pages/ProjectPage'
 import ProshoProtectedRoute from './prosho/components/ProtectedRoute'
 import Login from './applaut/pages/Login'
 import Register from './applaut/pages/Register'
@@ -96,6 +97,9 @@ export default function App() {
               </ProshoProtectedRoute>
             }
           />
+          {/* Public project pages. Static prosho/* routes above win over this
+              one, and their names are reserved slugs (schemas/project.py). */}
+          <Route path="prosho/:slug" element={<ProshoProjectPage />} />
           <Route path="applaut" element={<Layout />}>
             <Route index element={<Landing />} />
             <Route path="login" element={<Login />} />
