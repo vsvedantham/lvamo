@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Design, not built |
+| Status | Phase 1 (shared core) and Phase 2 (engine 3 sync) built and live 2026-10-17; Phases 3–5 not built |
 | Written | 2026-10-17 |
 | Replaces | `AGENT_IMPORT_DESIGN.md` (push-API idea, dropped) |
 | First real user | Venkat's own Claude routine "Job search automation" (§6.10) |

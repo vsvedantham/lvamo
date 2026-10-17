@@ -10,11 +10,23 @@
 
 ## 🎯 NEXT SESSION PRIMARY TASK
 
-**Changed 2026-10-17: Job engines Phase 2 — sync Venkat's own Claude routine
-into Applaut (engine 3).** Design: [`docs/applaut/JOB_ENGINES_DESIGN.md`](docs/applaut/JOB_ENGINES_DESIGN.md)
-§6 and §8; Phase 1 (shared core) is live, see "Job engines — Phase 1" below.
-Before starting: Venkat creates a read-only Neon role and a read-only R2 token
-for `job-search-automation-documents`, and rotates the routine's R2 key (§6.10).
+**Changed 2026-10-17: finish Job engines Phase 2 in production: connect
+Venkat's routine.** Phase 2 (engine 3 sync) is built, tested and deployed
+(see "Job engines — Phase 2" below). What's left needs Venkat:
+1. In Neon's SQL editor: create the read-only role (the SQL is under
+   Settings → Job engine → "Show the SQL that creates a read-only role").
+2. In Cloudflare: an R2 API token with **Object Read only** for
+   `job-search-automation-documents`; also rotate the routine's own R2 key
+   (it was printed in an earlier session, §6.10).
+3. In Applaut (prod): Settings → Job engine → "Your Claude routine", paste
+   the read-only Neon URL, account id, key id and secret, routine link,
+   schedule `7 6,18 * * *` UTC → **Test connection** → **Save and connect**.
+   The first sync starts at once.
+4. Then verify and record here: the 27 jobs (one per uid) and their 54 PDFs
+   synced, applications in To review, run_tracker rows under Run history,
+   and the next scheduled run's checks (T + 30 min …) and sync (finish + 60 min).
+Next build after that: Phase 3 (skeleton repo, profile-file export, setup
+wizard, onboarding engine step), design §8.
 The company-board scaling below is now secondary (it only feeds Applaut Basic).
 
 **Keep scaling `backend/app/applaut/discovery/data/company_boards.json` — now at 500 companies, single-country density still below target. A proven sourcing method exists — use it.**
@@ -483,6 +495,105 @@ mid-session).
 - `deploy.sh` on the VM had an uncommitted quoting bug (already committed and deployed).
 - Personio adapter (dead JSON endpoint → live XML feed) — see session update
   above (committed `efe3a95`, deployed).
+
+---
+
+## Job engines — Phase 2: your own Claude routine (2026-10-17, deployed)
+
+Engine 3 of [`docs/applaut/JOB_ENGINES_DESIGN.md`](docs/applaut/JOB_ENGINES_DESIGN.md)
+§6: Applaut reads a user's routine output from **their** Neon and R2 with
+read-only credentials and copies it into Applaut. Commit `b41303d`.
+
+**Code map** (`backend/app/applaut/routine/`):
+- `source.py`: `NeonReader` (asyncpg; every query in a READ ONLY transaction
+  with a 30 s statement timeout; works through Neon's pooler) and
+  `R2RoutineStorage` (boto3, list/get only). `make_storage` is the one place
+  an R2 client is built (tests replace it). Private/loopback hosts are refused
+  unless `APPLAUT_ROUTINE_ALLOW_PRIVATE_HOSTS` (tests only).
+- `schedule.py`: cron + timezone → status checks at T+30m/+60m/+2h/+3h,
+  one open `routine_check` and one open `routine_sync` task per profile.
+  APScheduler counts weekdays from Monday, cron from Sunday: numbers are
+  translated to names. Runs must be ≥ 4 h apart.
+- `checks.py`: copies `run_tracker` rows into `routine_runs`, decides
+  finished / still running / stopped / didn't run, queues the sync at
+  `finished_at + 60 min`, notifies once per bad run, pauses the connection
+  after 5 consecutive failures.
+- `sync.py`: §6.4. Reads `(uid, last_seen_at, docs_status)` for all jobs,
+  then full rows only for new/changed ones; per job a savepoint, so one bad
+  row doesn't stop the others.
+- `core/credentials.py`: Fernet/MultiFernet, key `APPLAUT_CREDENTIALS_KEY`
+  (comma-separated; first encrypts, all decrypt; `rotate()` re-encrypts).
+- `services/job_engine.py`, `api/v1/routers/job_engine.py` (`/job-engine`),
+  `schemas/job_engine.py`.
+
+**Migration `0027`**: `routine_connections`, `routine_runs`,
+`routine_syncs`, and `routine_jobs` (not in the design's table list, added
+because the sync needs it: uid → opportunity, whether it was linked to a
+shared Basic posting, the copied PDFs' ETags, and when the uid disappeared
+from the routine's database).
+
+**Decisions / assumptions made while building** (smallest reasonable ones):
+- Saving a connection requires the engine to be "Your Claude routine" first
+  (409 otherwise); the UI does both from one page.
+- A save re-runs every check; nothing is stored unless all pass. Saving
+  again with no changes is the "Try again" for a paused connection.
+- The first save (or new secrets) queues a sync **now** (§6.7 step 9).
+- Sync now: refreshes run status inline, then queues the sync and kicks the
+  dispatcher in the background; 429 within 10 min of the last one.
+- "Linked to a shared posting" uses the shared, active Basic opportunity
+  (no private copy); its description is never overwritten.
+- A sync notifies only when it found new jobs, copied documents, or failed.
+- PDFs: the routine names files `<Name>_CV.pdf` / `<Name>_CoverLetter.pdf`,
+  so they're found by suffix (works for the skeleton's other names too).
+- Removed rows: `routine_jobs.removed_at` + shown in the sync history; the
+  job page doesn't show it yet.
+
+**Tests** (`backend/tests/applaut/test_routine_*.py`, fake routine schema
+with a SELECT-only role in the local Postgres + in-memory R2,
+`routine_fake.py`): 36 new, full suite **131 passed**. Covered: encryption
+round trip and key rotation; secrets never in API responses or audit log;
+refusal of writer roles, superusers, writable R2 keys, private hosts, bad
+input; v0 detection; engine switch needs confirmation and deletes the
+connection; other users see nothing; sync creates opportunities,
+assessments (with `CHECK:` flags), PDFs at
+`applaut/documents/{user}/{opp}/{sha8}/…`, text versions, description,
+pending_review applications, one notification, audit entry; unchanged
+second sync reads nothing from R2; changed PDF replaces the current
+document; link to a shared posting by normalised URL; private jobs 404 for
+others; removed rows kept; non-PDF/oversized files skipped and reported;
+untrusted URLs dropped; source failure recorded; Sync now rate limit;
+checks through the real dispatcher (finished → sync at +60 min, failed with
+reason, running → stopped at T+3h, routine's 6 h stale marker, sources_failed
+→ problems, missed, v0, pause after 5 failures and recovery).
+
+**Verified locally (browser preview)**, seeded engine-3 user: dashboard
+engine card (failed state with the §6.5 sentence, last run / synced / next
+run rows, Sync now, Open routine, Run history); Settings: engine choice
+(Applaut AI disabled), connection form shows only "Saved · host" / "ends in
+…3f2a" hints, Test connection runs real network checks and lists each
+failure, schedule picker, run history (funnel counts, details; a
+`<script>` in the summary renders as text), sync history; 375 px wide
+with no horizontal scroll. Seed data deleted.
+
+**Verified in production (2026-10-17):** backup
+`/home/ubuntu/backups/lvamo-pre-0027-20261017-1113.dump` taken first
+(PGDMP header, 23 tables of data listed by `pg_restore -l`);
+`.env.production` backed up to `/home/ubuntu/backups/.env.production.bak-20261017-0027`,
+then `APPLAUT_CREDENTIALS_KEY` generated on the VM (never printed) and
+appended; inside the container an encrypt/decrypt round trip works.
+`deploy.sh` ran `0026 → 0027`; both workers started with no errors; DB at
+`0027` with the four `routine_*` tables; data unchanged (12 shared
+opportunities, 2 profiles on `basic`, no engine tasks). Applaut, Jobref,
+ProSho health and platform `verticals_enabled` all 200; `/job-engine`
+routes answer 403 without auth. Cloudflare Pages serves the new bundle.
+**Not verified in prod:** the logged-in Settings/dashboard pages and a real
+sync — both wait for Venkat to connect his routine (banner at the top).
+
+**Not verified:** a read-only probe of Venkat's real Neon/R2 from the Mac
+was blocked by the session's permission policy, so real-data compatibility
+is checked for the first time by the first production sync (the code
+follows the routine's `pipeline.py` table and file layout, read from
+`vsvedantham/job-search-automation` at `85d70a8`).
 
 ---
 
