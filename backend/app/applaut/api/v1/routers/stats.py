@@ -11,6 +11,7 @@ from app.applaut.models.score import Score
 from app.applaut.models.user import User
 from app.applaut.services.auth import get_current_user
 from app.applaut.services.profile import get_active_profile
+from app.applaut.services.visibility import visible_to
 
 router = APIRouter(prefix="/stats")
 
@@ -42,7 +43,7 @@ async def get_stats(
     near_miss_threshold = good_threshold - 15
 
     opportunities_found = await db.scalar(
-        select(func.count(Opportunity.id)).where(Opportunity.is_active == True)
+        select(func.count(Opportunity.id)).where(Opportunity.is_active == True, visible_to(uid))
     ) or 0
 
     good_matches = await db.scalar(

@@ -2,12 +2,16 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { createApplication } from '../api/applications'
 import {
+  effectiveScore,
   listOpportunities,
   runDiscovery,
+  type Assessment,
+  type EngineFilter,
   type MatchFilter,
   type NearMissKeyword,
   type Opportunity,
 } from '../api/opportunity'
+import { getMyProfile, JOB_ENGINE_LABELS, type JobEngine } from '../api/profile'
 import { decideNearMiss } from '../api/scoring'
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -15,6 +19,8 @@ const SOURCE_LABELS: Record<string, string> = {
   lever: 'Lever',
   ashby: 'Ashby',
   personio: 'Personio',
+  own_routine: 'Your Claude routine',
+  applaut_ai: 'Applaut AI',
 }
 
 const REMOTE_COLORS: Record<string, string> = {
@@ -26,9 +32,10 @@ const REMOTE_COLORS: Record<string, string> = {
 type Category = 'good' | 'near_miss' | 'below' | 'unscored'
 
 function categoryOf(opp: Opportunity, good: number, nearMiss: number): Category {
-  if (!opp.score) return 'unscored'
-  if (opp.score.total_score >= good) return 'good'
-  if (opp.score.total_score >= nearMiss) return 'near_miss'
+  const score = effectiveScore(opp)
+  if (score === null) return 'unscored'
+  if (score >= good) return 'good'
+  if (score >= nearMiss) return 'near_miss'
   return 'below'
 }
 
@@ -78,6 +85,26 @@ function KeywordChip({ kw }: { kw: NearMissKeyword }) {
         <span style={{ color, fontSize: '0.72rem' }}>{label}</span>
       </div>
       <p style={{ color: 'var(--text-2)', margin: '0.2rem 0 0', fontSize: '0.72rem' }}>{kw.reason}</p>
+    </div>
+  )
+}
+
+function AssessmentSummary({ assessment }: { assessment: Assessment }) {
+  return (
+    <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+      <span title={assessment.matched_skills.join(', ')} style={{ padding: '0.15rem 0.55rem', background: 'var(--success-bg)', border: '1px solid var(--success-border)', borderRadius: '999px', fontSize: '0.72rem', color: 'var(--success)', cursor: 'help' }}>
+        ✓ {assessment.matched_skills.length} must-haves matched
+      </span>
+      {assessment.missing_skills.length > 0 && (
+        <span title={assessment.missing_skills.join(', ')} style={{ padding: '0.15rem 0.55rem', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '999px', fontSize: '0.72rem', color: 'var(--text-2)', cursor: 'help' }}>
+          ✗ missing: {assessment.missing_skills.slice(0, 3).join(', ')}{assessment.missing_skills.length > 3 ? ` +${assessment.missing_skills.length - 3}` : ''}
+        </span>
+      )}
+      {assessment.flags.length > 0 && (
+        <span title={assessment.flags.join('\n')} style={{ padding: '0.15rem 0.55rem', background: 'var(--warn-bg)', border: '1px solid var(--warn-border)', borderRadius: '999px', fontSize: '0.72rem', color: 'var(--warn)', cursor: 'help' }}>
+          ⚠ {assessment.flags.length} to check
+        </span>
+      )}
     </div>
   )
 }
@@ -184,10 +211,9 @@ function GoodMatchActions({ opp }: { opp: Opportunity }) {
   const navigate = useNavigate()
 
   const startApplication = async () => {
-    if (!opp.score) return
     setStarting(true)
     try {
-      const app = await createApplication(opp.id, opp.score.id)
+      const app = await createApplication(opp.id, opp.score?.id)
       setApplicationId(app.id)
     } catch (err: any) {
       if (err.response?.status === 409) navigate('/applaut/applications')
@@ -202,7 +228,7 @@ function GoodMatchActions({ opp }: { opp: Opportunity }) {
         onClick={() => navigate(`/applaut/documents/${opp.id}`)}
         style={{ padding: '0.35rem 0.875rem', background: 'transparent', border: '1px solid var(--border-strong)', color: 'var(--text-1)', borderRadius: 'var(--radius-xs)', cursor: 'pointer', fontSize: '0.8rem' }}
       >
-        Generate documents →
+        {opp.is_private ? 'View documents →' : 'Generate documents →'}
       </button>
       {applicationId ? (
         <Link to="/applaut/applications" style={{ padding: '0.35rem 0.875rem', background: 'var(--success-bg)', color: 'var(--success)', border: '1px solid var(--success-border)', borderRadius: 'var(--radius-xs)', fontSize: '0.8rem', textDecoration: 'none' }}>
@@ -242,7 +268,10 @@ function OpportunityCard({ opp, goodThreshold, nearMissThreshold, onUpdate }: {
   onUpdate: () => void
 }) {
   const category = categoryOf(opp, goodThreshold, nearMissThreshold)
-  const needsReview = category === 'near_miss' && (!opp.score?.user_decision || opp.score.user_decision === 'pending_review')
+  // Keyword review applies to Applaut's rule-based score only; an AI engine's
+  // assessment already lists what's missing.
+  const needsReview = category === 'near_miss' && !opp.assessment && !!opp.score
+    && (!opp.score.user_decision || opp.score.user_decision === 'pending_review')
 
   return (
     <div style={{
@@ -272,11 +301,16 @@ function OpportunityCard({ opp, goodThreshold, nearMissThreshold, onUpdate }: {
               />
             )}
             <Badge text={SOURCE_LABELS[opp.source] ?? opp.source} color="var(--accent)" />
-            {category === 'near_miss' && !needsReview && <Badge text="Reviewed" color="var(--text-3)" />}
+            {category === 'near_miss' && !needsReview && !opp.assessment && <Badge text="Reviewed" color="var(--text-3)" />}
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem', flexShrink: 0 }}>
-          {opp.score ? (
+          {opp.assessment?.match_score != null ? (
+            <span title="Match % from your job engine's AI assessment" style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <span style={{ fontSize: '0.68rem', color: 'var(--text-3)' }}>AI match</span>
+              <ScoreBadge score={opp.assessment.match_score} good={goodThreshold} nearMiss={nearMissThreshold} />
+            </span>
+          ) : opp.score ? (
             <ScoreBadge score={opp.score.total_score} good={goodThreshold} nearMiss={nearMissThreshold} />
           ) : (
             <span style={{ fontSize: '0.72rem', color: 'var(--text-3)' }}>not scored</span>
@@ -289,9 +323,10 @@ function OpportunityCard({ opp, goodThreshold, nearMissThreshold, onUpdate }: {
         </div>
       </div>
 
-      {opp.score && <DimensionChips explanation={opp.score.explanation} />}
+      {opp.assessment ? <AssessmentSummary assessment={opp.assessment} /> : opp.score && <DimensionChips explanation={opp.score.explanation} />}
 
-      {category === 'good' && <GoodMatchActions opp={opp} />}
+      {/* An AI engine only brings in jobs it judged worth applying to. */}
+      {(category === 'good' || opp.is_private) && <GoodMatchActions opp={opp} />}
       {needsReview && <NearMissPanel opp={opp} goodThreshold={goodThreshold} onUpdate={onUpdate} />}
     </div>
   )
@@ -323,6 +358,8 @@ export default function Opportunities() {
   const [message, setMessage] = useState('')
   const [filterSource, setFilterSource] = useState('')
   const [filterCountry, setFilterCountry] = useState('')
+  const [filterEngine, setFilterEngine] = useState<EngineFilter | ''>('')
+  const [engine, setEngine] = useState<JobEngine | null>(null)
   const [filterMatch, setFilterMatch] = useState<MatchFilter>(
     initialMatch && VALID_MATCH_FILTERS.includes(initialMatch) ? initialMatch : 'all'
   )
@@ -342,6 +379,7 @@ export default function Opportunities() {
         source: filterSource || undefined,
         country_code: filterCountry || undefined,
         match: filterMatch,
+        engine: filterEngine || undefined,
       })
       setItems(res.items)
       setTotal(res.total)
@@ -352,7 +390,9 @@ export default function Opportunities() {
     }
   }
 
-  useEffect(() => { load(1); setPage(1) }, [filterSource, filterCountry, filterMatch])
+  useEffect(() => { load(1); setPage(1) }, [filterSource, filterCountry, filterMatch, filterEngine])
+  useEffect(() => { getMyProfile().then(p => setEngine(p.job_engine)).catch(() => setEngine('basic')) }, [])
+  const isBasic = engine === 'basic'
 
   const discover = async () => {
     setRunning(true)
@@ -377,13 +417,19 @@ export default function Opportunities() {
           <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, color: 'var(--text-1)' }}>Opportunities</h1>
           {total > 0 && <p style={{ color: 'var(--text-2)', fontSize: '0.825rem', marginTop: '0.2rem' }}>{total} jobs found</p>}
         </div>
-        <button
-          onClick={discover}
-          disabled={running}
-          style={{ padding: '0.5rem 1.25rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--radius-xs)', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500, opacity: running ? 0.7 : 1, whiteSpace: 'nowrap' }}
-        >
-          {running ? 'Searching & scoring…' : 'Run discovery'}
-        </button>
+        {isBasic ? (
+          <button
+            onClick={discover}
+            disabled={running}
+            style={{ padding: '0.5rem 1.25rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--radius-xs)', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500, opacity: running ? 0.7 : 1, whiteSpace: 'nowrap' }}
+          >
+            {running ? 'Searching & scoring…' : 'Run discovery'}
+          </button>
+        ) : engine && (
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-2)' }}>
+            Jobs come from <strong style={{ color: 'var(--text-1)' }}>{JOB_ENGINE_LABELS[engine]}</strong>
+          </span>
+        )}
       </div>
 
       {message && (
@@ -398,6 +444,13 @@ export default function Opportunities() {
             <option key={m} value={m}>{MATCH_LABELS[m]}</option>
           ))}
         </select>
+        {engine && !isBasic && (
+          <select value={filterEngine} onChange={e => setFilterEngine(e.target.value as EngineFilter | '')} style={selectStyle}>
+            <option value="">All engines</option>
+            <option value={engine}>{JOB_ENGINE_LABELS[engine]}</option>
+            <option value="basic">{JOB_ENGINE_LABELS.basic}</option>
+          </select>
+        )}
         <select value={filterSource} onChange={e => setFilterSource(e.target.value)} style={selectStyle}>
           <option value="">All sources</option>
           <option value="greenhouse">Greenhouse</option>
@@ -427,10 +480,12 @@ export default function Opportunities() {
           <option value="HU">Hungary</option>
           <option value="US">United States</option>
         </select>
-        <select value="rule_based" onChange={() => {}} style={selectStyle} title="AI scoring is a premium feature — coming soon">
-          <option value="rule_based">Rule-based scoring</option>
-          <option value="ai" disabled>AI scoring (premium — coming soon)</option>
-        </select>
+        {isBasic && (
+          <select value="rule_based" onChange={() => {}} style={selectStyle} title="AI scoring is a premium feature — coming soon">
+            <option value="rule_based">Rule-based scoring</option>
+            <option value="ai" disabled>AI scoring (premium — coming soon)</option>
+          </select>
+        )}
       </div>
 
       {loading ? (
@@ -438,7 +493,11 @@ export default function Opportunities() {
       ) : items.length === 0 ? (
         <div style={{ padding: '3rem', textAlign: 'center', border: '1px dashed var(--border-strong)', borderRadius: 'var(--radius)' }}>
           <p style={{ fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text-1)' }}>No jobs found yet</p>
-          <p style={{ color: 'var(--text-2)', fontSize: '0.85rem' }}>Click "Run discovery" to search across all job boards — new jobs are scored automatically.</p>
+          <p style={{ color: 'var(--text-2)', fontSize: '0.85rem' }}>
+            {isBasic || !engine
+              ? 'Click "Run discovery" to search across all job boards — new jobs are scored automatically.'
+              : `New jobs appear here after ${JOB_ENGINE_LABELS[engine]} runs.`}
+          </p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>

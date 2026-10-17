@@ -1,24 +1,50 @@
+"""Applaut's engine scheduler.
+
+The schedule lives in Postgres (`applaut.engine_tasks`), not in each
+worker's memory. Every uvicorn worker runs the same small dispatcher every
+two minutes; it claims due tasks with FOR UPDATE SKIP LOCKED, so a task runs
+in exactly one worker, every worker sees the same schedule, and the schedule
+survives restarts (docs/applaut/JOB_ENGINES_DESIGN.md §3.3).
+
+Today's one kind of task is Applaut Basic's discovery run for a profile;
+engine 3 (status checks, syncs) and engine 2 runs are added as more kinds.
+"""
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Awaitable, Callable
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import AsyncSessionLocal
 from app.applaut.discovery.engine import run_discovery_for_profile
+from app.applaut.models.engine_task import EngineTask
 from app.applaut.models.profile import Profile
 
 logger = logging.getLogger(__name__)
-scheduler = AsyncIOScheduler()
+scheduler = AsyncIOScheduler(timezone="UTC")
 
-_JOB_PREFIX = "discovery_"
+KIND_BASIC_DISCOVERY = "basic_discovery"
+OPEN_STATUSES = ("pending", "running")
 
-# Production runs several uvicorn workers, and each one has its own scheduler
-# holding its own job per profile. Two guards keep a profile's discovery to one
-# run per interval: a Postgres advisory lock stops two workers running it at
-# the same time, and a run is skipped if the last one finished within this
-# fraction of the interval (a second worker whose timer fires later).
+DISPATCH_EVERY_SECONDS = 120
+CLAIM_BATCH = 5
+# A task still `running` after this long belongs to a worker that died.
+STALE_RUNNING_AFTER = timedelta(hours=1)
+# Waits before retrying a task that raised; after the last one it is `failed`.
+RETRY_DELAYS = (timedelta(minutes=1), timedelta(minutes=5), timedelta(minutes=30))
+
+# Belt and braces inside a discovery run: the dispatcher already runs each
+# task once, but the run itself also takes a Postgres advisory lock and skips
+# if the last run finished within this fraction of the interval.
 _RECENT_RUN_FRACTION = 0.9
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def _ran_recently(profile: Profile) -> bool:
@@ -110,63 +136,179 @@ async def _run_profile_locked(profile_id: str) -> None:
         await db.commit()
 
 
-def schedule_profile(profile: Profile) -> None:
-    job_id = f"{_JOB_PREFIX}{profile.id}"
-    if not profile.is_active or not profile.discovery_enabled:
-        if scheduler.get_job(job_id):
-            scheduler.remove_job(job_id)
-            logger.info("Removed discovery job for profile %s", profile.id)
+# ----------------------------------------------------------------------------- schedule
+
+def _wants_discovery(profile: Profile | None) -> bool:
+    return bool(
+        profile and profile.is_active and profile.discovery_enabled and profile.job_engine == "basic"
+    )
+
+
+async def sync_discovery_task(
+    profile_id: str | uuid.UUID, db: AsyncSession, not_before: datetime | None = None
+) -> None:
+    """Make the queue match the profile: exactly one open discovery task if
+    the profile is active, on Applaut Basic and has discovery on; none
+    otherwise. Call after any change to those settings (commits).
+    `not_before` keeps the next run at least that far out (used after a run,
+    so a run that failed before recording itself doesn't repeat at once)."""
+    profile = await db.get(Profile, uuid.UUID(str(profile_id)))
+    open_task = await db.scalar(select(EngineTask).where(
+        EngineTask.kind == KIND_BASIC_DISCOVERY,
+        EngineTask.profile_id == uuid.UUID(str(profile_id)),
+        EngineTask.status.in_(OPEN_STATUSES),
+    ))
+
+    if not _wants_discovery(profile):
+        if open_task is not None and open_task.status == "pending":
+            open_task.status = "cancelled"
+            open_task.finished_at = _now()
+            await db.commit()
+            logger.info("Cancelled discovery for profile %s", profile_id)
         return
 
     hours = max(1, profile.discovery_frequency_hours or 24)
-    scheduler.add_job(
-        _run_profile,
-        trigger="interval",
-        hours=hours,
-        args=[str(profile.id)],
-        id=job_id,
-        replace_existing=True,
+    due = max(_now(), profile.last_discovery_at + timedelta(hours=hours)) if profile.last_discovery_at else _now()
+    if not_before is not None:
+        due = max(due, not_before)
+
+    if open_task is None:
+        # ON CONFLICT DO NOTHING: two workers bootstrapping at once race here,
+        # and the partial unique index keeps only one open task.
+        await db.execute(insert(EngineTask).values(
+            id=uuid.uuid4(), kind=KIND_BASIC_DISCOVERY, user_id=profile.user_id, profile_id=profile.id,
+            due_at=due, status="pending", attempts=0, payload={"interval_hours": hours},
+        ).on_conflict_do_nothing())
+        await db.commit()
+        logger.info("Scheduled discovery for profile %s every %dh, next %s", profile_id, hours, due.isoformat())
+    elif open_task.status == "pending" and (open_task.payload or {}).get("interval_hours") != hours:
+        open_task.due_at = due
+        open_task.payload = {**(open_task.payload or {}), "interval_hours": hours}
+        await db.commit()
+        logger.info("Rescheduled discovery for profile %s every %dh, next %s", profile_id, hours, due.isoformat())
+
+
+async def get_discovery_schedule(profile_id: str | uuid.UUID, db: AsyncSession) -> dict | None:
+    task = await db.scalar(select(EngineTask).where(
+        EngineTask.kind == KIND_BASIC_DISCOVERY,
+        EngineTask.profile_id == uuid.UUID(str(profile_id)),
+        EngineTask.status.in_(OPEN_STATUSES),
+    ))
+    if task is None:
+        return None
+    return {
+        "profile_id": str(profile_id),
+        "next_run_at": task.due_at.isoformat(),
+        "interval_hours": int((task.payload or {}).get("interval_hours") or 24),
+    }
+
+
+# ----------------------------------------------------------------------------- dispatcher
+
+async def _run_basic_discovery(task: EngineTask) -> None:
+    await _run_profile(str(task.profile_id))
+
+
+async def _after_basic_discovery(task: EngineTask, db: AsyncSession) -> None:
+    hours = int((task.payload or {}).get("interval_hours") or 24)
+    await sync_discovery_task(task.profile_id, db, not_before=_now() + timedelta(hours=hours))
+
+
+_HANDLERS: dict[str, Callable[[EngineTask], Awaitable[None]]] = {
+    KIND_BASIC_DISCOVERY: _run_basic_discovery,
+}
+# Runs after a task is closed (done or finally failed), e.g. to queue the next run.
+_FOLLOW_UPS: dict[str, Callable[[EngineTask, AsyncSession], Awaitable[None]]] = {
+    KIND_BASIC_DISCOVERY: _after_basic_discovery,
+}
+
+
+async def _recover_stale_tasks(db: AsyncSession) -> None:
+    await db.execute(
+        update(EngineTask)
+        .where(EngineTask.status == "running", EngineTask.started_at < _now() - STALE_RUNNING_AFTER)
+        .values(status="pending", due_at=_now(), last_error="worker stopped while running; retrying",
+                updated_at=_now())
     )
-    logger.info("Scheduled discovery for profile %s every %dh", profile.id, hours)
+    await db.commit()
 
 
-def unschedule_profile(profile_id: str) -> None:
-    job_id = f"{_JOB_PREFIX}{profile_id}"
-    if scheduler.get_job(job_id):
-        scheduler.remove_job(job_id)
+async def _claim_due_tasks(db: AsyncSession) -> list[EngineTask]:
+    tasks = list(await db.scalars(
+        select(EngineTask)
+        .where(EngineTask.status == "pending", EngineTask.due_at <= _now())
+        .order_by(EngineTask.due_at)
+        .limit(CLAIM_BATCH)
+        .with_for_update(skip_locked=True)
+    ))
+    for task in tasks:
+        task.status = "running"
+        task.started_at = _now()
+        task.attempts += 1
+    await db.commit()
+    return tasks
 
 
-def get_scheduler_status() -> list[dict]:
-    jobs = [j for j in scheduler.get_jobs() if j.id.startswith(_JOB_PREFIX)]
-    return [
-        {
-            "profile_id": j.id.removeprefix(_JOB_PREFIX),
-            "next_run_at": j.next_run_time.isoformat() if j.next_run_time else None,
-            "interval_hours": int(j.trigger.interval.total_seconds() // 3600),
-        }
-        for j in jobs
-    ]
-
-
-async def _load_all_profiles() -> None:
+async def _close_task(task_id: uuid.UUID, error: str | None) -> None:
     async with AsyncSessionLocal() as db:
-        profiles = await db.scalars(
-            select(Profile).where(Profile.is_active == True)
-        )
-        for profile in profiles:
-            schedule_profile(profile)
+        task = await db.get(EngineTask, task_id)
+        if task is None:
+            return
+        if error is None:
+            task.status, task.last_error = "done", None
+        elif task.attempts <= len(RETRY_DELAYS):
+            task.status, task.last_error = "pending", error[:4000]
+            task.due_at = _now() + RETRY_DELAYS[task.attempts - 1]
+        else:
+            task.status, task.last_error = "failed", error[:4000]
+        task.finished_at = _now()
+        await db.commit()
+        if task.status in ("done", "failed") and task.kind in _FOLLOW_UPS:
+            await _FOLLOW_UPS[task.kind](task, db)
+
+
+async def dispatch_due_tasks() -> int:
+    """Run every due task this worker can claim. Returns how many ran."""
+    async with AsyncSessionLocal() as db:
+        await _recover_stale_tasks(db)
+        tasks = await _claim_due_tasks(db)
+    for task in tasks:
+        handler = _HANDLERS.get(task.kind)
+        error = None
+        try:
+            if handler is None:
+                raise RuntimeError(f"no handler for task kind {task.kind!r}")
+            await handler(task)
+        except Exception as exc:  # noqa: BLE001  (a failed task must not stop the others)
+            logger.exception("Engine task %s (%s) failed", task.id, task.kind)
+            error = f"{type(exc).__name__}: {exc}"
+        await _close_task(task.id, error)
+    return len(tasks)
+
+
+async def _bootstrap() -> None:
+    """Bring the queue in line with every active profile (idempotent, so every
+    worker can run it at startup)."""
+    async with AsyncSessionLocal() as db:
+        profile_ids = list(await db.scalars(select(Profile.id).where(Profile.is_active == True)))
+        for profile_id in profile_ids:
+            await sync_discovery_task(profile_id, db)
 
 
 def start_scheduler() -> None:
     scheduler.start()
-    # Defer profile loading until the event loop is running
+    scheduler.add_job(_bootstrap, trigger="date", id="engine_bootstrap", replace_existing=True)
     scheduler.add_job(
-        _load_all_profiles,
-        trigger="date",
-        id="bootstrap_profiles",
+        dispatch_due_tasks,
+        trigger="interval",
+        seconds=DISPATCH_EVERY_SECONDS,
+        id="engine_dispatcher",
         replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        next_run_time=_now() + timedelta(seconds=30),
     )
-    logger.info("Discovery scheduler started")
+    logger.info("Engine scheduler started")
 
 
 def stop_scheduler() -> None:

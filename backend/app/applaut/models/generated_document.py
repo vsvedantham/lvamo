@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, UUIDPrimaryKey
-from app.applaut.models.enums import DocumentTypeEnum
+from app.applaut.models.enums import DocumentTypeEnum, JobEngineEnum
 
 
 class GeneratedDocument(Base, UUIDPrimaryKey):
@@ -50,6 +50,15 @@ class GeneratedDocument(Base, UUIDPrimaryKey):
     r2_key: Mapped[Optional[str]] = mapped_column(String(1000))
     ai_model: Mapped[Optional[str]] = mapped_column(String(200))
     is_current: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    engine: Mapped[str] = mapped_column(
+        sa.Enum(JobEngineEnum, name="job_engine_enum", schema="applaut", create_type=False),
+        nullable=False,
+        default=JobEngineEnum.basic,
+    )
+    # text/markdown for Applaut Basic's documents; application/pdf (stored in
+    # R2 at r2_key) for AI engines', whose `content` holds a text version.
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False, default="text/markdown")
+    content_sha256: Mapped[Optional[str]] = mapped_column(sa.CHAR(64))
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=sa.func.now(), nullable=False

@@ -11,6 +11,16 @@ export interface DocumentItem {
   ai_model: string | null
   is_current: boolean
   created_at: string
+  engine: 'basic' | 'applaut_ai' | 'own_routine'
+  content_type: string
+  /** A PDF exists; get a short-lived link with getDocumentFileLink. */
+  has_file: boolean
+}
+
+export interface DocumentFileLink {
+  url: string
+  expires_in: number
+  file_name: string
 }
 
 export interface OpportunityDocuments {
@@ -46,5 +56,10 @@ export async function getOpportunityDocuments(
 
 export async function getDocument(documentId: string): Promise<DocumentItem> {
   const { data } = await client.get<DocumentItem>(`/documents/${documentId}`)
+  return data
+}
+
+export async function getDocumentFileLink(documentId: string): Promise<DocumentFileLink> {
+  const { data } = await client.get<DocumentFileLink>(`/documents/${documentId}/file`)
   return data
 }

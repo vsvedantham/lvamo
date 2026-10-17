@@ -30,14 +30,14 @@ def delete_file(key: str) -> None:
     client.delete_object(Bucket=settings.r2_bucket_name, Key=key)
 
 
-def generate_presigned_url(key: str, expires_in: int = 300) -> str:
+def generate_presigned_url(key: str, expires_in: int = 300, download_name: str | None = None) -> str:
     """A short-lived signed GET URL for an object that isn't otherwise
     public — R2 buckets in this project aren't. Callers own their own
     authorization check (is this caller allowed to see this specific
     object?) before calling this; it does no such check itself."""
     client = get_r2_client()
-    return client.generate_presigned_url(
-        "get_object",
-        Params={"Bucket": settings.r2_bucket_name, "Key": key},
-        ExpiresIn=expires_in,
-    )
+    params = {"Bucket": settings.r2_bucket_name, "Key": key}
+    if download_name:
+        # Save under a readable name; the browser still opens PDFs inline.
+        params["ResponseContentDisposition"] = f'inline; filename="{download_name}"'
+    return client.generate_presigned_url("get_object", Params=params, ExpiresIn=expires_in)

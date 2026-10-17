@@ -30,3 +30,11 @@ class ApplicationStatusEnum(str, enum.Enum):
 class DocumentTypeEnum(str, enum.Enum):
     tailored_resume = "tailored_resume"
     cover_letter = "cover_letter"
+
+
+class JobEngineEnum(str, enum.Enum):
+    """Which engine finds jobs and writes documents for a profile
+    (docs/applaut/JOB_ENGINES_DESIGN.md)."""
+    basic = "basic"
+    applaut_ai = "applaut_ai"
+    own_routine = "own_routine"

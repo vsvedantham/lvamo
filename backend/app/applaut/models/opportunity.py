@@ -3,9 +3,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
+import uuid
+
 import sqlalchemy as sa
 from sqlalchemy import Boolean, DateTime, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKey
@@ -15,8 +17,23 @@ from app.applaut.models.enums import EmploymentTypeEnum, RemotePreferenceEnum
 class Opportunity(Base, UUIDPrimaryKey, TimestampMixin):
     __tablename__ = "opportunities"
     __table_args__ = (
-        sa.UniqueConstraint("source", "external_id"),
+        # Shared (Applaut Basic) and private (AI engine) jobs are unique
+        # separately, so the same posting can exist once shared and once per user.
+        sa.Index(
+            "uq_applaut_opportunities_shared_source_external_id", "source", "external_id",
+            unique=True, postgresql_where=sa.text("owner_user_id IS NULL"),
+        ),
+        sa.Index(
+            "uq_applaut_opportunities_owned_source_external_id", "owner_user_id", "source", "external_id",
+            unique=True, postgresql_where=sa.text("owner_user_id IS NOT NULL"),
+        ),
         {"schema": "applaut"},
+    )
+
+    # NULL = found by Applaut Basic, visible to everyone; set = brought in by an
+    # AI engine for this user only. Read through services/visibility.py.
+    owner_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), sa.ForeignKey("applaut.users.id", ondelete="CASCADE")
     )
 
     source: Mapped[str] = mapped_column(String(100), nullable=False)

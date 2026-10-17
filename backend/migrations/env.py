@@ -16,7 +16,7 @@ load_dotenv()
 from app.db.base import Base  # noqa: E402
 from app.applaut.models import (  # noqa: E402, F401
     User, Profile, Resume, Opportunity, Score,
-    Application, GeneratedDocument, Notification, AuditLog,
+    Application, GeneratedDocument, Notification, AuditLog, JobAssessment, EngineTask,
 )
 from app.applaut.models.application_setting import ApplicationSetting  # noqa: E402, F401
 from app.jobref.models import (  # noqa: E402, F401

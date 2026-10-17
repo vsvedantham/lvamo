@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { createApplication } from '../api/applications'
-import { generateDocuments, getOpportunityDocuments, type DocumentItem, type GenerationMode, type OpportunityDocuments } from '../api/documents'
+import { generateDocuments, getDocumentFileLink, getOpportunityDocuments, type DocumentItem, type GenerationMode, type OpportunityDocuments } from '../api/documents'
 import { getOpportunity, type OpportunityDetail } from '../api/opportunity'
+import { getMyProfile, JOB_ENGINE_LABELS, type JobEngine } from '../api/profile'
 
 function MarkdownBlock({ content }: { content: string }) {
   return (
-    <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', fontSize: '0.875rem', lineHeight: 1.6, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '1.25rem', margin: 0 }}>
+    <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', fontSize: '0.875rem', lineHeight: 1.6, color: 'var(--text-1)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', padding: '1.25rem', margin: 0 }}>
       {content}
     </pre>
   )
@@ -56,15 +57,19 @@ export default function DocumentDetail() {
   const [error, setError] = useState('')
   const [startingApp, setStartingApp] = useState(false)
   const [appStarted, setAppStarted] = useState(false)
+  const [engine, setEngine] = useState<JobEngine | null>(null)
+  const [openingPdf, setOpeningPdf] = useState(false)
 
   useEffect(() => {
     if (!opportunityId) return
     Promise.all([
       getOpportunity(opportunityId),
       getOpportunityDocuments(opportunityId),
-    ]).then(([o, d]) => {
+      getMyProfile(),
+    ]).then(([o, d, p]) => {
       setOpp(o)
       setDocs(d)
+      setEngine(p.job_engine)
     }).catch(() => setError('Failed to load.')).finally(() => setLoading(false))
   }, [opportunityId])
 
@@ -104,6 +109,28 @@ export default function DocumentDetail() {
   const activeDoc: DocumentItem | null | undefined =
     activeTab === 'resume' ? docs?.tailored_resume : docs?.cover_letter
 
+  // Applaut's templates only write documents for Applaut Basic's own jobs;
+  // an AI engine's job comes with its engine's CV and cover letter.
+  const canGenerate = engine === 'basic' && opp !== null && !opp.is_private
+
+  const openPdf = async (doc: DocumentItem) => {
+    // Open the tab now (inside the click) so popup blockers allow it, then
+    // point it at the short-lived signed link.
+    const tab = window.open('', '_blank')
+    setOpeningPdf(true)
+    setError('')
+    try {
+      const { url } = await getDocumentFileLink(doc.id)
+      if (tab) tab.location.href = url
+      else window.location.href = url
+    } catch {
+      tab?.close()
+      setError('Could not open the PDF. Please try again.')
+    } finally {
+      setOpeningPdf(false)
+    }
+  }
+
   const filename = activeTab === 'resume'
     ? `${opp?.company_name ?? 'resume'}_tailored_resume.md`
     : `${opp?.company_name ?? 'cover'}_cover_letter.md`
@@ -127,8 +154,9 @@ export default function DocumentDetail() {
         )}
       </div>
 
-      {/* Generate controls */}
+      {/* Generate controls (Applaut Basic) and document actions */}
       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+        {canGenerate && (<>
         <select
           value={mode}
           onChange={e => setMode(e.target.value as GenerationMode)}
@@ -144,10 +172,20 @@ export default function DocumentDetail() {
         >
           {generating ? 'Generating…' : docs?.tailored_resume ? 'Regenerate' : 'Generate documents'}
         </button>
+        </>)}
+        {activeDoc?.has_file && (
+          <button
+            onClick={() => openPdf(activeDoc)}
+            disabled={openingPdf}
+            style={{ padding: '0.5rem 1.25rem', background: '#111827', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem', opacity: openingPdf ? 0.7 : 1 }}
+          >
+            {openingPdf ? 'Opening…' : 'Open PDF'}
+          </button>
+        )}
         {activeDoc && (
           <>
             <CopyButton text={activeDoc.content} />
-            <DownloadButton content={activeDoc.content} filename={filename} />
+            {!activeDoc.has_file && <DownloadButton content={activeDoc.content} filename={filename} />}
           </>
         )}
         {appStarted ? (
@@ -179,7 +217,13 @@ export default function DocumentDetail() {
       ) : !docs?.tailored_resume && !docs?.cover_letter ? (
         <div style={{ padding: '3rem', textAlign: 'center', border: '1px dashed #d1d5db', borderRadius: '8px' }}>
           <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>No documents yet</p>
-          <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>Click "Generate documents" to create a tailored resume and cover letter.</p>
+          <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+            {canGenerate
+              ? 'Click "Generate documents" to create a tailored resume and cover letter.'
+              : engine && engine !== 'basic'
+                ? `Your CV and cover letter for this job will appear here once ${JOB_ENGINE_LABELS[engine]} has written them.`
+                : 'Documents for this job come from your job engine.'}
+          </p>
         </div>
       ) : (
         <>
@@ -200,13 +244,16 @@ export default function DocumentDetail() {
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                 <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
-                  Mode: {activeDoc.generation_mode} · {new Date(activeDoc.created_at).toLocaleString()}
+                  {activeDoc.engine === 'basic'
+                    ? `Mode: ${activeDoc.generation_mode}`
+                    : `Written by ${JOB_ENGINE_LABELS[activeDoc.engine]}${activeDoc.has_file ? ' · text version below, open the PDF for the formatted document' : ''}`}
+                  {' · '}{new Date(activeDoc.created_at).toLocaleString()}
                 </span>
               </div>
               <MarkdownBlock content={activeDoc.content} />
             </>
           ) : (
-            <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>Not generated yet — click "Generate documents".</p>
+            <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>{canGenerate ? 'Not generated yet — click "Generate documents".' : 'Not available yet.'}</p>
           )}
         </>
       )}

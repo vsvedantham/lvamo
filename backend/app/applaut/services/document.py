@@ -6,24 +6,22 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core.storage import upload_file
+from app.core.storage import generate_presigned_url, upload_file
 from app.applaut.generation.template import generate_cover_letter, generate_resume
 from app.applaut.models.generated_document import GeneratedDocument
 from app.applaut.models.opportunity import Opportunity
 from app.applaut.models.resume import Resume
 from app.applaut.models.user import User
 from app.applaut.services.profile import get_active_profile
+from app.applaut.services.visibility import require_visible_opportunity
 
 logger = logging.getLogger(__name__)
 
 ALLOWED_MODES = {"template", "ai"}
 
 
-async def _get_opportunity(opportunity_id: str, db: AsyncSession) -> Opportunity:
-    opp = await db.get(Opportunity, opportunity_id)
-    if not opp or not opp.is_active:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Opportunity not found")
-    return opp
+async def _get_opportunity(opportunity_id: str, user: User, db: AsyncSession) -> Opportunity:
+    return await require_visible_opportunity(opportunity_id, user.id, db)
 
 
 async def _get_master_resume(user: User, db: AsyncSession) -> Resume:
@@ -62,7 +60,12 @@ async def generate_documents(
         )
 
     profile = await get_active_profile(user, db)
-    opp = await _get_opportunity(opportunity_id, db)
+    opp = await _get_opportunity(opportunity_id, user, db)
+    if profile.job_engine != "basic" or opp.owner_user_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Documents for this job come from your job engine, not Applaut's templates",
+        )
     resume = await _get_master_resume(user, db)
 
     if mode == "ai":
@@ -161,7 +164,25 @@ async def get_document(
     user: User,
     db: AsyncSession,
 ) -> GeneratedDocument:
-    doc = await db.get(GeneratedDocument, document_id)
+    try:
+        doc = await db.get(GeneratedDocument, uuid.UUID(str(document_id)))
+    except ValueError:
+        doc = None
     if not doc or doc.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
     return doc
+
+
+FILE_LINK_SECONDS = 300
+
+
+async def get_document_file_link(document_id: str, user: User, db: AsyncSession) -> tuple[str, str]:
+    """A short-lived signed link to a document's PDF, for its owner only."""
+    doc = await get_document(document_id, user, db)
+    if doc.content_type != "application/pdf" or not doc.r2_key:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="This document has no file")
+    if not settings.r2_bucket_name:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="File storage isn't configured")
+    stem = "CV" if doc.document_type == "tailored_resume" else "Cover_Letter"
+    file_name = doc.file_name or f"{stem}.pdf"
+    return generate_presigned_url(doc.r2_key, expires_in=FILE_LINK_SECONDS, download_name=file_name), file_name

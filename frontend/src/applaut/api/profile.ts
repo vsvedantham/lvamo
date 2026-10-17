@@ -1,5 +1,13 @@
 import client from './client'
 
+export type JobEngine = 'basic' | 'applaut_ai' | 'own_routine'
+
+export const JOB_ENGINE_LABELS: Record<JobEngine, string> = {
+  basic: 'Applaut Basic',
+  applaut_ai: 'Applaut AI',
+  own_routine: 'Your Claude routine',
+}
+
 export interface Profile {
   id: string
   user_id: string
@@ -15,6 +23,7 @@ export interface Profile {
   discovery_enabled: boolean
   good_threshold: number
   near_miss_threshold: number
+  job_engine: JobEngine
   created_at: string
   updated_at: string
 }

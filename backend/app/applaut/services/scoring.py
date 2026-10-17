@@ -11,6 +11,7 @@ from app.applaut.models.score import Score
 from app.applaut.models.user import User
 from app.applaut.scoring.rule_based import score_opportunity
 from app.applaut.services.profile import get_active_profile
+from app.applaut.services.visibility import get_visible_opportunity, visible_to
 
 logger = logging.getLogger(__name__)
 
@@ -23,16 +24,16 @@ async def _get_resume(user: User, db: AsyncSession) -> Resume | None:
     )
 
 
-async def _get_all_active_opportunities(db: AsyncSession) -> list[Opportunity]:
-    result = await db.scalars(select(Opportunity).where(Opportunity.is_active == True))
+async def _get_all_active_opportunities(user: User, db: AsyncSession) -> list[Opportunity]:
+    result = await db.scalars(select(Opportunity).where(Opportunity.is_active == True, visible_to(user.id)))
     return list(result)
 
 
-async def _get_unscored_opportunities(profile: Profile, db: AsyncSession) -> list[Opportunity]:
+async def _get_unscored_opportunities(user: User, profile: Profile, db: AsyncSession) -> list[Opportunity]:
     scored_ids = set(await db.scalars(
         select(Score.opportunity_id).where(Score.profile_id == profile.id)
     ))
-    opps = await db.scalars(select(Opportunity).where(Opportunity.is_active == True))
+    opps = await db.scalars(select(Opportunity).where(Opportunity.is_active == True, visible_to(user.id)))
     return [o for o in opps if o.id not in scored_ids]
 
 
@@ -56,11 +57,11 @@ async def run_scoring(
 
     if mode == "rule_based":
         # Re-score every active opportunity (upsert) — fast and free
-        opportunities = await _get_all_active_opportunities(db)
+        opportunities = await _get_all_active_opportunities(user, db)
         existing_scores = await _get_existing_scores(profile, db)
     else:
         # AI mode: only score new opportunities to control API cost
-        opportunities = await _get_unscored_opportunities(profile, db)
+        opportunities = await _get_unscored_opportunities(user, profile, db)
         existing_scores = {}
 
     if not opportunities:
@@ -198,7 +199,7 @@ async def decide_near_miss(
             profile.skills = list(profile.skills or []) + new_skills
 
         resume = await _get_resume(user, db)
-        opp = await db.get(Opportunity, score.opportunity_id)
+        opp = await get_visible_opportunity(score.opportunity_id, user.id, db)
         if opp:
             try:
                 result = score_opportunity(opp, profile, resume)
@@ -214,9 +215,13 @@ async def decide_near_miss(
             except Exception as exc:
                 logger.warning("Re-scoring failed for score %s: %s", score_id, exc)
 
+    # A dismissal is this user's decision: it hides the job from their list
+    # (services/opportunity.py filters user_decision = "dismiss"). Deactivating
+    # the row is only safe for a job this user owns; a shared job stays
+    # active for everyone else.
     if action == "dismiss":
-        opp = await db.get(Opportunity, score.opportunity_id)
-        if opp:
+        opp = await get_visible_opportunity(score.opportunity_id, user.id, db)
+        if opp and opp.owner_user_id == user.id:
             opp.is_active = False
 
     await db.commit()

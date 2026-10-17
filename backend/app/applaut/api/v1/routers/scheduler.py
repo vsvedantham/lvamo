@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.applaut.discovery.scheduler import get_scheduler_status, schedule_profile
+from app.applaut.discovery.scheduler import get_discovery_schedule, sync_discovery_task
 from app.applaut.models.user import User
 from app.applaut.services.auth import get_current_user
 from app.applaut.services.profile import get_active_profile
@@ -31,8 +31,8 @@ async def get_status(
     db: AsyncSession = Depends(get_db),
 ):
     profile = await get_active_profile(user, db)
-    jobs_raw = get_scheduler_status()
-    profile_jobs = [j for j in jobs_raw if j["profile_id"] == str(profile.id)]
+    job = await get_discovery_schedule(profile.id, db)
+    profile_jobs = [job] if job else []
 
     return SchedulerStatusResponse(
         jobs=[ProfileJobStatus(**j) for j in profile_jobs],
@@ -52,7 +52,7 @@ async def enable_discovery(
     profile.discovery_enabled = True
     await db.commit()
     await db.refresh(profile)
-    schedule_profile(profile)
+    await sync_discovery_task(profile.id, db)
     return await get_status(user, db)
 
 
@@ -65,5 +65,5 @@ async def disable_discovery(
     profile.discovery_enabled = False
     await db.commit()
     await db.refresh(profile)
-    schedule_profile(profile)
+    await sync_discovery_task(profile.id, db)
     return await get_status(user, db)

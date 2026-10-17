@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,13 +8,18 @@ from app.applaut.models.profile import Profile
 from app.applaut.models.user import User
 from app.applaut.schemas.profile import CreateProfileRequest, UpdateProfileRequest
 
+logger = logging.getLogger(__name__)
 
-def _reschedule(profile: Profile) -> None:
+
+async def _reschedule(profile: Profile, db: AsyncSession) -> None:
+    # The profile is already saved; a scheduling hiccup must not fail the
+    # request (the scheduler's startup bootstrap re-syncs every profile).
+    from app.applaut.discovery.scheduler import sync_discovery_task
     try:
-        from app.applaut.discovery.scheduler import schedule_profile
-        schedule_profile(profile)
+        await sync_discovery_task(profile.id, db)
     except Exception:
-        pass
+        await db.rollback()
+        logger.warning("Could not update the discovery schedule for profile %s", profile.id, exc_info=True)
 
 
 async def create_profile(
@@ -41,7 +48,7 @@ async def create_profile(
     db.add(profile)
     await db.commit()
     await db.refresh(profile)
-    _reschedule(profile)
+    await _reschedule(profile, db)
     return profile
 
 
@@ -70,5 +77,5 @@ async def update_profile(
         setattr(profile, field, value)
     await db.commit()
     await db.refresh(profile)
-    _reschedule(profile)
+    await _reschedule(profile, db)
     return profile

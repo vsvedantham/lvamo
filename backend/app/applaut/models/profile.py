@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKey
-from app.applaut.models.enums import EmploymentTypeEnum, RemotePreferenceEnum
+from app.applaut.models.enums import EmploymentTypeEnum, JobEngineEnum, RemotePreferenceEnum
 
 
 class Profile(Base, UUIDPrimaryKey, TimestampMixin):
@@ -54,6 +54,13 @@ class Profile(Base, UUIDPrimaryKey, TimestampMixin):
     good_threshold: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=85)
     last_discovery_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     last_scored_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    job_engine: Mapped[str] = mapped_column(
+        sa.Enum(JobEngineEnum, name="job_engine_enum", schema="applaut", create_type=False),
+        nullable=False,
+        default=JobEngineEnum.basic,
+    )
+    job_engine_changed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 

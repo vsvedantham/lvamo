@@ -56,6 +56,7 @@ async def run_discovery_for_profile(profile: Profile, db: AsyncSession) -> int:
     existing = set(
         await db.scalars(
             select(Opportunity.external_id).where(
+                Opportunity.owner_user_id.is_(None),  # Basic's shared pool only
                 Opportunity.source.in_([l.source for l in listings]),
                 Opportunity.external_id.in_([l.external_id for l in listings]),
             )

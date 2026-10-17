@@ -47,6 +47,7 @@ class ProfileResponse(BaseModel):
     discovery_frequency_hours: int
     discovery_enabled: bool
     good_threshold: int
+    job_engine: str
     near_miss_threshold: int = 0
     created_at: datetime
     updated_at: datetime

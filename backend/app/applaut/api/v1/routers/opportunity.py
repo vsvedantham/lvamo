@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.applaut.models.user import User
 from app.applaut.schemas.opportunity import (
+    AssessmentInfo,
     DiscoveryRunResponse,
     OpportunityDetailResponse,
     OpportunityListResponse,
@@ -13,7 +14,7 @@ from app.applaut.schemas.opportunity import (
     OpportunityWithScoreResponse,
 )
 from app.applaut.services.auth import get_current_user
-from app.applaut.services.opportunity import get_opportunity, list_opportunities_with_scores, trigger_discovery
+from app.applaut.services.opportunity import get_opportunity_for_user, list_opportunities_with_scores, trigger_discovery
 
 router = APIRouter()
 
@@ -39,17 +40,20 @@ async def list_opps(
     country_code: Optional[str] = Query(None),
     source: Optional[str] = Query(None),
     match: Literal["all", "good", "near_miss", "below", "unscored"] = Query("all"),
+    engine: Optional[Literal["basic", "applaut_ai", "own_routine"]] = Query(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     rows, total, good_threshold, near_miss_threshold = await list_opportunities_with_scores(
-        current_user, db, page, page_size, country_code, source, match
+        current_user, db, page, page_size, country_code, source, match, engine
     )
     items = []
-    for opp, score in rows:
+    for opp, score, assessment in rows:
         item = OpportunityWithScoreResponse.model_validate(opp)
         if score:
             item.score = OpportunityScoreInfo.model_validate(score)
+        if assessment:
+            item.assessment = AssessmentInfo.model_validate(assessment)
         items.append(item)
     return OpportunityListResponse(
         items=items,
@@ -67,7 +71,11 @@ async def get_opp(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    opp = await get_opportunity(opportunity_id, db)
-    if not opp:
+    found = await get_opportunity_for_user(opportunity_id, current_user, db)
+    if not found:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Opportunity not found")
-    return opp
+    opp, assessment = found
+    detail = OpportunityDetailResponse.model_validate(opp)
+    if assessment:
+        detail.assessment = AssessmentInfo.model_validate(assessment)
+    return detail

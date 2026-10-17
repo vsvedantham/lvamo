@@ -6,12 +6,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.applaut.models.user import User
 from app.applaut.schemas.document import (
+    DocumentFileResponse,
     DocumentResponse,
     GenerateDocumentsResponse,
     OpportunityDocumentsResponse,
 )
 from app.applaut.services.auth import get_current_user
-from app.applaut.services.document import generate_documents, get_document, get_opportunity_documents
+from app.applaut.services.document import (
+    FILE_LINK_SECONDS,
+    generate_documents,
+    get_document,
+    get_document_file_link,
+    get_opportunity_documents,
+)
 
 router = APIRouter()
 
@@ -57,3 +64,13 @@ async def get_single(
     db: AsyncSession = Depends(get_db),
 ):
     return await get_document(document_id, current_user, db)
+
+
+@router.get("/documents/{document_id}/file", response_model=DocumentFileResponse)
+async def get_file(
+    document_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    url, file_name = await get_document_file_link(document_id, current_user, db)
+    return DocumentFileResponse(url=url, expires_in=FILE_LINK_SECONDS, file_name=file_name)

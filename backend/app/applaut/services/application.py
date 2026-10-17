@@ -10,6 +10,7 @@ from app.applaut.models.opportunity import Opportunity
 from app.applaut.models.user import User
 from app.applaut.schemas.application import ApplicationResponse
 from app.applaut.services.profile import get_active_profile
+from app.applaut.services.visibility import get_visible_opportunity, require_visible_opportunity
 
 VALID_STATUSES = {s.value for s in ApplicationStatusEnum}
 
@@ -44,9 +45,7 @@ async def create_application(
     user: User,
     db: AsyncSession,
 ) -> ApplicationResponse:
-    opp = await db.get(Opportunity, opportunity_id)
-    if not opp or not opp.is_active:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Opportunity not found")
+    opp = await require_visible_opportunity(opportunity_id, user.id, db)
 
     # Prevent duplicates
     existing = await db.scalar(
@@ -100,7 +99,7 @@ async def list_applications(
     apps = await db.scalars(query.order_by(Application.created_at.desc()))
     results = []
     for app in apps:
-        opp = await db.get(Opportunity, app.opportunity_id)
+        opp = await get_visible_opportunity(app.opportunity_id, user.id, db)
         results.append(_to_response(app, opp))
     return results
 
@@ -113,7 +112,7 @@ async def get_application(
     app = await db.get(Application, application_id)
     if not app or app.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
-    opp = await db.get(Opportunity, app.opportunity_id)
+    opp = await get_visible_opportunity(app.opportunity_id, user.id, db)
     return _to_response(app, opp)
 
 
@@ -144,7 +143,7 @@ async def update_application(
     if notes is not None:
         app.notes = notes
 
-    opp = await db.get(Opportunity, app.opportunity_id)
+    opp = await get_visible_opportunity(app.opportunity_id, user.id, db)
 
     from app.applaut.services.audit import log_action
     await log_action(
