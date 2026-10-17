@@ -62,7 +62,7 @@ Quick start for next session:
 - Offline company-slug discovery script: `backend/scripts/discover_company_slugs.py` — probes a seed list of company names against all 7 adapters' raw endpoints, keeps only slugs that resolve to a real non-empty job board, appends to `company_boards.json`. Seed files: `backend/scripts/seed_companies.txt` (general EU batch) and `backend/scripts/seed_companies_de.txt` (sourced from real German startup directories).
 - Role matching (`app/applaut/discovery/location.py`'s `matches_roles`) now uses the same synonym expansion as scoring (shared table: `backend/app/applaut/core/role_synonyms.py`) — a title like "Analytics Engineer" is now fetched for a "Data Engineer" search, not silently dropped before scoring ever sees it.
 - Concurrency-capped: `DISCOVERY_CONCURRENCY` (default 20, env-configurable) semaphore in `engine.py` so a large `COMPANY_BOARDS` doesn't burst-hammer any single ATS host.
-- Scheduled via APScheduler (`backend/app/applaut/discovery/scheduler.py`)
+- Scheduled via APScheduler (`backend/app/applaut/discovery/scheduler.py`) — runs once per profile per interval even with several uvicorn workers (advisory lock + recency guard, 2026-10-17, see "Scheduled discovery across uvicorn workers" below)
 - Location resolution: city → country code (`backend/app/applaut/discovery/location.py`)
 - Manual trigger available via API — **and now auto-chains into rule-based scoring** (see Scoring section)
 
@@ -476,6 +476,54 @@ mid-session).
 - `deploy.sh` on the VM had an uncommitted quoting bug (already committed and deployed).
 - Personio adapter (dead JSON endpoint → live XML feed) — see session update
   above (committed `efe3a95`, deployed).
+
+---
+
+## Scheduled discovery across uvicorn workers (2026-10-17, deployed)
+
+**Problem:** prod runs `uvicorn --workers 2` (`backend/Dockerfile.prod`) and
+`main.py`'s lifespan starts the discovery scheduler in each worker, so each
+worker had its own APScheduler with its own job per profile: with discovery
+on, every profile's discovery + auto-scoring + "Discovery complete"
+notification would have run twice per interval. Latent only: both prod
+profiles have `discovery_enabled = false`.
+
+**Fix** (commit `002f6e6`, `scheduler.py` only): `_run_profile` now
+1. takes `pg_try_advisory_xact_lock(hashtextextended('applaut.discovery:<profile id>', 0))`
+   and skips if another worker holds it. The lock sits on its **own
+   session** held open for the whole run, because `run_discovery_for_profile`
+   and `run_scoring` both commit mid-run and a commit would release a lock
+   held on the working session. It is released after `last_discovery_at`
+   is committed.
+2. skips if `last_discovery_at` is within 90% of the profile's interval
+   (`_RECENT_RUN_FRACTION`), read from the DB, so a worker whose timer fires
+   after the other finished doesn't re-run. A failed discovery doesn't set
+   `last_discovery_at`, so another worker may retry it that interval.
+
+The manual "Run discovery" API path (`services/opportunity.py`) is
+unchanged: it doesn't take the lock or set `last_discovery_at`.
+
+**Tests:** `backend/tests/applaut/test_discovery_scheduler.py` (first
+Applaut tests; discovery and scoring stubbed): two concurrent runs → one;
+run after a finished run → skipped; lock held elsewhere → skipped; 6h
+interval: 5h old → skip, 5.5h old → runs. All 4 fail with the guards
+disabled; full suite 42 passed.
+
+**Verified in prod (2026-10-17)** after `deploy.sh`: VM at `002f6e6`, both
+workers started clean, `/api/v1/{applaut,jobref,prosho}/health` 200. Inside
+the prod container, holding the lock on one session made `_run_profile`
+log "already running in another worker; skipping" for a real profile, and
+`pg_locks` showed 0 advisory locks after release. Not exercised in prod:
+an actual scheduled discovery run (no profile has discovery enabled).
+
+**Still per-worker (harmless now):** `schedule_profile()` from the
+enable/disable API only updates the worker that served the request, so
+`GET /scheduler/status`'s `jobs` (next run time) reflects whichever worker
+answers, and a worker started before a frequency change keeps its old
+interval until restart. Runs stay correct: `_run_profile` re-reads
+`discovery_enabled` and the interval from the DB, so a stale worker is
+skipped or does nothing. A proper fix would be a single scheduler (separate
+process or leader election).
 
 ---
 
