@@ -1,8 +1,8 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.db.session import AsyncSessionLocal
 from app.applaut.discovery.engine import run_discovery_for_profile
@@ -13,11 +13,48 @@ scheduler = AsyncIOScheduler()
 
 _JOB_PREFIX = "discovery_"
 
+# Production runs several uvicorn workers, and each one has its own scheduler
+# holding its own job per profile. Two guards keep a profile's discovery to one
+# run per interval: a Postgres advisory lock stops two workers running it at
+# the same time, and a run is skipped if the last one finished within this
+# fraction of the interval (a second worker whose timer fires later).
+_RECENT_RUN_FRACTION = 0.9
+
+
+def _ran_recently(profile: Profile) -> bool:
+    if profile.last_discovery_at is None:
+        return False
+    hours = max(1, profile.discovery_frequency_hours or 24)
+    age = datetime.now(timezone.utc) - profile.last_discovery_at
+    return age < timedelta(hours=hours * _RECENT_RUN_FRACTION)
+
 
 async def _run_profile(profile_id: str) -> None:
+    # The lock lives on its own session: discovery and scoring commit several
+    # times, and each commit would release a transaction-level lock held on
+    # the working session. It is released when lock_db closes, after the
+    # working session has committed last_discovery_at.
+    async with AsyncSessionLocal() as lock_db:
+        acquired = await lock_db.scalar(
+            text("SELECT pg_try_advisory_xact_lock(hashtextextended(:key, 0))"),
+            {"key": f"applaut.discovery:{profile_id}"},
+        )
+        if not acquired:
+            logger.info("Discovery for profile %s already running in another worker; skipping", profile_id)
+            return
+        await _run_profile_locked(profile_id)
+
+
+async def _run_profile_locked(profile_id: str) -> None:
     async with AsyncSessionLocal() as db:
         profile = await db.get(Profile, profile_id)
         if not profile or not profile.is_active or not profile.discovery_enabled:
+            return
+        if _ran_recently(profile):
+            logger.info(
+                "Discovery for profile %s already ran at %s; skipping",
+                profile_id, profile.last_discovery_at.isoformat(),
+            )
             return
 
         new_count = 0
