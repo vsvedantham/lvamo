@@ -9,6 +9,7 @@ from app.applaut.models.notification import Notification
 from app.applaut.models.audit_log import AuditLog
 from app.applaut.models.job_assessment import JobAssessment
 from app.applaut.models.engine_task import EngineTask
+from app.applaut.models.routine import RoutineConnection, RoutineJob, RoutineRun, RoutineSync
 
 __all__ = [
     "User",
@@ -22,4 +23,8 @@ __all__ = [
     "AuditLog",
     "JobAssessment",
     "EngineTask",
+    "RoutineConnection",
+    "RoutineRun",
+    "RoutineSync",
+    "RoutineJob",
 ]

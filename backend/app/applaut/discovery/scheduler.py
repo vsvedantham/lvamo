@@ -6,9 +6,10 @@ two minutes; it claims due tasks with FOR UPDATE SKIP LOCKED, so a task runs
 in exactly one worker, every worker sees the same schedule, and the schedule
 survives restarts (docs/applaut/JOB_ENGINES_DESIGN.md §3.3).
 
-Today's one kind of task is Applaut Basic's discovery run for a profile;
-engine 3 (status checks, syncs) and engine 2 runs are added as more kinds.
+Task kinds: Applaut Basic's discovery run for a profile, and engine 3's
+status checks and syncs (routine/schedule.py); engine 2 runs come later.
 """
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -214,12 +215,49 @@ async def _after_basic_discovery(task: EngineTask, db: AsyncSession) -> None:
     await sync_discovery_task(task.profile_id, db, not_before=_now() + timedelta(hours=hours))
 
 
+async def _run_routine_check(task: EngineTask) -> None:
+    from app.applaut.routine.checks import run_check
+    await run_check(task)
+
+
+async def _after_routine_check(task: EngineTask, db: AsyncSession) -> None:
+    """Queue the check the handler decided on (in payload `next`); if the
+    handler never got that far (it kept failing), plan from the schedule."""
+    from app.applaut.models.routine import RoutineConnection
+    from app.applaut.routine import schedule as routine_schedule
+    payload = task.payload or {}
+    profile = await db.get(Profile, task.profile_id)
+    if profile is None:
+        return
+    plan = payload.get("next")
+    if not payload.get("decided"):
+        conn = await db.scalar(select(RoutineConnection).where(RoutineConnection.user_id == task.user_id))
+        if conn is not None:
+            expected = datetime.fromisoformat(payload["expected_at"])
+            plan = routine_schedule.plan_check(conn, _now(), after_run=expected)
+    if plan is not None:
+        await routine_schedule.queue_check(db, profile, plan)
+    await routine_schedule.ensure_routine_tasks(profile.id, db)
+
+
+async def _run_routine_sync(task: EngineTask) -> None:
+    from app.applaut.routine.sync import SyncBusy, sync_user
+    payload = task.payload or {}
+    try:
+        await sync_user(task.user_id, payload.get("trigger") or "scheduled", payload.get("run_id"))
+    except SyncBusy:
+        logger.info("Routine sync for user %s already running elsewhere; skipping", task.user_id)
+
+
 _HANDLERS: dict[str, Callable[[EngineTask], Awaitable[None]]] = {
     KIND_BASIC_DISCOVERY: _run_basic_discovery,
+    "routine_check": _run_routine_check,
+    "routine_sync": _run_routine_sync,
 }
 # Runs after a task is closed (done or finally failed), e.g. to queue the next run.
 _FOLLOW_UPS: dict[str, Callable[[EngineTask, AsyncSession], Awaitable[None]]] = {
     KIND_BASIC_DISCOVERY: _after_basic_discovery,
+    "routine_check": _after_routine_check,
 }
 
 
@@ -286,13 +324,29 @@ async def dispatch_due_tasks() -> int:
     return len(tasks)
 
 
+_kicked: set[asyncio.Task] = set()
+
+
+def kick_dispatcher() -> None:
+    """Run the dispatcher now in the background (e.g. after Sync now), instead
+    of waiting up to two minutes for its next tick."""
+    try:
+        task = asyncio.get_running_loop().create_task(dispatch_due_tasks())
+    except RuntimeError:
+        return
+    _kicked.add(task)
+    task.add_done_callback(_kicked.discard)
+
+
 async def _bootstrap() -> None:
     """Bring the queue in line with every active profile (idempotent, so every
     worker can run it at startup)."""
+    from app.applaut.routine.schedule import ensure_routine_tasks
     async with AsyncSessionLocal() as db:
         profile_ids = list(await db.scalars(select(Profile.id).where(Profile.is_active == True)))
         for profile_id in profile_ids:
             await sync_discovery_task(profile_id, db)
+            await ensure_routine_tasks(profile_id, db)
 
 
 def start_scheduler() -> None:

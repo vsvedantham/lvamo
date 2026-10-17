@@ -31,6 +31,7 @@ import OpportunityDetail from './applaut/pages/OpportunityDetail'
 import DocumentDetail from './applaut/pages/DocumentDetail'
 import Applications from './applaut/pages/Applications'
 import AuditLog from './applaut/pages/AuditLog'
+import ApplautSettings from './applaut/pages/Settings'
 import NotFound from './applaut/pages/NotFound'
 import ProtectedRoute from './applaut/components/ProtectedRoute'
 
@@ -158,6 +159,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <Applications />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="settings"
+              element={
+                <ProtectedRoute>
+                  <ApplautSettings />
                 </ProtectedRoute>
               }
             />

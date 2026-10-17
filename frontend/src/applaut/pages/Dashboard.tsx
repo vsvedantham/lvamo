@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { getMyProfile, type Profile } from '../api/profile'
+import { getMyProfile, JOB_ENGINE_LABELS, type Profile } from '../api/profile'
+import { getJobEngine, type EngineCard } from '../api/jobEngine'
+import RoutineEngineCard from '../components/RoutineEngineCard'
 import { getMyResume, type Resume } from '../api/resume'
 import { getDashboardStats, type DashboardStats } from '../api/stats'
 import { disableDiscovery, enableDiscovery, getSchedulerStatus, type SchedulerStatus } from '../api/scheduler'
@@ -121,6 +123,20 @@ function DiscoveryWidget({ hasProfile }: { hasProfile: boolean }) {
   )
 }
 
+function EngineWidget({ profile }: { profile: Profile | null }) {
+  const [card, setCard] = useState<EngineCard | null>(null)
+
+  useEffect(() => {
+    if (profile?.job_engine !== 'own_routine') return
+    getJobEngine().then(s => setCard(s.card)).catch(() => null)
+  }, [profile?.job_engine])
+
+  if (!profile) return null
+  if (profile.job_engine === 'basic') return <DiscoveryWidget hasProfile />
+  if (profile.job_engine !== 'own_routine' || !card) return null
+  return <div style={{ marginBottom: '1.25rem' }}><RoutineEngineCard card={card} onChange={setCard} /></div>
+}
+
 function SetupCard({ title, description, href, cta }: { title: string; description: string; href: string; cta: string }) {
   return (
     <div style={{ padding: '1.25rem', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -184,7 +200,7 @@ export default function Dashboard() {
         <p style={{ color: 'var(--text-2)' }}>Loading…</p>
       ) : (
         <>
-          <DiscoveryWidget hasProfile={profile !== null} />
+          <EngineWidget profile={profile} />
 
           {stats && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '0.75rem', marginBottom: '1.5rem' }}>
@@ -218,7 +234,8 @@ export default function Dashboard() {
                 <InfoRow label="Roles" value={profile.target_roles.join(', ')} />
                 <InfoRow label="Countries" value={profile.target_countries.join(', ')} />
                 <InfoRow label="Remote" value={profile.remote_preference} />
-                <InfoRow label="Discovery" value={`every ${profile.discovery_frequency_hours}h`} />
+                <InfoRow label="Job engine" value={JOB_ENGINE_LABELS[profile.job_engine]} />
+                {profile.job_engine === 'basic' && <InfoRow label="Discovery" value={`every ${profile.discovery_frequency_hours}h`} />}
                 <Link to="/applaut/onboarding" style={{ fontSize: '0.8rem', color: 'var(--accent)', textDecoration: 'none', marginTop: '0.25rem' }}>Edit profile →</Link>
               </InfoCard>
             )}

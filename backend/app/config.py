@@ -22,6 +22,15 @@ class Settings(BaseSettings):
     r2_bucket_name: str = ""
     r2_public_url: str = ""
 
+    # Applaut — Fernet key(s) for stored user credentials (engine 3's Neon URL
+    # and R2 keys). Comma-separated; the first encrypts, all decrypt, so a key
+    # can be rotated. Generate with:
+    # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    applaut_credentials_key: str = ""
+    # Lets a routine connection point at a private/loopback host. Only for
+    # local tests against the dev Postgres; never set in production.
+    applaut_routine_allow_private_hosts: bool = False
+
     # AI providers
     openai_api_key: str = ""
 
