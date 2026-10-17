@@ -4,18 +4,13 @@ import Logo from '../../components/Logo'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { describeTarget } from '../api/github'
 import { PROJECT_TYPE_LABEL } from '../api/projects'
-import { getPublicProject, type PublicClaim, type PublicClaimStatus, type PublicProject } from '../api/public'
+import { getPublicProject, type PublicClaim, type PublicProject } from '../api/public'
+import { formatValue, timeAgo } from '../api/evidence'
+import DataModulePanels from '../components/DataModulePanels'
+import StatusPill from '../components/StatusPill'
 
 // The public project page (BETA_PLAN §10): the student's work first, LVAMO
 // branding kept to the small footer.
-
-const STATUS: Record<PublicClaimStatus, { label: string; bg: string; border: string; color: string }> = {
-  met: { label: '✓ Met', bg: 'var(--success-bg)', border: 'var(--success-border)', color: 'var(--success)' },
-  not_met: { label: 'Not met', bg: 'var(--danger-bg)', border: 'var(--danger-border)', color: 'var(--danger)' },
-  in_progress: { label: 'In progress', bg: 'var(--warn-bg)', border: 'var(--warn-border)', color: 'var(--warn)' },
-  not_started: { label: 'Not started', bg: 'transparent', border: 'var(--border-strong)', color: 'var(--text-2)' },
-  awaiting_evidence: { label: 'Awaiting evidence', bg: 'transparent', border: 'var(--border-strong)', color: 'var(--text-2)' },
-}
 
 const sectionTitle: React.CSSProperties = {
   fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-2)', marginBottom: '0.9rem',
@@ -95,6 +90,8 @@ export default function ProshoProjectPage() {
           </section>
         )}
 
+        {page.data_module && <DataModulePanels data={page.data_module} />}
+
         {page.demo_kind && page.demo_url && <Demo kind={page.demo_kind} url={page.demo_url} />}
 
         <p style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>Last updated {new Date(page.updated_at).toLocaleDateString()}</p>
@@ -106,7 +103,6 @@ export default function ProshoProjectPage() {
 }
 
 function ClaimRow({ claim, n }: { claim: PublicClaim; n: number }) {
-  const s = STATUS[claim.status]
   return (
     <li style={{ display: 'flex', gap: '0.9rem', alignItems: 'flex-start', padding: '1rem 1.1rem', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
       <span aria-hidden="true" style={{ flexShrink: 0, width: '1.6rem', height: '1.6rem', borderRadius: '50%', background: 'var(--bg-elevated)', color: 'var(--text-2)', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{n}</span>
@@ -114,11 +110,10 @@ function ClaimRow({ claim, n }: { claim: PublicClaim; n: number }) {
         <p style={{ fontSize: '0.95rem', lineHeight: 1.5, overflowWrap: 'anywhere' }}>{claim.text}</p>
         <p style={{ fontSize: '0.78rem', color: 'var(--text-3)', marginTop: '0.25rem' }}>
           {claim.self_reported ? 'Self-reported' : <>Measured · <code>{claim.metric_key}</code> {describeTarget(claim)}</>}
+          {claim.latest_at && <> · latest <strong style={{ color: 'var(--text-2)' }}>{formatValue(claim.latest_value, claim.latest_unit)}</strong> ({timeAgo(claim.latest_at)})</>}
         </p>
       </div>
-      <span style={{ flexShrink: 0, padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 600, whiteSpace: 'nowrap', background: s.bg, border: `1px solid ${s.border}`, color: s.color }}>
-        {s.label}
-      </span>
+      <StatusPill status={claim.status} />
     </li>
   )
 }

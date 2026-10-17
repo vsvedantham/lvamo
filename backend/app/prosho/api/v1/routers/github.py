@@ -8,6 +8,7 @@ from app.prosho.models.prosho_user import ProshoUser
 from app.prosho.schemas.github import AvailableRepos, ClaimResponse, ClaimStatusUpdate, ConnectRepo
 from app.prosho.schemas.project import ProjectResponse
 from app.prosho.services import claims as claims_service
+from app.prosho.services import claims_view
 from app.prosho.services import github_connect
 from app.prosho.services.auth import get_current_user
 from app.prosho.services.manifest_sync import sync_project
@@ -43,7 +44,12 @@ async def sync_now(project_id: uuid.UUID, user: ProshoUser = Depends(get_current
 @router.get("/claims", response_model=list[ClaimResponse])
 async def list_claims(project_id: uuid.UUID, user: ProshoUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     project = await get_owned(project_id, user, db)
-    return await claims_service.list_claims(project, db)
+    claims = await claims_service.list_claims(project, db)
+    resolved = {c.key: c for c in await claims_view.resolve(project, claims, db)}
+    return [ClaimResponse.model_validate(c).model_copy(update={
+        "status": resolved[c.key].status, "latest_value": resolved[c.key].latest_value,
+        "latest_unit": resolved[c.key].latest_unit, "latest_at": resolved[c.key].latest_at,
+    }) for c in claims]
 
 
 @router.patch("/claims/{claim_id}", response_model=ClaimResponse)

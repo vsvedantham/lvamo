@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel
@@ -33,6 +34,12 @@ class ClaimResponse(BaseModel):
     target_value_hi: Optional[float]
     manual_status: ClaimManualStatus
     position: int
+    # Resolved like the public page: computed from evidence for measured
+    # claims, the manual status otherwise.
+    status: Optional[str] = None
+    latest_value: Optional[float] = None
+    latest_unit: Optional[str] = None
+    latest_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 

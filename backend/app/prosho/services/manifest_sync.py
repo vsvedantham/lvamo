@@ -20,7 +20,7 @@ from app.prosho.models.prosho_project import ProshoProject
 from app.prosho.services import audit, github
 from app.prosho.services.manifest import MANIFEST_PATH, MAX_BYTES, TYPE_FROM_MANIFEST, ManifestV1, parse_manifest
 
-STORY_FIELDS = ("title", "summary", "problem", "project_type", "demo_kind", "demo_url")
+STORY_FIELDS = ("title", "summary", "problem", "project_type", "demo_kind", "demo_url", "module_config")
 
 
 def _error(message: str) -> list[dict[str, Any]]:
@@ -83,6 +83,10 @@ async def _apply(project: ProshoProject, m: ManifestV1, db: AsyncSession, *, act
         "project_type": TYPE_FROM_MANIFEST[m.type],
         "demo_kind": m.demo.kind if m.demo else None,
         "demo_url": str(m.demo.url) if m.demo else None,
+        # The module section (data: / frontend:), kept so scheduled checks
+        # don't need GitHub. JSON-ready so it compares cleanly on re-sync.
+        "module_config": ({"data": m.data.model_dump(mode="json")} if m.data
+                          else {"frontend": m.frontend.model_dump(mode="json")} if m.frontend else None),
     }
     before = {k: getattr(project, k) for k in STORY_FIELDS if getattr(project, k) != story[k]}
     after = {k: story[k] for k in before}

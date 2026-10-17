@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel
 
@@ -25,6 +25,48 @@ class PublicClaim(BaseModel):
     target_op: Optional[str]
     target_value: Optional[float]
     target_value_hi: Optional[float]
+    # The evidence that decided a measured claim's status.
+    latest_value: Optional[float] = None
+    latest_unit: Optional[str] = None
+    latest_at: Optional[datetime] = None
+    latest_commit: Optional[str] = None
+
+
+class SourcePanelItem(BaseModel):
+    name: str
+    url: str
+    licence: Optional[str]
+    status: Literal["pass", "fail", "warn", "unchecked"]
+    checked_at: Optional[datetime]
+    detail: Optional[str]
+    status_code: Optional[int]
+
+
+class MetricPanelItem(BaseModel):
+    key: str
+    value: Optional[float]
+    unit: Optional[str]
+    recorded_at: datetime
+    commit_sha: Optional[str]
+    claim_text: Optional[str]
+    target_op: Optional[str]
+    target_value: Optional[float]
+    target_value_hi: Optional[float]
+    status: Optional[Literal["met", "not_met", "awaiting_evidence"]]
+
+
+class RunPanelItem(BaseModel):
+    key: str
+    status: Optional[str]
+    recorded_at: datetime
+    commit_sha: Optional[str]
+    details: dict[str, Any]
+
+
+class DataModule(BaseModel):
+    sources: list[SourcePanelItem]
+    metrics: list[MetricPanelItem]
+    runs: list[RunPanelItem]
 
 
 class PublicProject(BaseModel):
@@ -40,6 +82,8 @@ class PublicProject(BaseModel):
     demo_url: Optional[str]
     owner: PublicOwner
     claims: list[PublicClaim]
+    # Present for data-science projects (BETA_PLAN §2 data module).
+    data_module: Optional[DataModule] = None
     updated_at: datetime
     # True when the owner is looking at their own not-yet-shared page.
     preview: bool

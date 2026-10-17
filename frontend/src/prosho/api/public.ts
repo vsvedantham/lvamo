@@ -1,6 +1,7 @@
 import client from './client'
 import type { DemoKind, ProjectType, Visibility } from './projects'
 import type { TargetOp } from './github'
+import type { DataModule } from './evidence'
 
 export type PublicClaimStatus = 'not_started' | 'in_progress' | 'met' | 'not_met' | 'awaiting_evidence'
 
@@ -13,6 +14,10 @@ export interface PublicClaim {
   target_op: TargetOp | null
   target_value: number | null
   target_value_hi: number | null
+  latest_value: number | null
+  latest_unit: string | null
+  latest_at: string | null
+  latest_commit: string | null
 }
 
 export interface PublicProject {
@@ -28,6 +33,7 @@ export interface PublicProject {
   demo_url: string | null
   owner: { name: string | null; github_login: string; avatar_url: string | null }
   claims: PublicClaim[]
+  data_module: DataModule | null
   updated_at: string
   preview: boolean
 }

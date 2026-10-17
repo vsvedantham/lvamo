@@ -9,12 +9,16 @@ from app.applaut.discovery.scheduler import start_scheduler, stop_scheduler
 from app.jobref.api.v1.router import router as jobref_v1_router
 from app.platform.api.v1.router import router as platform_v1_router
 from app.prosho.api.v1.router import router as prosho_v1_router
+from app.prosho.scheduler import start_scheduler as start_prosho_scheduler
+from app.prosho.scheduler import stop_scheduler as stop_prosho_scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start_scheduler()
+    start_prosho_scheduler()
     yield
+    stop_prosho_scheduler()
     stop_scheduler()
 
 

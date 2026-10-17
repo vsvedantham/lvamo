@@ -6,6 +6,9 @@ import {
   type DemoKind, type Project, type ProjectUpdate, type Visibility,
 } from '../api/projects'
 import ClaimsCard from '../components/ClaimsCard'
+import { DataSourcesCard, RecentEvidenceCard } from '../components/DataSourcesCard'
+import EvidenceCard from '../components/EvidenceCard'
+import { listClaims, type Claim } from '../api/github'
 import ProshoShell from '../components/ProshoShell'
 import RepositoryCard from '../components/RepositoryCard'
 import { Banner, Button, Card, Field, hintStyle, publicPagePath, publicPageUrl, VisibilityPill } from '../components/ui'
@@ -28,11 +31,18 @@ export default function ProshoProjectManage() {
   const { id = '' } = useParams()
   const [project, setProject] = useState<Project | null>(null)
   const [loadError, setLoadError] = useState('')
+  const [claims, setClaims] = useState<Claim[] | null>(null)
   useDocumentTitle(`${project?.title ?? 'Project'} | ProSho`)
 
   useEffect(() => {
     getProject(id).then(setProject).catch(err => setLoadError(apiErrorMessage(err, 'Project not found.')))
   }, [id])
+
+  // Claims change whenever prosho.yaml syncs.
+  useEffect(() => {
+    if (!project?.manifest_managed) { setClaims([]); return }
+    listClaims(project.id).then(setClaims).catch(() => setClaims([]))
+  }, [project?.id, project?.manifest_managed, project?.manifest_synced_at])
 
   if (loadError) {
     return (
@@ -65,7 +75,10 @@ export default function ProshoProjectManage() {
       )}
 
       <RepositoryCard project={project} onChange={setProject} />
-      <ClaimsCard project={project} />
+      <ClaimsCard project={project} claims={claims} onChange={c => setClaims(cs => cs?.map(x => (x.id === c.id ? { ...x, ...c } : x)) ?? null)} />
+      <EvidenceCard project={project} claims={claims ?? []} />
+      <DataSourcesCard project={project} />
+      <RecentEvidenceCard project={project} />
       <VisibilityCard project={project} onSaved={setProject} />
       <DetailsCard project={project} onSaved={setProject} />
       <DemoCard project={project} onSaved={setProject} />

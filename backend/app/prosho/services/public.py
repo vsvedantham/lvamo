@@ -9,11 +9,12 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.prosho.models.enums import Visibility
-from app.prosho.models.prosho_claim import ProshoClaim
+from app.prosho.models.enums import ProjectType, Visibility
 from app.prosho.models.prosho_project import ProshoProject
 from app.prosho.models.prosho_user import ProshoUser
-from app.prosho.schemas.public import PublicClaim, PublicOwner, PublicProject
+from app.prosho.modules import data_science_page
+from app.prosho.schemas.public import PublicOwner, PublicProject
+from app.prosho.services import claims_view
 
 
 def _not_found() -> HTTPException:
@@ -35,9 +36,9 @@ async def get_public_project(slug: str, viewer: ProshoUser | None, db: AsyncSess
     if project.visibility == Visibility.private and not is_owner:
         raise _not_found()
 
-    claims = await db.scalars(select(ProshoClaim)
-                              .where(ProshoClaim.project_id == project.id, ProshoClaim.archived_at.is_(None))
-                              .order_by(ProshoClaim.position))
+    claims = await claims_view.active_claims(project, db)
+    data_module = (await data_science_page.build(project, claims, db)
+                   if project.project_type == ProjectType.data_science else None)
     return PublicProject(
         slug=project.slug,
         title=project.title,
@@ -50,19 +51,8 @@ async def get_public_project(slug: str, viewer: ProshoUser | None, db: AsyncSess
         demo_kind=project.demo_kind,
         demo_url=project.demo_url,
         owner=PublicOwner(name=owner.name, github_login=owner.github_login, avatar_url=owner.avatar_url),
-        claims=[
-            PublicClaim(
-                key=c.key,
-                text=c.text,
-                status="awaiting_evidence" if c.metric_key else c.manual_status.value,
-                self_reported=c.metric_key is None,
-                metric_key=c.metric_key,
-                target_op=c.target_op.value if c.target_op else None,
-                target_value=c.target_value,
-                target_value_hi=c.target_value_hi,
-            )
-            for c in claims
-        ],
+        claims=await claims_view.resolve(project, claims, db),
+        data_module=data_module,
         updated_at=max(project.updated_at, project.manifest_synced_at or project.updated_at),
         preview=project.visibility == Visibility.private,
     )

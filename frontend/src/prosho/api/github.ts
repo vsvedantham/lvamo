@@ -27,6 +27,10 @@ export interface Claim {
   target_value_hi: number | null
   manual_status: ManualStatus
   position: number
+  status: 'not_started' | 'in_progress' | 'met' | 'not_met' | 'awaiting_evidence' | null
+  latest_value: number | null
+  latest_unit: string | null
+  latest_at: string | null
 }
 
 export const MANUAL_STATUS_LABEL: Record<ManualStatus, string> = {
