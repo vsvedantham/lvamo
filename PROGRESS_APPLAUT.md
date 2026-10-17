@@ -10,6 +10,13 @@
 
 ## 🎯 NEXT SESSION PRIMARY TASK
 
+**Changed 2026-10-17: Job engines Phase 2 — sync Venkat's own Claude routine
+into Applaut (engine 3).** Design: [`docs/applaut/JOB_ENGINES_DESIGN.md`](docs/applaut/JOB_ENGINES_DESIGN.md)
+§6 and §8; Phase 1 (shared core) is live, see "Job engines — Phase 1" below.
+Before starting: Venkat creates a read-only Neon role and a read-only R2 token
+for `job-search-automation-documents`, and rotates the routine's R2 key (§6.10).
+The company-board scaling below is now secondary (it only feeds Applaut Basic).
+
 **Keep scaling `backend/app/applaut/discovery/data/company_boards.json` — now at 500 companies, single-country density still below target. A proven sourcing method exists — use it.**
 
 **This session found a working method.** Two failed/weak approaches first:
@@ -476,6 +483,78 @@ mid-session).
 - `deploy.sh` on the VM had an uncommitted quoting bug (already committed and deployed).
 - Personio adapter (dead JSON endpoint → live XML feed) — see session update
   above (committed `efe3a95`, deployed).
+
+---
+
+## Job engines — Phase 1 shared core (2026-10-17, deployed)
+
+Applaut is moving to three job engines chosen per user: **Applaut Basic**
+(today's non-AI search, the fallback), **Applaut AI** (Claude run by Applaut,
+paid via credits, later) and **your own Claude routine** (runs in the user's
+Claude account; Applaut reads its Neon/R2 output). Full design, decisions and
+build order: [`docs/applaut/JOB_ENGINES_DESIGN.md`](docs/applaut/JOB_ENGINES_DESIGN.md).
+Venkat's routine already writes the `run_tracker` table Applaut will read
+(routine commit `85d70a8`, schema checked read-only 2026-10-17).
+
+**Phase 1 (commit `3e777fd`)** — groundwork every engine uses:
+- **Migration `0026`**: `profiles.job_engine` (`basic | applaut_ai |
+  own_routine`, everyone `basic`); `opportunities.owner_user_id` (NULL =
+  shared Basic job, set = private job from an AI engine) with two partial
+  unique indexes replacing `UNIQUE (source, external_id)`;
+  `job_assessments` (AI match %, matched/missing must-haves, flags — kept
+  apart from rule-based `scores`); `generated_documents.engine /
+  content_type / content_sha256` for engine PDFs; `engine_tasks`.
+- **Visibility** (`services/visibility.py`): every opportunity read goes
+  through one rule; another user's private job is a 404 everywhere (list,
+  detail, scoring, documents, applications, stats).
+- **Bug fixed on the way:** dismissing a near miss used to set the shared
+  opportunity `is_active = false`, hiding it for **every** user. Now it only
+  hides it for the user who dismissed it.
+- **Scheduler**: the schedule now lives in `applaut.engine_tasks`. Each
+  worker runs one dispatcher every 2 min that claims due tasks with
+  `FOR UPDATE SKIP LOCKED`; failed tasks retry after 1, 5, 30 min, then
+  `failed`; a task stuck `running` > 1 h is retried. Basic discovery is the
+  first task kind (only for `job_engine = basic` profiles with discovery
+  on); the next run is queued one interval after each run. This replaces
+  the per-worker APScheduler jobs, so the "still per-worker" caveat in the
+  section below no longer applies. Behaviour change: turning auto-discovery
+  on with no previous run now runs discovery within ~2 minutes (before: after
+  one full interval).
+- **API**: `assessment` and `is_private` on opportunity list/detail; `engine`
+  filter; documents carry `engine`, `content_type`, `has_file`;
+  `GET /documents/{id}/file` → 5-minute signed R2 link (owner only, 503 if R2
+  isn't configured); Applaut's template generator returns 409 for an engine's
+  job.
+- **UI**: AI match %, matched/missing chips and "to check" flags on cards;
+  AI assessment panel on the job page; engine badge and filter; "Run
+  discovery" and the rule-based scoring picker only on Basic; **Open PDF** on
+  the documents page; description and document text now use theme colours
+  (were unreadable in dark mode).
+
+**Tests:** `backend/tests/applaut/` (shared fixtures in `conftest.py`):
+visibility (owner sees job + assessment; others get 404 on list, detail,
+apply, documents; others' scoring and stats skip it), dismissal per user,
+templates can't overwrite engine documents, PDF link owner-only / 503 without
+R2, dispatcher (one open task, cancel on disable or engine switch, interval
+change moves next run, two concurrent dispatchers run a task once, retry
+backoff then fail, stale running task recovered). The leak tests fail when
+the visibility rule is disabled. Full suite: 95 passed.
+
+**Verified locally (browser preview):** with a seeded private job +
+assessment + PDF docs on `verify2@test.com` switched to `own_routine`: list
+card, engine filter, detail assessment panel, documents page without
+generate controls, Open PDF error path (no local R2). Switched back to
+Basic: page unchanged from before. Seed data deleted.
+
+**Verified in production (2026-10-17):** backup
+`/home/ubuntu/backups/lvamo-pre-0026-20261017.dump` taken first;
+`deploy.sh` ran `0025 → 0026`; both workers started with no errors;
+Applaut/Jobref/ProSho health 200, platform settings 200; new routes answer
+(403 without auth); DB: both profiles `basic` with discovery off, so 0
+engine tasks; all 12 opportunities shared; both new unique indexes present.
+Cloudflare Pages deployed `3e777fd`; the live bundle contains the new UI.
+**Not verified in prod:** the logged-in pages (no prod test login) and a
+real PDF link (no engine documents exist until Phase 2).
 
 ---
 
