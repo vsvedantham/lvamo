@@ -8,37 +8,103 @@
 
 ## 🎯 NEXT SESSION PRIMARY TASK
 
-**Finish Phase 1's exit check: the HeatRisk EU page live as *unlisted*,
-built from its real repo.** All Phase 1 code is built, tested and live
-(2026-10-15, see "Phase 1" under Status). What's left needs real people and
-a real repo, in this order:
+**Phases 1 and 2 are code-complete and live (2026-10-17).** Their exit
+checks both need the real HeatRisk EU repo, so the next step is the same
+for both — get the pilot onto ProSho:
 
-1. **Founder signs in for real** at https://www.lvamo.com/prosho/login
-   (`vsvedantham` is the only invited login). First real GitHub consent →
-   confirms the production OAuth round trip. Then make the account admin:
-   `UPDATE prosho.users SET role = 'admin' WHERE github_login = 'vsvedantham';`
-2. **Invite the HeatRisk EU student**: add their GitHub login to
-   `PROSHO_SIGNUP_ALLOWLIST` in `/home/ubuntu/lvamo/.env.production`
-   (comma-separated), then `sudo docker compose --env-file .env.production
-   -f docker-compose.prod.yml up -d backend` to reload it.
-3. **The student**: signs in → New project → "Install on GitHub" (their
-   *personal* account; pick the HeatRisk repo) → back on the project page,
-   picks the repo → adds `prosho.yaml` (the page offers a starter) →
-   pushes → page updates via the webhook → sets visibility to Unlisted.
-4. Verify: the push webhook delivery shows 200 in the App's "Advanced"
-   tab, the page renders the real claims and Streamlit demo, and a
-   logged-out browser sees it. Record it here.
+1. **First, two loose ends from 2026-10-17 (5 minutes):**
+   - The first *scheduled* source check runs at **05:00 UTC on 2026-10-18**.
+     Confirm it ran in production: the throwaway project
+     `prod-p2-check-zz` (owner `prod-check-p2`, github_id `9190000020`) should
+     have 3 new `source.*` evidence rows with `payload->>'trigger' = 'daily'`.
+     Then **delete that user** (cascades to its project, claims, evidence,
+     tokens) plus its audit rows — it's leftover test data.
+   - The Jobref API cert (`api.jobref.lvamo.com`, expires 2026-11-16) should
+     have auto-renewed at the 09:46 UTC certbot run on 2026-10-17 — the first
+     real renewal since the 2026-10-11 fix. Confirm the new expiry.
+2. **Founder dry run on `testproj1`** (signed in already, 2026-10-15): install
+   the App on a scratch repo, add `prosho.yaml`, push → confirm the webhook
+   sync; then create a CI token and run the GitHub Actions step once.
+3. **Invite the HeatRisk EU student** (`PROSHO_SIGNUP_ALLOWLIST`, then
+   restart the backend) → they connect the repo, add `prosho.yaml` with
+   `data.sources` and metric claims, add the CI step → page **unlisted**.
+   That closes Phase 1's exit check, and Phase 2's once their CI reports
+   evidence and the daily source check shows on the page.
 
-Then Phase 2 (evidence + data module, plan §12).
-
-**Not in Phase 1, by design:** the "Mentored via LVAMO" badge (needs
-Phase 3's mentor assignment; showing it on every page would claim
-mentoring that didn't happen); page-view counts (Phase 3); gallery and
-rate limits (Phase 5).
+Then Phase 3 (work over time: commit timeline, milestones, mentor role +
+feedback, admin mentor assignment, page-view counts).
 
 ---
 
 ## Status
+
+**Phase 2 (Evidence + data module) — code complete and live, 2026-10-17**
+(`083ed1b`, migration `0025`). Exit check pending the real pilot (banner).
+
+### Phase 2 — what was built
+
+- **Tables** (`0025`): `prosho.evidence` — append-only; unique per
+  (project, key, commit) when a commit is given, so CI retries are
+  idempotent; scheduler rows just accumulate. `prosho.ingest_tokens` —
+  `psho_` + 32 random bytes, only the SHA-256 stored, prefix kept for
+  display, shown once, max 10 active per project, revocable, `last_used_at`.
+  `projects.module_config` (JSONB) — the validated `data:`/`frontend:`
+  section from prosho.yaml, so scheduled checks need no GitHub call and new
+  modules need no schema change.
+- **`POST /ingest/evidence`** (ingest token, no JWT): ≤ 50 items, ≤ 64 KB
+  (413), each item validated alone → `accepted` / `duplicate` / `rejected`
+  + reason. Kinds: `metric` (value_num), `check` (pass/fail/warn), `run`
+  (success/failure/cancelled); optional unit, payload ≤ 4 KB, `claim` link
+  by id. `source.*` keys are reserved for LVAMO's own checks.
+  `artifact` uploads are Phase 4.
+- **Computed claim status** (`services/claim_status.py`): latest metric for
+  the claim's `metric_key` vs target (`gte`, `lte`, `abs_lte`, `between`,
+  `eq` with float tolerance; NaN never meets) → `met` / `not_met` /
+  `awaiting_evidence`. `services/claims_view.py` resolves claims once for
+  both the owner dashboard and the public page, including the deciding
+  value, unit, time and commit.
+- **Data module** (`modules/`): daily source health checks at **05:00 UTC**
+  (`app/prosho/scheduler.py`, ProSho's own AsyncIOScheduler started in
+  `main.py`'s lifespan). Production runs **2 uvicorn workers**, so the job
+  takes a Postgres advisory lock and skips projects checked in the last 20 h
+  — verified in prod: two simultaneous runs wrote one set of rows. On-demand
+  "Check now" (owner, max once per 10 min → 429). Panels: Results (metrics
+  vs targets), Pipeline (latest run per key, tests, duration), Data sources
+  ("checked daily by LVAMO — not reported by the student").
+- **SSRF-safe fetcher** (`services/safe_fetch.py`, plan §11 — built and
+  tested before the scheduler job, as the plan's risk table requires):
+  http/https only; no URL credentials; every resolved address must be
+  public (private, loopback, link-local incl. 169.254.169.254, multicast,
+  reserved, IPv4-mapped IPv6 all refused); the connection is **pinned to the
+  checked IP** (Host header + TLS SNI keep normal certificate checking —
+  confirmed live: real sites pass, expired/wrong-host certs fail); redirects
+  re-checked (max 3); 10 s; 64 KB. DNS failure is reported as "down", not as
+  a security block.
+- **Owner UI:** "Evidence from CI" (create token → shown once with the
+  repo-secret instructions, an example `prosho-evidence.json` built from the
+  project's own metric keys, and a copy-paste GitHub Actions step using
+  `jq` + `curl`; list/revoke), "Data sources" with Check now, "Recent
+  evidence" table; claims card shows computed status + latest value.
+- **Public page:** claims show the latest value; Results / Pipeline / Data
+  sources panels for data-science projects.
+
+**Tests:** 41 new (claim operators 16, SSRF guard 17, ingest/tokens/panels/
+daily job 8) → **83 total** (incl. Applaut's 4 from `002f6e6`).
+
+**Verified locally:** real browser, desktop + phone: token created through
+the UI, evidence sent with the exact `jq | curl` step → claim flipped to
+✓ Met; Check now hit real URLs (Eurostat, Copernicus up; a dead domain
+down); public page panels; no console errors, no horizontal scroll.
+
+**Verified in production** (throwaway project): ingest 2 accepted + the
+spoofed `source.` key rejected; same-commit retry → 2 duplicates; no token →
+401; claim `met` from 0.93 ≥ 0.9; **2 concurrent daily runs → exactly 3
+source rows**; from the VM, Eurostat up, dead domain down, cloud metadata
+address refused; Check now right after → 429; page rendered on
+`www.lvamo.com` with all panels, no console errors.
+
+**Not verified yet:** the first *scheduled* 05:00 UTC run in production
+(see banner, step 1).
 
 **Phase 1 (Core page) — code complete and live, 2026-10-15.** Exit check
 pending real users (see the banner above). Shipped in four slices, each
@@ -261,6 +327,15 @@ first API call is the check.
   project (TransitBuddy). All example values in it are illustrative.
 
 ## Session log
+
+### 2026-10-17 — Phase 2 built and deployed
+- Evidence ingestion with per-project tokens, computed claim statuses, the
+  data module (daily SSRF-safe source checks + results/pipeline/sources
+  panels). Migration `0025`. 83 tests.
+- Found while designing the scheduler: prod runs 2 uvicorn workers, each
+  with its own scheduler, so Applaut's discovery would run twice per
+  profile once enabled. Flagged as a separate task; fixed the same day in
+  another session (`002f6e6`, `1d756e2` — see `PROGRESS_APPLAUT.md`).
 
 ### 2026-10-15 — Phase 1 built and deployed
 - Four slices, each live and production-verified: GitHub sign-in;
