@@ -522,6 +522,18 @@ ends in ~10 s, exit 0, every board reported as an error. Merged on Venkat's
 18:07 UTC run on 2026-10-18 is the first with the change (Applaut's status
 check at 18:37): expect `fetch-boards` counts in the summary, fewer or no
 `sources_failed`, and "Boards to add"/"Boards gone" sections.
+**Checked 2026-10-18 20:17 UTC (first run with the change, `20261018_2008`):**
+succeeded, `sources_failed` empty → Applaut shows it as a normal run (first
+one). 18 min 12 s (earlier runs 23 and 12 min). `fetch-boards` ran: 24,949
+postings → 52 candidates, all assessed, 1 eligible (Clera); 231/250 searches;
+118 postings assessed (64 this morning); 2 new jobs + docs, 13 refreshed.
+Summary had "Boards to add" (Recruitee `intersnackitkg`), "Boards gone",
+"Recovered errors" (Workable idoven/kantox 429 inside fetch-boards; Covestro/
+Synera 502). End to end in Applaut without intervention: check 18:37 saw
+the run finished → sync due 19:27:11 → synced 19:28 (2 new, 13 updated, 4
+PDFs; 32 jobs). Next check 2026-10-19 06:37 UTC. Note: the run left out two
+~70–78% matches (Intersnack, Statista) only because Arbeitnow re-lists them
+but they were first published months ago (the 7-day rule).
 **Applaut Basic impact:** 77 of the 500 boards in
 `backend/app/applaut/discovery/data/company_boards.json` now return 404
 (60 Personio, 11 Greenhouse, 3 Lever, 3 Recruitee) and Check24 on
