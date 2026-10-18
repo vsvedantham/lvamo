@@ -542,6 +542,12 @@ for later changes). Routine accounts get no discovery controls at all.
   the form; routine Opportunities without discovery controls; Settings kit
   card. **Not verified:** rendering the kit's PDFs (WeasyPrint isn't in the
   backend image); only the fact guard and YAML were exercised.
+- Prod (commit `b61376c`): backup `lvamo-pre-onboarding-20261018-1253.dump`,
+  `deploy.sh`, both workers up without errors, kit fonts present in the
+  image, all API hosts 200, `/routine/setup-kit` 403 without auth, live
+  bundle has the engine step and kit button (toggle gone), registration
+  still closed. Venkat's existing profile was created before this, so it's
+  on `basic`: he switches in Settings → Job engine.
 
 ## 2026-10-18: Venkat's new account, onboarding fix, shared jobs hidden for routine accounts
 
