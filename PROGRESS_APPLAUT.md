@@ -501,6 +501,28 @@ mid-session).
 
 ---
 
+## 2026-10-18: Venkat's routine connected in production
+
+- Venkat re-created his account (old one deleted after backup
+  `lvamo-pre-user-delete-20261018-1304.dump`; registration open 13:05–13:20:18
+  UTC, auto-closed) and connected his routine himself: connection active,
+  contract v1, first sync 13:20–13:21 UTC: **30 jobs, 60 PDFs copied**, 0
+  linked to shared Basic postings.
+- **Fixed (commit `7f592ab`):** Run history stayed empty because
+  `run_tracker` rows were only copied by the status checks after the next
+  scheduled run. Now every sync copies the last 30 days of runs, and saving
+  a connection copies them at once. Deployed (backup
+  `lvamo-pre-runs-20261018-1327.dump`); his two runs backfilled with
+  `checks.refresh_runs`: `20261018_0809` and `20261017_2008`, both
+  `succeeded` with `sources_failed` set → shown as "Finished with problems".
+- What his runs report as failed sources: the routine's web search doesn't
+  honour `site:` filters, so ATS-board and germantechjobs/englishjobs
+  discovery returns little; `boards-api.eu.greenhouse.io` blocked by the
+  cloud egress proxy; Arbeitnow 429 (recovered). This supports giving the
+  routine a saved list of company boards to poll in code (see the
+  Basic-vs-routine comparison).
+- Next scheduled check: 18:37 UTC (run at 18:07).
+
 ## 2026-10-18: job engine chosen in onboarding + routine setup kit
 
 Venkat's request: decide how jobs are found during onboarding (Settings is
