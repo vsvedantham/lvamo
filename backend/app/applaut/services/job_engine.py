@@ -216,6 +216,14 @@ async def save_connection(user: User, data: RoutineConnectionInput, db: AsyncSes
     await db.commit()
     await db.refresh(conn)
 
+    # Show the routine's recent runs straight away (best effort: the next
+    # sync or status check copies them anyway).
+    try:
+        await checks.refresh_runs(db, conn)
+    except Exception:  # noqa: BLE001
+        await db.rollback()
+        await db.refresh(profile)
+        logger.warning("Could not read run_tracker right after saving for user %s", user.id, exc_info=True)
     await _reschedule(profile, db, reschedule=schedule_changed or first)
     if first or replaced:
         # §6.7 step 9: the first sync runs now rather than after the next run.

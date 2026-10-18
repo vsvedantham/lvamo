@@ -179,3 +179,15 @@ async def test_other_users_see_nothing(client, make_user, fake_source, fake_r2, 
     assert r.json()["connection"] is None
     assert (await client.post(f"{API}/routine/sync-now", headers=headers_b)).status_code == 404
     assert (await client.get(f"{API}/routine/runs", headers=headers_b)).json() == []
+
+
+async def test_save_copies_existing_runs_at_once(client, make_user, fake_source, fake_r2, routine_env):
+    from datetime import datetime, timedelta, timezone
+    _, _, headers = await make_user()
+    started = datetime.now(timezone.utc) - timedelta(hours=7)
+    await fake_source.add_run("20261018_0809", started, status="succeeded", finished_at=started + timedelta(minutes=12))
+    assert (await connect_routine(client, headers, fake_source)).status_code == 200
+    runs = (await client.get(f"{API}/routine/runs", headers=headers)).json()
+    assert [r["run_id"] for r in runs] == ["20261018_0809"]
+    card = (await client.get(API, headers=headers)).json()["card"]
+    assert card["state"] == "healthy" and card["last_run"]["run_id"] == "20261018_0809"

@@ -20,7 +20,7 @@ import hashlib
 import json
 import logging
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
@@ -50,6 +50,7 @@ MAX_DOCS_PER_SYNC = 200       # §6.9
 MAX_PDF_BYTES = 5_000_000     # §6.9
 MAX_TEXT_BYTES = 1_000_000    # content JSONs and the job description
 MAX_DESCRIPTION_CHARS = 200_000
+RUN_LOOKBACK = timedelta(days=30)   # run_tracker rows copied on each sync
 TRACKING_PARAMS = {"gh_src", "source", "src", "ref", "referrer", "lever-source", "lever-origin", "trk", "trackingid"}
 DOC_FILES = {
     "tailored_resume": ("_CV.pdf", "cv_content.json", "cv"),
@@ -475,6 +476,10 @@ async def _sync_locked(db: AsyncSession, user_id: uuid.UUID, trigger: str, run_i
 
     try:
         async with NeonReader(checks.neon_url(conn)) as src:
+            # Run status rides along with every sync (same short session), so
+            # Run history is current without waiting for a scheduled check.
+            version = await src.contract_version()
+            run_rows = await src.runs_since(datetime.now(timezone.utc) - RUN_LOOKBACK) if version >= 1 else []
             index, total = await src.job_index()
             known = {j.uid: j for j in await db.scalars(select(RoutineJob).where(RoutineJob.user_id == user_id))}
             todo = [r["uid"] for r in index if r.get("uid") and needs_sync(r, known.get(r["uid"]))]
@@ -487,7 +492,9 @@ async def _sync_locked(db: AsyncSession, user_id: uuid.UUID, trigger: str, run_i
         await checks.record_failure(db, conn, str(exc))
         await _finish(db, conn, record, run=None)
         raise SourceError(str(exc)) from None
-    await checks.record_success(db, conn)
+    await checks.record_success(db, conn, version)
+    await checks.mirror_runs(db, user_id, run_rows, datetime.now(timezone.utc))
+    await db.commit()
 
     await db.commit()
 

@@ -209,3 +209,17 @@ async def test_sync_now_rate_limited(connected, client, fake_source, fake_r2, st
     assert r.status_code == 200 and r.json()["queued"] is True, r.text
     r = await client.post(f"{API}/job-engine/routine/sync-now", headers=headers)
     assert r.status_code == 429 and "Retry-After" in r.headers
+
+
+async def test_sync_copies_run_tracker_rows(connected, fake_source, fake_r2, stored_files):
+    from datetime import datetime, timedelta, timezone
+    from app.applaut.models.routine import RoutineRun
+    user, _, _ = connected
+    started = datetime.now(timezone.utc) - timedelta(hours=5)
+    await fake_source.add_run("20261018_0809", started, status="succeeded", finished_at=started + timedelta(minutes=12),
+                              current_step="summary", jobs_new=1, docs_done=1, docs_failed=0,
+                              sources_failed="jobs.sap.com: blocked (403)")
+    await routine_sync.sync_user(user.id)
+    runs = await _rows(RoutineRun, RoutineRun.user_id == user.id)
+    assert [(r.run_id, r.outcome, r.jobs_new) for r in runs] == [("20261018_0809", "problems", 1)]
+    assert runs[0].notified_at is None  # a sync copies; only the status check notifies
