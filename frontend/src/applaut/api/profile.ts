@@ -39,6 +39,10 @@ export interface CreateProfilePayload {
   languages: string[]
   discovery_frequency_hours: number
   good_threshold?: number
+  /** Chosen in onboarding; Applaut AI isn't available yet. */
+  job_engine?: 'basic' | 'own_routine'
+  /** Applaut Basic only: run discovery automatically every discovery_frequency_hours. */
+  discovery_enabled?: boolean
 }
 
 export async function createProfile(data: CreateProfilePayload): Promise<Profile> {

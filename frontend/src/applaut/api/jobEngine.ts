@@ -153,6 +153,19 @@ export async function listRoutineSyncs(limit = 20): Promise<RoutineSync[]> {
   return (await client.get('/job-engine/routine/syncs', { params: { limit } })).data
 }
 
+/** Downloads the routine setup kit (zip), pre-filled from your profile. */
+export async function downloadSetupKit(): Promise<void> {
+  const res = await client.get('/job-engine/routine/setup-kit', { responseType: 'blob' })
+  const url = URL.createObjectURL(res.data as Blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'applaut-routine-kit.zip'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 10000)
+}
+
 /** FastAPI error detail as a sentence. */
 export function errorMessage(err: unknown, fallback = 'Something went wrong'): string {
   const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail

@@ -14,8 +14,10 @@ and Cloudflare account.
 
 1. Register at <https://www.lvamo.com/applaut/register> (only while
    registration is open).
-2. Complete onboarding (roles, countries, skills). The job engine belongs to
-   the profile, so this comes first.
+2. Complete onboarding (roles, countries, skills). Its last step asks how
+   Applaut should find jobs: choose **Your own Claude routine**, then
+   **Yes, connect it** (this guide), or **Not yet** to download the setup kit
+   (pre-filled with your profile) and start from its README.
 
 ## 2. A read-only Neon role for Applaut (5 min)
 
@@ -30,7 +32,7 @@ and Cloudflare account.
    CREATE ROLE applaut_reader WITH LOGIN PASSWORD '<your hex password>';
    GRANT CONNECT ON DATABASE neondb TO applaut_reader;
    GRANT USAGE ON SCHEMA public TO applaut_reader;
-   GRANT SELECT ON jobsearchautomationresults, run_tracker TO applaut_reader;
+   GRANT SELECT ON ALL TABLES IN SCHEMA public TO applaut_reader;
    -- tables the routine creates later are readable too
    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO applaut_reader;
    ```

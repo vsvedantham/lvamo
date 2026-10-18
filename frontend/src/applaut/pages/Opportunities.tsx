@@ -458,16 +458,6 @@ const STATE_TABS: { id: StateTab; label: string }[] = [
 ]
 const VALID_STATES: StateTab[] = ['open', 'applied', 'unavailable', 'all']
 
-// Routine accounts: whether to also list Applaut Basic's shared jobs. A
-// per-browser preference, off by default.
-const INCLUDE_BASIC_KEY = 'applaut_include_basic_jobs'
-function readIncludeBasic(): boolean {
-  try { return localStorage.getItem(INCLUDE_BASIC_KEY) === '1' } catch { return false }
-}
-function writeIncludeBasic(on: boolean): void {
-  try { on ? localStorage.setItem(INCLUDE_BASIC_KEY, '1') : localStorage.removeItem(INCLUDE_BASIC_KEY) } catch { /* ignore */ }
-}
-
 function SectionHeading({ text }: { text: string }) {
   return (
     <p style={{ margin: '0.75rem 0 0.125rem', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -500,7 +490,6 @@ export default function Opportunities() {
     initialState && VALID_STATES.includes(initialState) ? initialState : 'open'
   )
   const [counts, setCounts] = useState<Record<StateTab, number> | null>(null)
-  const [includeBasic, setIncludeBasic] = useState(readIncludeBasic)
   const PAGE_SIZE = 20
 
   const syncParams = (m: MatchFilter, st: StateTab) => {
@@ -539,8 +528,6 @@ export default function Opportunities() {
         match: filterMatch,
         engine: filterEngine || undefined,
         state: stateTab,
-        // Only routine accounts get the choice; everyone else keeps the default.
-        include_shared: engine === 'own_routine' ? includeBasic : undefined,
       })
       setItems(res.items)
       setTotal(res.total)
@@ -557,13 +544,7 @@ export default function Opportunities() {
   useEffect(() => {
     if (engine === null) return
     load(1); setPage(1)
-  }, [filterSource, filterCountry, filterMatch, filterEngine, stateTab, includeBasic, engine])
-
-  const toggleIncludeBasic = (on: boolean) => {
-    writeIncludeBasic(on)
-    setIncludeBasic(on)
-    if (!on) setFilterEngine('')
-  }
+  }, [filterSource, filterCountry, filterMatch, filterEngine, stateTab, engine])
   const isBasic = engine === 'basic'
 
   const discover = async () => {
@@ -632,27 +613,23 @@ export default function Opportunities() {
             <option key={m} value={m}>{MATCH_LABELS[m]}</option>
           ))}
         </select>
-        {engine === 'own_routine' && (
-          <label title="Jobs Applaut Basic found for everyone. Jobs your routine also found always show."
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.8rem', color: 'var(--text-2)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            <input type="checkbox" checked={includeBasic} onChange={e => toggleIncludeBasic(e.target.checked)} />
-            Include Applaut Basic jobs
-          </label>
-        )}
-        {engine && !isBasic && (engine !== 'own_routine' || includeBasic) && (
+        {/* A routine account only sees its routine's jobs: no engine choice to make. */}
+        {engine && !isBasic && engine !== 'own_routine' && (
           <select value={filterEngine} onChange={e => setFilterEngine(e.target.value as EngineFilter | '')} style={selectStyle}>
             <option value="">All engines</option>
             <option value={engine}>{JOB_ENGINE_LABELS[engine]}</option>
             <option value="basic">{JOB_ENGINE_LABELS.basic}</option>
           </select>
         )}
-        <select value={filterSource} onChange={e => setFilterSource(e.target.value)} style={selectStyle}>
-          <option value="">All sources</option>
-          <option value="greenhouse">Greenhouse</option>
-          <option value="lever">Lever</option>
-          <option value="ashby">Ashby</option>
-          <option value="personio">Personio</option>
-        </select>
+        {engine !== 'own_routine' && (
+          <select value={filterSource} onChange={e => setFilterSource(e.target.value)} style={selectStyle}>
+            <option value="">All sources</option>
+            <option value="greenhouse">Greenhouse</option>
+            <option value="lever">Lever</option>
+            <option value="ashby">Ashby</option>
+            <option value="personio">Personio</option>
+          </select>
+        )}
         <select value={filterCountry} onChange={e => setFilterCountry(e.target.value)} style={selectStyle}>
           <option value="">All countries</option>
           <option value="DE">Germany</option>
@@ -688,14 +665,16 @@ export default function Opportunities() {
       ) : items.length === 0 ? (
         <div style={{ padding: '3rem', textAlign: 'center', border: '1px dashed var(--border-strong)', borderRadius: 'var(--radius)' }}>
           <p style={{ fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text-1)' }}>
-            {stateTab === 'open' ? 'Nothing left to review' : stateTab === 'applied' ? 'No applications marked yet' : stateTab === 'unavailable' ? 'No jobs marked not available' : 'No jobs found yet'}
+            {counts?.all === 0 ? 'No jobs yet' : stateTab === 'open' ? 'Nothing left to review' : stateTab === 'applied' ? 'No applications marked yet' : stateTab === 'unavailable' ? 'No jobs marked not available' : 'No jobs found yet'}
           </p>
           <p style={{ color: 'var(--text-2)', fontSize: '0.85rem' }}>
             {stateTab === 'applied' ? 'Press "Mark as applied" on a job once you have applied.'
               : stateTab === 'unavailable' ? 'Jobs you mark as closed or impossible to apply to land here.'
               : isBasic || !engine
               ? 'Click "Run discovery" to search across all job boards — new jobs are scored automatically.'
-              : `New jobs appear here after ${JOB_ENGINE_LABELS[engine]} runs.`}
+              : engine === 'own_routine'
+                ? <>Your routine's jobs appear here an hour after each run. Not connected yet? <Link to="/applaut/settings" style={{ color: 'var(--accent)' }}>Settings → Job engine</Link></>
+                : `New jobs appear here after ${JOB_ENGINE_LABELS[engine]} runs.`}
           </p>
         </div>
       ) : (

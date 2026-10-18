@@ -1,6 +1,9 @@
 import { type KeyboardEvent, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getJobEngine, type JobEngineState } from '../api/jobEngine'
 import { createProfile } from '../api/profile'
+import RoutineSetupKit from '../components/RoutineSetupKit'
+import { ConnectionForm } from './Settings'
 
 const COUNTRIES = [
   { code: 'DE', name: 'Germany' },
@@ -132,6 +135,33 @@ function describeError(err: any): string {
   return 'Failed to create profile. Please try again.'
 }
 
+type EngineChoice = 'basic' | 'own_routine'
+
+const ENGINE_OPTIONS: { id: EngineChoice | 'applaut_ai'; title: string; badge: string; text: string; disabled?: boolean }[] = [
+  { id: 'basic', title: 'Applaut job search', badge: 'Ready now · free',
+    text: 'Applaut searches company job boards for you and scores every job against your profile. Nothing to set up.' },
+  { id: 'own_routine', title: 'Your own Claude routine', badge: 'For IT professionals',
+    text: 'Run the AI job search in your own Claude account. Applaut collects the jobs, CVs and cover letters an hour after each run. Needs a paid Claude plan, GitHub, Neon and Cloudflare.' },
+  { id: 'applaut_ai', title: 'Applaut AI', badge: 'Coming soon',
+    text: "Applaut's AI reads every new job against your profile and writes a tailored CV and cover letter. Nothing to set up.", disabled: true },
+]
+
+function Choice({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" role="radio" aria-checked={selected} onClick={onClick}
+      style={{
+        padding: '0.45rem 0.95rem', borderRadius: '999px', cursor: 'pointer', fontSize: '0.825rem',
+        background: selected ? 'var(--accent-glow)' : 'var(--bg-elevated)',
+        border: `1px solid ${selected ? 'var(--accent-border)' : 'var(--border)'}`,
+        color: selected ? 'var(--accent)' : 'var(--text-2)', fontWeight: selected ? 600 : 400,
+      }}>
+      {children}
+    </button>
+  )
+}
+
+const hint: React.CSSProperties = { margin: 0, fontSize: '0.78rem', color: 'var(--text-2)', lineHeight: 1.5 }
+
 export default function Onboarding() {
   const navigate = useNavigate()
   const [step, setStep] = useState(1)
@@ -153,6 +183,13 @@ export default function Onboarding() {
   const [languages, setLanguages] = useState<string[]>([])
   const [discoveryFrequency, setDiscoveryFrequency] = useState(24)
   const [goodThreshold, setGoodThreshold] = useState(85)
+
+  // Step 4: how jobs are found
+  const [engine, setEngine] = useState<EngineChoice | null>(null)
+  const [autoDiscovery, setAutoDiscovery] = useState<boolean | null>(null)
+  const [hasRoutine, setHasRoutine] = useState<boolean | null>(null)
+  // Step 5 (routine only, after the profile exists): connect it or get the kit
+  const [engineState, setEngineState] = useState<JobEngineState | null>(null)
 
   const toggleCountry = (code: string) =>
     setCountries(prev => prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code])
@@ -177,13 +214,25 @@ export default function Onboarding() {
       setError('Please select at least one employment type.')
       return
     }
+    if (step === 3 && skills.length === 0) {
+      setError('Please add at least one skill.')
+      return
+    }
     setError('')
     setStep(s => s + 1)
   }
 
   const submit = async () => {
-    if (skills.length === 0) {
-      setError('Please add at least one skill.')
+    if (engine === null) {
+      setError('Please choose how Applaut should find jobs for you.')
+      return
+    }
+    if (engine === 'basic' && autoDiscovery === null) {
+      setError('Please choose whether Applaut should search automatically.')
+      return
+    }
+    if (engine === 'own_routine' && hasRoutine === null) {
+      setError('Please tell us whether you already have a routine.')
       return
     }
     setError('')
@@ -201,8 +250,15 @@ export default function Onboarding() {
         languages,
         discovery_frequency_hours: discoveryFrequency,
         good_threshold: goodThreshold,
+        job_engine: engine,
+        discovery_enabled: engine === 'basic' && autoDiscovery === true,
       })
-      navigate('/applaut/resume')
+      if (engine === 'basic') {
+        navigate('/applaut/resume')
+      } else {
+        setEngineState(await getJobEngine())
+        setStep(5)
+      }
     } catch (err: any) {
       setError(describeError(err))
     } finally {
@@ -210,14 +266,15 @@ export default function Onboarding() {
     }
   }
 
-  const progress = ((step - 1) / 3) * 100
+  const progress = Math.min(1, (step - 1) / 4) * 100
+  const STEP_NAMES = ['', 'Basics', 'Location & preferences', 'Skills & matching', 'How should Applaut find jobs?', 'Connect your Claude routine']
 
   return (
     <div style={{ maxWidth: '560px' }}>
       {/* Header */}
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: '0 0 0.25rem', color: 'var(--text-1)' }}>Set up your profile</h1>
-        <p style={{ color: 'var(--text-2)', fontSize: '0.875rem', margin: '0 0 1.25rem' }}>Step {step} of 3 — {['', 'Basics', 'Location & preferences', 'Skills & settings'][step]}</p>
+        <p style={{ color: 'var(--text-2)', fontSize: '0.875rem', margin: '0 0 1.25rem' }}>{step <= 4 ? `Step ${step} of 4 — ` : 'Profile created — '}{STEP_NAMES[step]}</p>
         <div style={{ height: '3px', background: 'var(--bg-elevated)', borderRadius: '999px', overflow: 'hidden' }}>
           <div style={{ height: '100%', width: `${progress}%`, background: 'linear-gradient(90deg, var(--accent-dim), var(--accent))', borderRadius: '999px', transition: 'width 0.35s ease' }} />
         </div>
@@ -336,15 +393,6 @@ export default function Onboarding() {
               <TagInput tags={languages} onChange={setLanguages} placeholder="e.g. English, German" />
             </FieldGroup>
 
-            {/* The API accepts exactly these (CreateProfileRequest.discovery_frequency_hours). */}
-            <FieldGroup label="Discovery frequency (Applaut Basic)">
-              <select value={discoveryFrequency} onChange={e => setDiscoveryFrequency(Number(e.target.value))} style={{ ...inputStyle, width: 'auto' }}>
-                <option value={6}>Every 6 hours</option>
-                <option value={12}>Every 12 hours</option>
-                <option value={24}>Every 24 hours</option>
-              </select>
-            </FieldGroup>
-
             <FieldGroup label={`Match threshold — Good: ${goodThreshold}+  ·  Near miss: ${goodThreshold - 15}–${goodThreshold - 1}`}>
               <input
                 type="range"
@@ -361,7 +409,94 @@ export default function Onboarding() {
           </>
         )}
 
-        <div style={{ display: 'flex', gap: '0.625rem', paddingTop: '0.25rem' }}>
+        {step === 4 && (
+          <>
+            <div role="radiogroup" aria-label="How should Applaut find jobs?" style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
+              {ENGINE_OPTIONS.map(o => {
+                const selected = engine === o.id
+                return (
+                  <button key={o.id} type="button" role="radio" aria-checked={selected} disabled={o.disabled}
+                    onClick={() => { if (!o.disabled) { setEngine(o.id as EngineChoice); setError('') } }}
+                    style={{
+                      textAlign: 'left', padding: '0.875rem 1rem', borderRadius: 'var(--radius-sm)',
+                      cursor: o.disabled ? 'default' : 'pointer', opacity: o.disabled ? 0.5 : 1,
+                      background: selected ? 'var(--accent-glow)' : 'var(--bg-elevated)',
+                      border: `1px solid ${selected ? 'var(--accent-border)' : 'var(--border)'}`,
+                      display: 'flex', flexDirection: 'column', gap: '0.3rem',
+                    }}>
+                    <span style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', alignItems: 'baseline' }}>
+                      <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-1)' }}>{o.title}</span>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: selected ? 'var(--accent)' : 'var(--text-3)' }}>{o.badge}</span>
+                    </span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-2)', lineHeight: 1.45 }}>{o.text}</span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {engine === 'basic' && (
+              <FieldGroup label="Search automatically?">
+                <div role="radiogroup" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <Choice selected={autoDiscovery === true} onClick={() => setAutoDiscovery(true)}>Yes, automatically</Choice>
+                  <Choice selected={autoDiscovery === false} onClick={() => setAutoDiscovery(false)}>No, I'll run it myself</Choice>
+                </div>
+                {autoDiscovery === true && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-2)' }}>Search</span>
+                    {/* The API accepts exactly these (CreateProfileRequest.discovery_frequency_hours). */}
+                    <select value={discoveryFrequency} onChange={e => setDiscoveryFrequency(Number(e.target.value))} style={{ ...inputStyle, width: 'auto' }} aria-label="How often">
+                      <option value={6}>every 6 hours</option>
+                      <option value={12}>every 12 hours</option>
+                      <option value={24}>every 24 hours</option>
+                    </select>
+                  </div>
+                )}
+                {autoDiscovery === false && (
+                  <p style={{ ...hint, marginTop: '0.6rem' }}>Use <strong>Run discovery</strong> on Opportunities whenever you want a fresh search.</p>
+                )}
+              </FieldGroup>
+            )}
+
+            {engine === 'own_routine' && (
+              <FieldGroup label="Do you already have a routine that saves jobs to Neon and Cloudflare R2?">
+                <div role="radiogroup" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <Choice selected={hasRoutine === true} onClick={() => setHasRoutine(true)}>Yes, connect it</Choice>
+                  <Choice selected={hasRoutine === false} onClick={() => setHasRoutine(false)}>Not yet</Choice>
+                </div>
+                <p style={{ ...hint, marginTop: '0.6rem' }}>
+                  {hasRoutine === false
+                    ? "Next you'll get a setup kit (pre-filled with this profile) and a step-by-step guide."
+                    : hasRoutine === true
+                      ? "Next you'll connect it with a read-only database role and a read-only storage key."
+                      : 'Applaut only ever reads your data, with read-only keys you create.'}
+                </p>
+              </FieldGroup>
+            )}
+            <p style={{ ...hint, fontSize: '0.75rem' }}>You can change this any time in Settings. Your jobs and documents stay when you switch.</p>
+          </>
+        )}
+
+        {step === 5 && (
+          <>
+            {hasRoutine && engineState?.credentials_storage_ready ? (
+              <ConnectionForm state={engineState} onSaved={() => navigate('/applaut/dashboard')} />
+            ) : (
+              <RoutineSetupKit />
+            )}
+            <p style={hint}>
+              {hasRoutine
+                ? <>No routine yet after all? <button type="button" onClick={() => setHasRoutine(false)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent)', cursor: 'pointer', fontSize: '0.78rem' }}>Get the setup kit</button></>
+                : <>Already have one? <button type="button" onClick={() => setHasRoutine(true)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent)', cursor: 'pointer', fontSize: '0.78rem' }}>Connect it now</button></>}
+              {' '}· You can also do this later in Settings → Job engine.
+            </p>
+            <button type="button" onClick={() => navigate('/applaut/dashboard')}
+              style={{ padding: '0.625rem', background: 'transparent', border: '1px solid var(--border-strong)', color: 'var(--text-1)', borderRadius: 'var(--radius-xs)', cursor: 'pointer', fontSize: '0.9rem' }}>
+              Go to dashboard
+            </button>
+          </>
+        )}
+
+        {step <= 4 && <div style={{ display: 'flex', gap: '0.625rem', paddingTop: '0.25rem' }}>
           {step > 1 && (
             <button
               onClick={() => { setError(''); setStep(s => s - 1) }}
@@ -370,7 +505,7 @@ export default function Onboarding() {
               Back
             </button>
           )}
-          {step < 3 ? (
+          {step < 4 ? (
             <button
               onClick={next}
               style={{ flex: 1, padding: '0.625rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--radius-xs)', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 600 }}
@@ -386,7 +521,7 @@ export default function Onboarding() {
               {submitting ? 'Creating profile…' : 'Create profile'}
             </button>
           )}
-        </div>
+        </div>}
       </div>
     </div>
   )

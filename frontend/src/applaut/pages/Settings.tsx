@@ -8,6 +8,7 @@ import {
 import { DEFAULT_LOCAL_FOLDER, getLocalDocsFolder, setLocalDocsFolder } from '../api/opportunity'
 import { JOB_ENGINE_LABELS, type JobEngine } from '../api/profile'
 import RoutineEngineCard, { buttonStyle, formatWhen } from '../components/RoutineEngineCard'
+import RoutineSetupKit from '../components/RoutineSetupKit'
 
 // Settings → Job engine (docs/applaut/JOB_ENGINES_DESIGN.md §3.4, §6.6–6.8).
 // Secrets are write-only: the form never receives them back, only hints.
@@ -27,18 +28,18 @@ const pre: React.CSSProperties = {
 const ENGINES: { id: JobEngine; badge: string; text: string; disabled?: boolean }[] = [
   { id: 'applaut_ai', badge: 'Coming soon', text: "Applaut's AI searches German job sites, reads every new job against your profile and writes a tailored CV and cover letter. Nothing to set up.", disabled: true },
   { id: 'own_routine', badge: 'For IT professionals', text: 'Run the AI job search in your own Claude account. Applaut collects your jobs and documents an hour after each run, reading your Neon database and R2 bucket with read-only keys.' },
-  { id: 'basic', badge: 'Fallback', text: 'Keyword search on company job boards with a rule-based match score and template documents. No AI, no setup.' },
+  { id: 'basic', badge: 'Ready now · free', text: 'Applaut searches company job boards for you and scores every job against your profile. Nothing to set up; turn automatic searching on or off on the dashboard.' },
 ]
 
 const TIMEZONES = ['UTC', 'Europe/Berlin', 'Europe/London', 'Europe/Paris', 'Europe/Amsterdam', 'Europe/Vienna', 'Europe/Zurich', 'America/New_York', 'Asia/Kolkata']
 
-const READ_ONLY_SQL = `-- Run in Neon's SQL editor, as the database owner.
--- Choose a long random password; Neon rejects weak ones.
+const READ_ONLY_SQL = `-- Run in Neon's SQL editor, as the database owner (the role your routine uses).
+-- Use a long random password, e.g. from \`openssl rand -hex 24\`; Neon rejects weak ones.
 CREATE ROLE applaut_reader WITH LOGIN PASSWORD '<a long random password>';
 GRANT CONNECT ON DATABASE neondb TO applaut_reader;
 GRANT USAGE ON SCHEMA public TO applaut_reader;
-GRANT SELECT ON jobsearchautomationresults, run_tracker TO applaut_reader;
--- Tables the routine adds later are readable too:
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO applaut_reader;
+-- Tables the routine creates later are readable too:
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO applaut_reader;`
 
 // --- schedule picker: daily (or weekday) times that share one minute = one cron line
@@ -129,7 +130,7 @@ function Checks({ checks }: { checks: CheckResult[] }) {
   )
 }
 
-function ConnectionForm({ state, onSaved }: { state: JobEngineState; onSaved: (s: JobEngineState) => void }) {
+export function ConnectionForm({ state, onSaved }: { state: JobEngineState; onSaved: (s: JobEngineState) => void }) {
   const saved = state.connection
   const [form, setForm] = useState<Required<Omit<ConnectionInput, 'routine_url'>> & { routine_url: string }>({
     neon_url: '', r2_access_key_id: '', r2_secret: '',
@@ -485,6 +486,13 @@ export default function Settings() {
               ) : (
                 <div style={card}><p style={{ ...muted, color: 'var(--warn)' }}>Applaut can't store connection details on this server yet (no encryption key configured).</p></div>
               )}
+              <div style={card}>
+                <h2 style={h2}>{state.connection ? 'Routine setup kit' : "Don't have a routine yet?"}</h2>
+                {state.connection
+                  ? <p style={muted}>The routine's files and guide, with your profile and search terms pre-filled. Handy to set up a new routine.</p>
+                  : null}
+                <RoutineSetupKit compact={!!state.connection} />
+              </div>
               <LocalFolderSetting />
               {state.connection && <History refreshKey={refreshKey} />}
             </>

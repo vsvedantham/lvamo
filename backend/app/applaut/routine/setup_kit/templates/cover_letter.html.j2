@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ p.personal.name }} – Cover Letter</title>
+<style>
+  /* Carlito is metric-compatible with Calibri, the font of the original letter. */
+  @font-face { font-family: "CalibriLike"; font-weight: 400; src: url("fonts/Carlito-Regular.ttf"); }
+  @font-face { font-family: "CalibriLike"; font-weight: 700; src: url("fonts/Carlito-Bold.ttf"); }
+
+  @page { size: A4; margin: 46pt 59pt 40pt 55pt; }
+  body { font-family: "CalibriLike", Calibri, sans-serif; font-size: 11pt; line-height: 1.42; color: #333333; margin: 0; }
+  a { color: inherit; text-decoration: none; }
+
+  .name { font-size: 17pt; font-weight: 700; color: #1f3864; letter-spacing: 0.3pt; margin: 0; line-height: 1.15; }
+  .tagline { font-size: 8.4pt; color: #555555; margin: 3pt 0 6pt 0; }
+  .rule { border-top: 1.6pt solid #1f3864; margin: 0 0 7pt 0; }
+  .contact { font-size: 8.4pt; color: #555555; line-height: 1.6; }
+  .sep { padding: 0 6pt; }
+
+  .date { margin: 15pt 0 12pt 0; }
+  .recipient { margin: 0 0 30pt 0; line-height: 1.5; }
+  .subject { font-weight: 700; margin: 0 0 11pt 0; }
+  p { margin: 0 0 9.5pt 0; }
+  .closing { margin-top: 11pt; }
+  .signature { font-weight: 700; margin-top: 12pt; }
+</style>
+</head>
+<body>
+  <div class="name">{{ p.personal.name | upper }}</div>
+  <div class="tagline">{{ cl.tagline }}</div>
+  <div class="rule"></div>
+  <div class="contact">
+    {{ p.personal.location }}<span class="sep">|</span>{{ p.personal.phone }}<span class="sep">|</span><a href="mailto:{{ p.personal.email }}">{{ p.personal.email }}</a><br>
+    <a href="{{ p.personal.linkedin_url }}">{{ p.personal.linkedin_display }}</a><span class="sep">|</span><a href="{{ p.personal.github_url }}">{{ p.personal.github_display }}</a><span class="sep">|</span>{{ p.personal.work_authorization_short }} – {{ p.personal.availability_short }}
+  </div>
+
+  <div class="date">{{ cl.date }}</div>
+  <div class="recipient">{% for line in cl.recipient_lines %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}</div>
+
+  <div class="subject">{{ cl.subject }}</div>
+  <p>{{ cl.salutation }}</p>
+  {% for para in cl.paragraphs %}<p>{{ para }}</p>
+  {% endfor %}
+  <p class="closing">{{ cl.closing }}</p>
+  <div class="signature">{{ p.personal.name }}</div>
+</body>
+</html>

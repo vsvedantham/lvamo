@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.applaut.models.user import User
@@ -7,7 +7,9 @@ from app.applaut.schemas.job_engine import (
     ConnectionTestRequest, ConnectionTestResponse, JobEngineResponse, RoutineConnectionInput,
     RoutineRunInfo, RoutineSyncInfo, SetEngineRequest, SyncNowResponse,
 )
+from app.applaut.routine.kit import KIT_FILENAME, build_setup_kit
 from app.applaut.services import job_engine as svc
+from app.applaut.services.audit import log_action
 from app.applaut.services.auth import get_current_user
 from app.applaut.services.profile import get_active_profile
 from app.db.session import get_db
@@ -67,3 +69,17 @@ async def list_runs(limit: int = Query(50, ge=1, le=200), user: User = Depends(g
 async def list_syncs(limit: int = Query(20, ge=1, le=100), user: User = Depends(get_current_user),
                      db: AsyncSession = Depends(get_db)):
     return await svc.list_syncs(user, db, limit)
+
+
+@router.get("/routine/setup-kit", response_class=Response,
+            responses={200: {"content": {"application/zip": {}}, "description": "The routine setup kit"}})
+async def download_setup_kit(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Everything needed to run your own Claude routine, with the profile and
+    search config pre-filled from your Applaut profile."""
+    profile = await get_active_profile(user, db)
+    data = build_setup_kit(user, profile)
+    await log_action(action="routine.setup_kit_downloaded", db=db, user_id=str(user.id),
+                     entity_type="profile", entity_id=str(profile.id))
+    await db.commit()
+    return Response(content=data, media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{KIT_FILENAME}"'})

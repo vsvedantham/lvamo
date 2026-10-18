@@ -501,6 +501,48 @@ mid-session).
 
 ---
 
+## 2026-10-18: job engine chosen in onboarding + routine setup kit
+
+Venkat's request: decide how jobs are found during onboarding (Settings is
+for later changes). Routine accounts get no discovery controls at all.
+- **Onboarding step 4 "How should Applaut find jobs?"**: *Applaut job
+  search* (Basic) → "Search automatically?" yes → every 6/12/24 h, no →
+  manual Run discovery only; *Your own Claude routine* → "Already have
+  one?" → after the profile is created, a step 5 with the connection form
+  (yes) or the setup kit download (not yet), both skippable to Settings;
+  *Applaut AI* shown disabled ("Coming soon"). The frequency control moved
+  here from step 3. `CreateProfileRequest` gained `job_engine` (basic |
+  own_routine) and `discovery_enabled` (ignored for own_routine);
+  `create_profile` now also saves `good_threshold` (it was silently
+  dropped) and audit-logs `profile.create`.
+- **Routine accounts**: no Run discovery, no "Include Applaut Basic jobs"
+  toggle (removed; the API's `include_shared` stays, default off for them),
+  no engine or source filters; empty state links to Settings → Job engine.
+- **Setup kit** (`GET /job-engine/routine/setup-kit`, `routine/kit.py`,
+  static files in `routine/setup_kit/`): a zip generalised from
+  `vsvedantham/job-search-automation@85d70a8`: ROUTINE_PROMPT (no names,
+  employers, numbers or visa details; experience/project rules read from
+  the profile), `pipeline.py` (file names from `personal.name`, generic
+  sample letter), templates (photo optional), fonts (OFL / Apache), setup.sh,
+  sync_to_mac.sh; plus generated `README.md` (setup steps), `CLAUDE.md`,
+  `SETUP_PROMPT.md` (for Claude Code), `sql/applaut_reader.sql`, and
+  `profile/master_profile.yaml` + `config/search_config.yaml` pre-filled from
+  the user's Applaut profile (name, email, skills, roles, preferences; the
+  rest is TODO, never invented). Not included: Venkat's profile, photo, or
+  Mac unlock listener. Also downloadable from Settings.
+- Read-only SQL (Settings, kit, guide) now grants `SELECT ON ALL TABLES` +
+  default privileges, so it works before the routine's first run creates
+  the tables.
+- Tests: `tests/applaut/test_onboarding_engine.py` (three engine choices at
+  creation incl. tasks queued / not, Applaut AI refused, kit contents, no
+  personal words in any text file, generated YAML, the kit's own fact guard
+  accepts the generated profile's sample). Full suite 142 passed.
+- Verified locally in the browser: steps 1–4, both step-4 branches, routine +
+  "Not yet" → profile created → kit download (200) → "Connect it now" shows
+  the form; routine Opportunities without discovery controls; Settings kit
+  card. **Not verified:** rendering the kit's PDFs (WeasyPrint isn't in the
+  backend image); only the fact guard and YAML were exercised.
+
 ## 2026-10-18: Venkat's new account, onboarding fix, shared jobs hidden for routine accounts
 
 - **Registration** was opened on request at 12:22 UTC

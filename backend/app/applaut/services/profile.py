@@ -44,8 +44,18 @@ async def create_profile(
         skills=payload.skills,
         languages=payload.languages,
         discovery_frequency_hours=payload.discovery_frequency_hours,
+        good_threshold=payload.good_threshold,
+        job_engine=payload.job_engine,
+        # Automatic discovery is Applaut Basic's; a routine finds jobs itself.
+        discovery_enabled=payload.discovery_enabled and payload.job_engine == "basic",
     )
     db.add(profile)
+    await db.flush()
+    from app.applaut.services.audit import log_action
+    await log_action(action="profile.create", db=db, user_id=str(user.id), entity_type="profile",
+                     entity_id=str(profile.id),
+                     after_state={"job_engine": payload.job_engine, "discovery_enabled": profile.discovery_enabled,
+                                  "discovery_frequency_hours": payload.discovery_frequency_hours})
     await db.commit()
     await db.refresh(profile)
     await _reschedule(profile, db)

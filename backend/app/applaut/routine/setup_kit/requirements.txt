@@ -1,0 +1,7 @@
+weasyprint>=62
+jinja2>=3.1
+pyyaml>=6
+sqlalchemy>=2.0
+psycopg[binary]>=3.1
+pymysql>=1.1
+boto3>=1.34
