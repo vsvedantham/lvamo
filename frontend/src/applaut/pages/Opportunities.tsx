@@ -458,6 +458,16 @@ const STATE_TABS: { id: StateTab; label: string }[] = [
 ]
 const VALID_STATES: StateTab[] = ['open', 'applied', 'unavailable', 'all']
 
+// Routine accounts: whether to also list Applaut Basic's shared jobs. A
+// per-browser preference, off by default.
+const INCLUDE_BASIC_KEY = 'applaut_include_basic_jobs'
+function readIncludeBasic(): boolean {
+  try { return localStorage.getItem(INCLUDE_BASIC_KEY) === '1' } catch { return false }
+}
+function writeIncludeBasic(on: boolean): void {
+  try { on ? localStorage.setItem(INCLUDE_BASIC_KEY, '1') : localStorage.removeItem(INCLUDE_BASIC_KEY) } catch { /* ignore */ }
+}
+
 function SectionHeading({ text }: { text: string }) {
   return (
     <p style={{ margin: '0.75rem 0 0.125rem', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -490,6 +500,7 @@ export default function Opportunities() {
     initialState && VALID_STATES.includes(initialState) ? initialState : 'open'
   )
   const [counts, setCounts] = useState<Record<StateTab, number> | null>(null)
+  const [includeBasic, setIncludeBasic] = useState(readIncludeBasic)
   const PAGE_SIZE = 20
 
   const syncParams = (m: MatchFilter, st: StateTab) => {
@@ -528,6 +539,8 @@ export default function Opportunities() {
         match: filterMatch,
         engine: filterEngine || undefined,
         state: stateTab,
+        // Only routine accounts get the choice; everyone else keeps the default.
+        include_shared: engine === 'own_routine' ? includeBasic : undefined,
       })
       setItems(res.items)
       setTotal(res.total)
@@ -539,8 +552,18 @@ export default function Opportunities() {
     }
   }
 
-  useEffect(() => { load(1); setPage(1) }, [filterSource, filterCountry, filterMatch, filterEngine, stateTab])
   useEffect(() => { getMyProfile().then(p => setEngine(p.job_engine)).catch(() => setEngine('basic')) }, [])
+  // Wait for the engine so a routine account never flashes the shared pool.
+  useEffect(() => {
+    if (engine === null) return
+    load(1); setPage(1)
+  }, [filterSource, filterCountry, filterMatch, filterEngine, stateTab, includeBasic, engine])
+
+  const toggleIncludeBasic = (on: boolean) => {
+    writeIncludeBasic(on)
+    setIncludeBasic(on)
+    if (!on) setFilterEngine('')
+  }
   const isBasic = engine === 'basic'
 
   const discover = async () => {
@@ -609,7 +632,14 @@ export default function Opportunities() {
             <option key={m} value={m}>{MATCH_LABELS[m]}</option>
           ))}
         </select>
-        {engine && !isBasic && (
+        {engine === 'own_routine' && (
+          <label title="Jobs Applaut Basic found for everyone. Jobs your routine also found always show."
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.8rem', color: 'var(--text-2)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            <input type="checkbox" checked={includeBasic} onChange={e => toggleIncludeBasic(e.target.checked)} />
+            Include Applaut Basic jobs
+          </label>
+        )}
+        {engine && !isBasic && (engine !== 'own_routine' || includeBasic) && (
           <select value={filterEngine} onChange={e => setFilterEngine(e.target.value as EngineFilter | '')} style={selectStyle}>
             <option value="">All engines</option>
             <option value={engine}>{JOB_ENGINE_LABELS[engine]}</option>

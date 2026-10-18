@@ -102,6 +102,8 @@ export interface OpportunityList {
   good_threshold: number
   near_miss_threshold: number
   counts: Record<TrackingState | 'all', number>
+  /** Whether Applaut Basic's shared jobs are in this list. */
+  include_shared: boolean
 }
 
 export interface DiscoveryRunResponse {
@@ -125,6 +127,8 @@ export async function listOpportunities(params?: {
   match?: MatchFilter
   engine?: EngineFilter
   state?: TrackingState | 'all'
+  /** Default: yes, except for accounts on their own Claude routine. */
+  include_shared?: boolean
 }): Promise<OpportunityList> {
   const { data } = await client.get<OpportunityList>('/opportunities', { params })
   return data

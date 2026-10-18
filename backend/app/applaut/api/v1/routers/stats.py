@@ -6,7 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.applaut.models.application import Application
 from app.applaut.models.generated_document import GeneratedDocument
+from app.applaut.models.job_assessment import JobAssessment
 from app.applaut.models.opportunity import Opportunity
+from app.applaut.models.routine import RoutineJob
 from app.applaut.models.score import Score
 from app.applaut.models.user import User
 from app.applaut.services.auth import get_current_user
@@ -42,6 +44,26 @@ async def get_stats(
     good_threshold = profile.good_threshold
     near_miss_threshold = good_threshold - 15
 
+    if profile.job_engine == "own_routine":
+        # Your routine's jobs only (Applaut Basic's shared pool is hidden for
+        # you, as on Opportunities), ranked by the routine's match %.
+        routine_opps = (
+            select(RoutineJob.opportunity_id).where(RoutineJob.user_id == uid)
+            .union(select(Opportunity.id).where(Opportunity.owner_user_id == uid))
+        )
+        opportunities_found = await db.scalar(
+            select(func.count(Opportunity.id)).where(Opportunity.is_active == True, Opportunity.id.in_(routine_opps))
+        ) or 0
+        match = select(func.count(JobAssessment.id)).where(
+            JobAssessment.profile_id == profile.id, JobAssessment.engine == "own_routine",
+            JobAssessment.opportunity_id.in_(routine_opps),
+        )
+        good_matches = await db.scalar(match.where(JobAssessment.match_score >= good_threshold)) or 0
+        near_misses = await db.scalar(match.where(
+            JobAssessment.match_score >= near_miss_threshold, JobAssessment.match_score < good_threshold,
+        )) or 0
+        return await _with_documents_and_applications(uid, db, opportunities_found, good_matches, near_misses)
+
     opportunities_found = await db.scalar(
         select(func.count(Opportunity.id)).where(Opportunity.is_active == True, visible_to(uid))
     ) or 0
@@ -61,6 +83,12 @@ async def get_stats(
         )
     ) or 0
 
+    return await _with_documents_and_applications(uid, db, opportunities_found, good_matches, near_misses)
+
+
+async def _with_documents_and_applications(
+    uid, db: AsyncSession, opportunities_found: int, good_matches: int, near_misses: int,
+) -> DashboardStats:
     documents_generated = await db.scalar(
         select(func.count(GeneratedDocument.id)).where(
             GeneratedDocument.user_id == uid,

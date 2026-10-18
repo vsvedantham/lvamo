@@ -117,3 +117,5 @@ class OpportunityListResponse(BaseModel):
     near_miss_threshold: int
     # Jobs per tracking state, for the tabs (same filters except the state).
     counts: dict[str, int] = {}
+    # Whether Applaut Basic's shared jobs are in this list.
+    include_shared: bool = True

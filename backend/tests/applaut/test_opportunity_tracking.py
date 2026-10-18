@@ -26,7 +26,7 @@ async def test_routine_jobs_first_with_folder_info(client, make_user, make_oppor
     await _routine_job(user, profile, low, "acme__low__berlin", 71, docs_status="pending")
     await _routine_job(user, profile, high, "acme__high__berlin", 95)
 
-    r = await client.get(API, headers=headers, params={"page_size": 100})
+    r = await client.get(API, headers=headers, params={"page_size": 100, "include_shared": "true"})
     assert r.status_code == 200, r.text
     items = r.json()["items"]
     titles = [i["title"] for i in items]
@@ -88,3 +88,28 @@ async def test_bad_tracking_input(client, make_user, make_opportunity):
     opp = await make_opportunity()
     r = await client.put(f"{API}/{opp.id}/tracking", json={"state": "deleted"}, headers=headers)
     assert r.status_code == 422
+
+
+async def test_routine_users_hide_shared_basic_jobs_by_default(client, make_user, make_opportunity):
+    user, profile, headers = await make_user(job_engine="own_routine")
+    shared = await make_opportunity(title="Shared only")
+    linked = await make_opportunity(title="Shared, also found by my routine")
+    mine = await make_opportunity(owner=user, title="Mine")
+    await _routine_job(user, profile, linked, "linked__de__berlin", 88)
+    await _routine_job(user, profile, mine, "mine__de__berlin", 90)
+
+    res = (await client.get(API, headers=headers, params={"page_size": 100})).json()
+    assert res["include_shared"] is False
+    assert {i["title"] for i in res["items"]} == {"Mine", "Shared, also found by my routine"}
+    assert res["counts"]["all"] == 2
+
+    res = (await client.get(API, headers=headers, params={"page_size": 100, "include_shared": "true"})).json()
+    assert res["include_shared"] is True and str(shared.id) in {i["id"] for i in res["items"]}
+
+    stats = (await client.get("/api/v1/applaut/stats", headers=headers)).json()
+    assert stats["opportunities_found"] == 2 and stats["good_matches"] == 2
+
+    # Basic users keep seeing the shared pool.
+    _, _, basic_headers = await make_user()
+    res = (await client.get(API, headers=basic_headers, params={"page_size": 100})).json()
+    assert res["include_shared"] is True and str(shared.id) in {i["id"] for i in res["items"]}

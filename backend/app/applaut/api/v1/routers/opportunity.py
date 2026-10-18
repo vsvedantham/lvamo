@@ -48,11 +48,12 @@ async def list_opps(
     match: Literal["all", "good", "near_miss", "below", "unscored"] = Query("all"),
     engine: Optional[Literal["basic", "applaut_ai", "own_routine"]] = Query(None),
     state: Literal["all", "open", "applied", "unavailable"] = Query("all"),
+    include_shared: Optional[bool] = Query(None, description="Applaut Basic's shared jobs; default: yes, except on your own routine"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    rows, total, good_threshold, near_miss_threshold, counts = await list_opportunities_with_scores(
-        current_user, db, page, page_size, country_code, source, match, engine, state
+    rows, total, good_threshold, near_miss_threshold, counts, shared_included = await list_opportunities_with_scores(
+        current_user, db, page, page_size, country_code, source, match, engine, state, include_shared
     )
     items = []
     for opp, score, assessment, application, routine_job in rows:
@@ -74,6 +75,7 @@ async def list_opps(
         good_threshold=good_threshold,
         near_miss_threshold=near_miss_threshold,
         counts=counts,
+        include_shared=shared_included,
     )
 
 
