@@ -501,6 +501,34 @@ mid-session).
 
 ---
 
+## 2026-10-18: Venkat's new account, onboarding fix, shared jobs hidden for routine accounts
+
+- **Registration** was opened on request at 12:22 UTC
+  (`applaut.application_settings.allow_new_registrations = '1'`) and closed
+  automatically by a one-off job on the VM at 12:37:52 UTC (verified via
+  `GET /settings/allow_new_registrations` → `0`; script removed). Venkat
+  created his new account then.
+- **Blank page after onboarding** (commit `8511e4a`, frontend only): the
+  discovery-frequency slider offered 1–72 h but `CreateProfileRequest`
+  accepts only 6/12/24 (and decimal years are rejected); the 422's list of
+  errors was put into JSX, which crashed React. Now a 6/12/24 choice, years
+  rounded, employment type and 0–50 years checked first, and
+  `api/errors.ts apiErrorMessage()` used on Login, Register, Resume,
+  documents, Opportunities so no validation error can blank a page.
+  Reproduced both 422s against the local API; verified onboarding with
+  "4.5" years creates the profile and moves to Resume.
+- **Shared Basic jobs hidden for routine accounts** (commit `f8b85ec`): a
+  brand-new account saw 56 jobs because Applaut Basic's jobs are one shared
+  pool (by design: public postings fetched once). For `own_routine`
+  profiles, `GET /opportunities` now defaults to `include_shared=false`
+  (private jobs + shared postings their routine also found); the
+  Opportunities page has an **Include Applaut Basic jobs** checkbox
+  (per browser, off by default); dashboard stats for routine accounts count
+  the routine's jobs and use its match %. Basic accounts unchanged. Tests:
+  136 passed. Verified locally (1 routine job by default, 44 with the toggle).
+  Prod: backup `lvamo-pre-shared-20261018-1238.dump`, `deploy.sh`, both
+  workers up without errors, all API hosts 200, toggle in the live bundle.
+
 ## Opportunities: routine jobs first + apply actions (2026-10-18, deployed)
 
 Commit `3c0f9ed`. Venkat's request: his routine's jobs first, and per job
