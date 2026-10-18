@@ -16,6 +16,7 @@ import {
 } from '../api/opportunity'
 import { getMyProfile, JOB_ENGINE_LABELS, type JobEngine } from '../api/profile'
 import { decideNearMiss } from '../api/scoring'
+import { apiErrorMessage } from '../api/errors'
 
 const SOURCE_LABELS: Record<string, string> = {
   greenhouse: 'Greenhouse',
@@ -270,7 +271,7 @@ function JobActions({ opp, showDocuments, onTracked }: {
       onTracked(opp, await setTracking(opp.id, next, reason))
       setNote(null)
     } catch (err: any) {
-      setNote(err.response?.data?.detail ?? 'Could not update this job')
+      setNote(apiErrorMessage(err, 'Could not update this job'))
     } finally {
       setBusy(false)
     }
@@ -550,7 +551,7 @@ export default function Opportunities() {
       setMessage(res.message)
       load(1); setPage(1)
     } catch (err: any) {
-      setMessage(err.response?.data?.detail ?? 'Discovery failed.')
+      setMessage(apiErrorMessage(err, 'Discovery failed.'))
     } finally {
       setRunning(false)
     }

@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { apiErrorMessage } from '../api/errors'
 
 const field: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '0.375rem' }
 const labelStyle: React.CSSProperties = { fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-2)' }
@@ -21,7 +22,7 @@ export default function Login() {
       await login(email, password)
       navigate('/applaut/dashboard')
     } catch (err: any) {
-      setError(err.response?.data?.detail ?? 'Invalid email or password.')
+      setError(apiErrorMessage(err, 'Invalid email or password.'))
     } finally {
       setLoading(false)
     }

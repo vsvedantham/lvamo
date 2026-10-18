@@ -4,6 +4,7 @@ import { createApplication } from '../api/applications'
 import { generateDocuments, getDocumentFileLink, getOpportunityDocuments, type DocumentItem, type GenerationMode, type OpportunityDocuments } from '../api/documents'
 import { getOpportunity, type OpportunityDetail } from '../api/opportunity'
 import { getMyProfile, JOB_ENGINE_LABELS, type JobEngine } from '../api/profile'
+import { apiErrorMessage } from '../api/errors'
 
 function MarkdownBlock({ content }: { content: string }) {
   return (
@@ -85,7 +86,7 @@ export default function DocumentDetail() {
         cover_letter: result.cover_letter,
       })
     } catch (err: any) {
-      setError(err.response?.data?.detail ?? 'Generation failed.')
+      setError(apiErrorMessage(err, 'Generation failed.'))
     } finally {
       setGenerating(false)
     }

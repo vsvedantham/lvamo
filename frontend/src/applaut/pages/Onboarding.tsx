@@ -105,6 +105,33 @@ function FieldGroup({ label, children }: { label: string; children: React.ReactN
   )
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  display_name: 'Profile name',
+  total_experience_years: 'Years of experience',
+  target_roles: 'Target roles',
+  target_countries: 'Countries',
+  remote_preference: 'Work mode',
+  employment_types: 'Employment types',
+  skills: 'Skills',
+  languages: 'Languages',
+  discovery_frequency_hours: 'Discovery frequency',
+  good_threshold: 'Good-match threshold',
+}
+
+/** The API's error as a sentence. FastAPI's validation errors are a list of
+ * objects, which React can't render as text (that blanked the page). */
+function describeError(err: any): string {
+  const detail = err?.response?.data?.detail
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail) && detail.length) {
+    return detail.map((d: any) => {
+      const field = Array.isArray(d?.loc) ? String(d.loc[d.loc.length - 1]) : ''
+      return `${FIELD_LABELS[field] ?? field}: ${String(d?.msg ?? 'invalid value').replace(/^Value error, /, '')}`
+    }).join(' · ')
+  }
+  return 'Failed to create profile. Please try again.'
+}
+
 export default function Onboarding() {
   const navigate = useNavigate()
   const [step, setStep] = useState(1)
@@ -138,8 +165,16 @@ export default function Onboarding() {
       setError('Please enter a profile name and at least one target role.')
       return
     }
+    if (step === 1 && !(experienceYears >= 0 && experienceYears <= 50)) {
+      setError('Years of experience must be between 0 and 50.')
+      return
+    }
     if (step === 2 && countries.length === 0) {
       setError('Please select at least one country.')
+      return
+    }
+    if (step === 2 && employmentTypes.length === 0) {
+      setError('Please select at least one employment type.')
       return
     }
     setError('')
@@ -155,8 +190,9 @@ export default function Onboarding() {
     setSubmitting(true)
     try {
       await createProfile({
-        display_name: displayName,
-        total_experience_years: experienceYears,
+        display_name: displayName.trim(),
+        // The API takes whole years; 4.5 would be rejected.
+        total_experience_years: Math.round(experienceYears),
         target_roles: targetRoles,
         target_countries: countries,
         remote_preference: remotePreference,
@@ -168,7 +204,7 @@ export default function Onboarding() {
       })
       navigate('/applaut/resume')
     } catch (err: any) {
-      setError(err.response?.data?.detail ?? 'Failed to create profile. Please try again.')
+      setError(describeError(err))
     } finally {
       setSubmitting(false)
     }
@@ -200,7 +236,7 @@ export default function Onboarding() {
               <input value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="e.g. Senior Data Engineer" style={inputStyle} />
             </FieldGroup>
             <FieldGroup label="Years of experience">
-              <input type="number" min={0} max={50} value={experienceYears} onChange={e => setExperienceYears(Number(e.target.value))} style={{ ...inputStyle, width: '120px' }} />
+              <input type="number" min={0} max={50} step={1} value={experienceYears} onChange={e => setExperienceYears(Number(e.target.value) || 0)} style={{ ...inputStyle, width: '120px' }} />
             </FieldGroup>
             <FieldGroup label="Target roles — add each role and press Enter">
               <TagInput tags={targetRoles} onChange={setTargetRoles} placeholder="e.g. Data Engineer" />
@@ -300,18 +336,13 @@ export default function Onboarding() {
               <TagInput tags={languages} onChange={setLanguages} placeholder="e.g. English, German" />
             </FieldGroup>
 
-            <FieldGroup label={`Discovery frequency — every ${discoveryFrequency}h`}>
-              <input
-                type="range"
-                min={1}
-                max={72}
-                value={discoveryFrequency}
-                onChange={e => setDiscoveryFrequency(Number(e.target.value))}
-                style={{ width: '100%', accentColor: 'var(--accent)', cursor: 'pointer' }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-3)', marginTop: '0.25rem' }}>
-                <span>1h</span><span>24h</span><span>72h</span>
-              </div>
+            {/* The API accepts exactly these (CreateProfileRequest.discovery_frequency_hours). */}
+            <FieldGroup label="Discovery frequency (Applaut Basic)">
+              <select value={discoveryFrequency} onChange={e => setDiscoveryFrequency(Number(e.target.value))} style={{ ...inputStyle, width: 'auto' }}>
+                <option value={6}>Every 6 hours</option>
+                <option value={12}>Every 12 hours</option>
+                <option value={24}>Every 24 hours</option>
+              </select>
             </FieldGroup>
 
             <FieldGroup label={`Match threshold — Good: ${goodThreshold}+  ·  Near miss: ${goodThreshold - 15}–${goodThreshold - 1}`}>

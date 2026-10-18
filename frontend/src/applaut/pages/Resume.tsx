@@ -10,6 +10,7 @@ import {
   updateExtractedContent,
   uploadResume,
 } from '../api/resume'
+import { apiErrorMessage } from '../api/errors'
 
 const inputStyle: React.CSSProperties = {
   display: 'block',
@@ -175,7 +176,7 @@ export default function ResumePage() {
       setExisting(r)
       populateFromResume(r)
     } catch (err: any) {
-      setError(err.response?.data?.detail ?? 'Upload failed. Please try again.')
+      setError(apiErrorMessage(err, 'Upload failed. Please try again.'))
     } finally {
       setUploading(false)
     }
@@ -200,7 +201,7 @@ export default function ResumePage() {
       await updateExtractedContent({ skills, languages, experience, education, certifications })
       navigate('/applaut/dashboard')
     } catch (err: any) {
-      setError(err.response?.data?.detail ?? 'Save failed. Please try again.')
+      setError(apiErrorMessage(err, 'Save failed. Please try again.'))
     } finally {
       setSaving(false)
     }

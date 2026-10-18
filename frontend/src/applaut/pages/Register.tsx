@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import client from '../api/client'
+import { apiErrorMessage } from '../api/errors'
 
 const field: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '0.375rem' }
 const labelStyle: React.CSSProperties = { fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-2)' }
@@ -32,7 +33,7 @@ export default function Register() {
       await register(name, email, password)
       navigate('/applaut/onboarding')
     } catch (err: any) {
-      setError(err.response?.data?.detail ?? 'Registration failed. Please try again.')
+      setError(apiErrorMessage(err, 'Registration failed. Please try again.'))
     } finally {
       setLoading(false)
     }
