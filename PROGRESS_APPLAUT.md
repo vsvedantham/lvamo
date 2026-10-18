@@ -501,7 +501,7 @@ mid-session).
 
 ---
 
-## 2026-10-18: routine fix proposed (job-search-automation PR #1, not merged)
+## 2026-10-18: routine fix merged (job-search-automation PR #1, `6143804`, 13:47 UTC)
 
 Venkat asked why runs "finished with problems". Cause (from the runs'
 `sources_failed` and summaries): the routine's web search ignores `site:`
@@ -514,7 +514,14 @@ fetch-boards` (read-only, ~40 s), and changes the prompt (no `site:`, no
 guessed boards, only real failures in `sources_failed`). Dry run with no
 Neon/R2 writes: 413 live boards, 24,958 postings, 79 new candidates (vs 18
 assessed from boards this morning); known jobs and duplicates skipped.
-Waiting for Venkat to merge.
+Before merging, `board_posted_within_days` was set to 7 like the other
+sources (rejected postings aren't remembered, so a longer window would
+re-read them every run): 52 candidates. With a refusing proxy the command
+ends in ~10 s, exit 0, every board reported as an error. Merged on Venkat's
+"merge if it works and doesn't make results worse". **To check:** the
+18:07 UTC run on 2026-10-18 is the first with the change (Applaut's status
+check at 18:37): expect `fetch-boards` counts in the summary, fewer or no
+`sources_failed`, and "Boards to add"/"Boards gone" sections.
 **Applaut Basic impact:** 77 of the 500 boards in
 `backend/app/applaut/discovery/data/company_boards.json` now return 404
 (60 Personio, 11 Greenhouse, 3 Lever, 3 Recruitee) and Check24 on
