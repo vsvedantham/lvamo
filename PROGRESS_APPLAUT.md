@@ -501,6 +501,25 @@ mid-session).
 
 ---
 
+## 2026-10-18: routine fix proposed (job-search-automation PR #1, not merged)
+
+Venkat asked why runs "finished with problems". Cause (from the runs'
+`sources_failed` and summaries): the routine's web search ignores `site:`
+(so ATS-board and germantechjobs.de discovery found nothing), it guessed
+board names (93 of 163 calls 404), and recovered errors were listed as
+failures. https://github.com/vsvedantham/job-search-automation/pull/1 adds
+`config/company_boards.json` (441 boards: Applaut's list + boards from his
+jobs, dead ones removed, + germantechjobs.de RSS) and `pipeline.py
+fetch-boards` (read-only, ~40 s), and changes the prompt (no `site:`, no
+guessed boards, only real failures in `sources_failed`). Dry run with no
+Neon/R2 writes: 413 live boards, 24,958 postings, 79 new candidates (vs 18
+assessed from boards this morning); known jobs and duplicates skipped.
+Waiting for Venkat to merge.
+**Applaut Basic impact:** 77 of the 500 boards in
+`backend/app/applaut/discovery/data/company_boards.json` now return 404
+(60 Personio, 11 Greenhouse, 3 Lever, 3 Recruitee) and Check24 on
+SmartRecruiters returns 401.
+
 ## 2026-10-18: Venkat's routine connected in production
 
 - Venkat re-created his account (old one deleted after backup
