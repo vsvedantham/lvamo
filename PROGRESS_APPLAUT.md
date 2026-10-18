@@ -21,6 +21,9 @@ Venkat's routine.** Phase 2 (engine 3 sync) is built, tested and deployed
 3. In Applaut (prod): Settings → Job engine → "Your Claude routine", paste
    the read-only Neon URL, account id, key id and secret, routine link,
    schedule `7 6,18 * * *` UTC → **Test connection** → **Save and connect**.
+   Full walkthrough: [`docs/applaut/CONNECT_YOUR_ROUTINE.md`](docs/applaut/CONNECT_YOUR_ROUTINE.md).
+   Venkat is creating a fresh Applaut account for this (registration opened
+   briefly on request, then closed again).
    The first sync starts at once.
 4. Then verify and record here: the 27 jobs (one per uid) and their 54 PDFs
    synced, applications in To review, run_tracker rows under Run history,
@@ -495,6 +498,46 @@ mid-session).
 - `deploy.sh` on the VM had an uncommitted quoting bug (already committed and deployed).
 - Personio adapter (dead JSON endpoint → live XML feed) — see session update
   above (committed `efe3a95`, deployed).
+
+---
+
+## Opportunities: routine jobs first + apply actions (2026-10-18, deployed)
+
+Commit `3c0f9ed`. Venkat's request: his routine's jobs first, and per job
+Apply / copy the documents folder / mark applied / mark unavailable.
+- **List** (`services/opportunity.py`): jobs with a `routine_jobs` row for
+  the user come first (heading "From your Claude routine", then "Other jobs
+  (Applaut Basic)"), then by match %. Tabs **To review / Applied / Not
+  available / All** with counts (`?state=`), default To review.
+- **Actions** (`PUT /opportunities/{id}/tracking`, `services/application.py
+  set_tracking`): **Mark as applied** → application `submitted` +
+  `applied_at`; **Not available** → *Posting closed* (`closed`) or *I can't
+  apply* (`withdrawn`); **Undo** → `pending_review`, dates cleared. One
+  application per job, created if missing; audit action `application.tracking`.
+- **Apply ↗** opens `application_url`. **Copy folder path** copies
+  `<folder>/<uid>`, where `<folder>` is the Mac sync's destination
+  (`sync_to_mac.sh`, default `~/JobSearchDocuments`), set per browser in
+  Settings → "Documents on this computer" (localStorage, it's per computer);
+  only shown when the routine's documents are done. Paste in Finder with ⇧⌘G.
+  Clipboard falls back to `execCommand('copy')` when the Clipboard API is refused.
+- Settings shows "Set up your profile first" (link to onboarding) for an
+  account without a profile, instead of a 404 error.
+- Tests: `tests/applaut/test_opportunity_tracking.py` (routine-first order
+  and folder info, all three actions + undo + tab counts, per-user and
+  private-job 404, bad input). Full suite 135 passed.
+- Step-by-step guide for connecting a routine: [`docs/applaut/CONNECT_YOUR_ROUTINE.md`](docs/applaut/CONNECT_YOUR_ROUTINE.md).
+- **Verified in production (2026-10-18):** backup
+  `/home/ubuntu/backups/lvamo-pre-opps-20261018-1211.dump` first; `deploy.sh`
+  (no migration); both workers up, no errors; all four API hosts 200; the
+  new `PUT …/tracking` answers 403 without auth; the live Pages bundle has
+  the new UI. Logged-in pages not checked in prod (no prod test login).
+- Verified locally in the browser (seeded engine-3 user, deleted after):
+  sections, tabs and counts, Mark as applied → "✓ Applied 18 Oct" + Undo,
+  Not available → reasons → Not available tab, Copy folder path, 375 px.
+- Known test flake (not from this change): `tests/prosho/test_evidence.py::
+  test_daily_job_skips_recent_and_checks_due` counts every due source in the
+  DB, so it fails when the local DB holds a hand-made ProSho project whose
+  sources are due (seen once on 2026-10-18, passed on rerun).
 
 ---
 
