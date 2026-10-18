@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { createApplication } from '../api/applications'
 import {
   effectiveScore,
+  getLocalDocsFolder,
   listOpportunities,
   runDiscovery,
+  setTracking,
+  type Tracking,
+  type TrackingState,
   type Assessment,
   type EngineFilter,
   type MatchFilter,
@@ -205,44 +208,139 @@ function NearMissPanel({ opp, goodThreshold, onUpdate }: { opp: Opportunity; goo
   )
 }
 
-function GoodMatchActions({ opp }: { opp: Opportunity }) {
-  const [starting, setStarting] = useState(false)
-  const [applicationId, setApplicationId] = useState<string | null>(null)
-  const navigate = useNavigate()
+const actionBtn = (tone: 'primary' | 'ghost' | 'success' | 'danger' = 'ghost', disabled = false): React.CSSProperties => ({
+  padding: '0.35rem 0.8rem',
+  borderRadius: 'var(--radius-xs)',
+  fontSize: '0.8rem',
+  fontWeight: 500,
+  cursor: disabled ? 'default' : 'pointer',
+  opacity: disabled ? 0.5 : 1,
+  textDecoration: 'none',
+  whiteSpace: 'nowrap',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '0.3rem',
+  background: tone === 'primary' ? 'var(--accent)' : tone === 'success' ? 'var(--success-bg)' : tone === 'danger' ? 'var(--danger-bg)' : 'transparent',
+  color: tone === 'primary' ? '#fff' : tone === 'success' ? 'var(--success)' : tone === 'danger' ? 'var(--danger)' : 'var(--text-1)',
+  border: `1px solid ${tone === 'primary' ? 'var(--accent)' : tone === 'success' ? 'var(--success-border)' : tone === 'danger' ? 'var(--danger-border)' : 'var(--border-strong)'}`,
+})
 
-  const startApplication = async () => {
-    setStarting(true)
+const UNAVAILABLE_LABEL: Record<string, string> = { closed: 'Posting closed', withdrawn: "Can't apply" }
+
+function shortDate(iso: string | null): string {
+  return iso ? new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short' }) : ''
+}
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    // Older browsers, or clipboard permission denied: copy via a selected textarea.
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.setAttribute('readonly', '')
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    let ok = false
+    try { ok = document.execCommand('copy') } catch { ok = false }
+    document.body.removeChild(ta)
+    return ok
+  }
+}
+
+/** Apply ↗ · Copy folder path · Documents · Mark as applied · Not available — and Undo. */
+function JobActions({ opp, showDocuments, onTracked }: {
+  opp: Opportunity
+  showDocuments: boolean
+  onTracked: (opp: Opportunity, tracking: Tracking) => void
+}) {
+  const navigate = useNavigate()
+  const [busy, setBusy] = useState(false)
+  const [askReason, setAskReason] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
+  const state = opp.tracking.state
+
+  const track = async (next: TrackingState, reason?: 'closed' | 'cannot_apply') => {
+    setBusy(true)
+    setAskReason(false)
     try {
-      const app = await createApplication(opp.id, opp.score?.id)
-      setApplicationId(app.id)
+      onTracked(opp, await setTracking(opp.id, next, reason))
+      setNote(null)
     } catch (err: any) {
-      if (err.response?.status === 409) navigate('/applaut/applications')
+      setNote(err.response?.data?.detail ?? 'Could not update this job')
     } finally {
-      setStarting(false)
+      setBusy(false)
     }
   }
 
+  const folder = opp.routine?.docs_ready ? `${getLocalDocsFolder()}/${opp.routine.uid}` : null
+  const copyFolder = async () => {
+    if (!folder) return
+    if (await copyText(folder)) setNote('Folder path copied. In Finder press ⇧⌘G, paste, then Return.')
+    else setNote(`Couldn't copy. The folder is ${folder}`)
+    window.setTimeout(() => setNote(null), 6000)
+  }
+
   return (
-    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-      <button
-        onClick={() => navigate(`/applaut/documents/${opp.id}`)}
-        style={{ padding: '0.35rem 0.875rem', background: 'transparent', border: '1px solid var(--border-strong)', color: 'var(--text-1)', borderRadius: 'var(--radius-xs)', cursor: 'pointer', fontSize: '0.8rem' }}
-      >
-        {opp.is_private ? 'View documents →' : 'Generate documents →'}
-      </button>
-      {applicationId ? (
-        <Link to="/applaut/applications" style={{ padding: '0.35rem 0.875rem', background: 'var(--success-bg)', color: 'var(--success)', border: '1px solid var(--success-border)', borderRadius: 'var(--radius-xs)', fontSize: '0.8rem', textDecoration: 'none' }}>
-          Application started ✓
-        </Link>
-      ) : (
-        <button
-          onClick={startApplication}
-          disabled={starting}
-          style={{ padding: '0.35rem 0.875rem', background: 'var(--blue-bg)', color: 'var(--blue)', border: '1px solid var(--blue-border)', borderRadius: 'var(--radius-xs)', cursor: 'pointer', fontSize: '0.8rem', opacity: starting ? 0.7 : 1 }}
-        >
-          {starting ? 'Starting…' : 'Start application'}
-        </button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        {opp.application_url ? (
+          <a href={opp.application_url} target="_blank" rel="noopener noreferrer" style={actionBtn('primary')}
+            title="Open the job posting to apply">
+            Apply ↗
+          </a>
+        ) : (
+          <span style={actionBtn('primary', true)} title="This job has no apply link">Apply ↗</span>
+        )}
+        {folder && (
+          <button type="button" onClick={copyFolder} style={actionBtn()} title={`Copies ${folder}: the CV and cover letter your Mac synced`}>
+            Copy folder path
+          </button>
+        )}
+        {showDocuments && (
+          <button type="button" onClick={() => navigate(`/applaut/documents/${opp.id}`)} style={actionBtn()}>
+            {opp.is_private || opp.routine ? 'Documents' : 'Generate documents'}
+          </button>
+        )}
+        {state === 'open' && (
+          <>
+            <button type="button" onClick={() => track('applied')} disabled={busy} style={actionBtn('success', busy)}>
+              Mark as applied
+            </button>
+            <button type="button" onClick={() => setAskReason(a => !a)} disabled={busy} style={actionBtn('ghost', busy)}
+              aria-expanded={askReason} title="The posting is closed, or you can't apply">
+              Not available ▾
+            </button>
+          </>
+        )}
+        {state === 'applied' && (
+          <>
+            <Badge text={`✓ Applied ${shortDate(opp.tracking.applied_at)}`} color="var(--success)" />
+            <button type="button" onClick={() => track('open')} disabled={busy} style={actionBtn('ghost', busy)}>Undo</button>
+          </>
+        )}
+        {state === 'unavailable' && (
+          <>
+            <Badge text={UNAVAILABLE_LABEL[opp.tracking.status ?? ''] ?? 'Not available'} color="var(--text-2)" />
+            <button type="button" onClick={() => track('open')} disabled={busy} style={actionBtn('ghost', busy)}>Undo</button>
+          </>
+        )}
+      </div>
+      {askReason && state === 'open' && (
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-2)' }}>Why?</span>
+          <button type="button" onClick={() => track('unavailable', 'closed')} disabled={busy} style={actionBtn('danger', busy)}>
+            Posting closed
+          </button>
+          <button type="button" onClick={() => track('unavailable', 'cannot_apply')} disabled={busy} style={actionBtn('danger', busy)}>
+            I can't apply
+          </button>
+        </div>
       )}
+      {note && <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-2)' }}>{note}</p>}
     </div>
   )
 }
@@ -261,11 +359,12 @@ const CATEGORY_BG: Record<Category, string> = {
   unscored: 'var(--bg-surface)',
 }
 
-function OpportunityCard({ opp, goodThreshold, nearMissThreshold, onUpdate }: {
+function OpportunityCard({ opp, goodThreshold, nearMissThreshold, onUpdate, onTracked }: {
   opp: Opportunity
   goodThreshold: number
   nearMissThreshold: number
   onUpdate: () => void
+  onTracked: (opp: Opportunity, tracking: Tracking) => void
 }) {
   const category = categoryOf(opp, goodThreshold, nearMissThreshold)
   // Keyword review applies to Applaut's rule-based score only; an AI engine's
@@ -279,7 +378,8 @@ function OpportunityCard({ opp, goodThreshold, nearMissThreshold, onUpdate }: {
       background: CATEGORY_BG[category],
       border: `1px solid ${CATEGORY_BORDER[category]}`,
       borderRadius: 'var(--radius)',
-      transition: 'border-color 0.15s',
+      transition: 'border-color 0.15s, opacity 0.15s',
+      opacity: opp.tracking.state === 'open' ? 1 : 0.72,
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', marginBottom: '0.625rem' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -300,7 +400,9 @@ function OpportunityCard({ opp, goodThreshold, nearMissThreshold, onUpdate }: {
                 color={REMOTE_COLORS[opp.remote_option] ?? 'var(--text-2)'}
               />
             )}
-            <Badge text={SOURCE_LABELS[opp.source] ?? opp.source} color="var(--accent)" />
+            <Badge text={opp.routine ? 'Your Claude routine' : SOURCE_LABELS[opp.source] ?? opp.source} color="var(--accent)" />
+            {opp.routine?.removed && <Badge text="No longer in your routine's database" color="var(--text-3)" />}
+            {opp.routine && !opp.routine.docs_ready && <Badge text="Documents not ready" color="var(--warn)" />}
             {category === 'near_miss' && !needsReview && !opp.assessment && <Badge text="Reviewed" color="var(--text-3)" />}
           </div>
         </div>
@@ -325,9 +427,11 @@ function OpportunityCard({ opp, goodThreshold, nearMissThreshold, onUpdate }: {
 
       {opp.assessment ? <AssessmentSummary assessment={opp.assessment} /> : opp.score && <DimensionChips explanation={opp.score.explanation} />}
 
-      {/* An AI engine only brings in jobs it judged worth applying to. */}
-      {(category === 'good' || opp.is_private) && <GoodMatchActions opp={opp} />}
       {needsReview && <NearMissPanel opp={opp} goodThreshold={goodThreshold} onUpdate={onUpdate} />}
+      <div style={{ marginTop: needsReview ? '0.875rem' : 0 }}>
+        {/* Documents: an AI engine's own PDFs, or Applaut's templates for good Basic matches. */}
+        <JobActions opp={opp} showDocuments={category === 'good' || opp.is_private || !!opp.routine} onTracked={onTracked} />
+      </div>
     </div>
   )
 }
@@ -344,9 +448,27 @@ const MATCH_LABELS: Record<MatchFilter, string> = {
 
 const VALID_MATCH_FILTERS: MatchFilter[] = ['all', 'good', 'near_miss', 'below', 'unscored']
 
+type StateTab = TrackingState | 'all'
+const STATE_TABS: { id: StateTab; label: string }[] = [
+  { id: 'open', label: 'To review' },
+  { id: 'applied', label: 'Applied' },
+  { id: 'unavailable', label: 'Not available' },
+  { id: 'all', label: 'All' },
+]
+const VALID_STATES: StateTab[] = ['open', 'applied', 'unavailable', 'all']
+
+function SectionHeading({ text }: { text: string }) {
+  return (
+    <p style={{ margin: '0.75rem 0 0.125rem', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+      {text}
+    </p>
+  )
+}
+
 export default function Opportunities() {
   const [searchParams, setSearchParams] = useSearchParams()
   const initialMatch = searchParams.get('match') as MatchFilter | null
+  const initialState = searchParams.get('state') as StateTab | null
 
   const [items, setItems] = useState<Opportunity[]>([])
   const [total, setTotal] = useState(0)
@@ -363,11 +485,35 @@ export default function Opportunities() {
   const [filterMatch, setFilterMatch] = useState<MatchFilter>(
     initialMatch && VALID_MATCH_FILTERS.includes(initialMatch) ? initialMatch : 'all'
   )
+  const [stateTab, setStateTab] = useState<StateTab>(
+    initialState && VALID_STATES.includes(initialState) ? initialState : 'open'
+  )
+  const [counts, setCounts] = useState<Record<StateTab, number> | null>(null)
   const PAGE_SIZE = 20
 
+  const syncParams = (m: MatchFilter, st: StateTab) => {
+    const params: Record<string, string> = {}
+    if (m !== 'all') params.match = m
+    if (st !== 'open') params.state = st
+    setSearchParams(params)
+  }
   const updateMatchFilter = (m: MatchFilter) => {
     setFilterMatch(m)
-    setSearchParams(m === 'all' ? {} : { match: m })
+    syncParams(m, stateTab)
+  }
+  const updateStateTab = (st: StateTab) => {
+    setStateTab(st)
+    syncParams(filterMatch, st)
+  }
+
+  // Keep a job where it is after an action (so Undo is one click away); the
+  // tab counts move at once, the list itself on the next load.
+  const onTracked = (opp: Opportunity, tracking: Tracking) => {
+    const from = opp.tracking.state
+    setItems(prev => prev.map(o => o.id === opp.id ? { ...o, tracking } : o))
+    if (from !== tracking.state) {
+      setCounts(c => c ? { ...c, [from]: Math.max(0, c[from] - 1), [tracking.state]: c[tracking.state] + 1 } : c)
+    }
   }
 
   const load = async (p = page) => {
@@ -380,9 +526,11 @@ export default function Opportunities() {
         country_code: filterCountry || undefined,
         match: filterMatch,
         engine: filterEngine || undefined,
+        state: stateTab,
       })
       setItems(res.items)
       setTotal(res.total)
+      setCounts(res.counts)
       setGoodThreshold(res.good_threshold)
       setNearMissThreshold(res.near_miss_threshold)
     } finally {
@@ -390,7 +538,7 @@ export default function Opportunities() {
     }
   }
 
-  useEffect(() => { load(1); setPage(1) }, [filterSource, filterCountry, filterMatch, filterEngine])
+  useEffect(() => { load(1); setPage(1) }, [filterSource, filterCountry, filterMatch, filterEngine, stateTab])
   useEffect(() => { getMyProfile().then(p => setEngine(p.job_engine)).catch(() => setEngine('basic')) }, [])
   const isBasic = engine === 'basic'
 
@@ -415,7 +563,7 @@ export default function Opportunities() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.75rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, color: 'var(--text-1)' }}>Opportunities</h1>
-          {total > 0 && <p style={{ color: 'var(--text-2)', fontSize: '0.825rem', marginTop: '0.2rem' }}>{total} jobs found</p>}
+          {counts && <p style={{ color: 'var(--text-2)', fontSize: '0.825rem', marginTop: '0.2rem' }}>{counts.open} to review · {counts.applied} applied</p>}
         </div>
         {isBasic ? (
           <button
@@ -437,6 +585,22 @@ export default function Opportunities() {
           <p style={{ color: 'var(--success)', fontSize: '0.85rem', margin: 0 }}>{message}</p>
         </div>
       )}
+
+      <div role="tablist" style={{ display: 'flex', gap: '0.25rem', marginBottom: '1rem', borderBottom: '1px solid var(--border)', overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none' }}>
+        {STATE_TABS.map(t => {
+          const active = stateTab === t.id
+          return (
+            <button key={t.id} role="tab" aria-selected={active} onClick={() => updateStateTab(t.id)}
+              style={{
+                padding: '0.55rem 0.875rem', background: 'none', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+                borderBottom: `2px solid ${active ? 'var(--accent)' : 'transparent'}`,
+                color: active ? 'var(--text-1)' : 'var(--text-2)', fontWeight: active ? 600 : 400, fontSize: '0.85rem',
+              }}>
+              {t.label}{counts ? <span style={{ marginLeft: '0.35rem', color: 'var(--text-3)', fontVariantNumeric: 'tabular-nums' }}>{counts[t.id]}</span> : null}
+            </button>
+          )
+        })}
+      </div>
 
       <div style={{ display: 'flex', gap: '0.625rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
         <select value={filterMatch} onChange={e => updateMatchFilter(e.target.value as MatchFilter)} style={selectStyle}>
@@ -492,24 +656,36 @@ export default function Opportunities() {
         <p style={{ color: 'var(--text-2)' }}>Loading…</p>
       ) : items.length === 0 ? (
         <div style={{ padding: '3rem', textAlign: 'center', border: '1px dashed var(--border-strong)', borderRadius: 'var(--radius)' }}>
-          <p style={{ fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text-1)' }}>No jobs found yet</p>
+          <p style={{ fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text-1)' }}>
+            {stateTab === 'open' ? 'Nothing left to review' : stateTab === 'applied' ? 'No applications marked yet' : stateTab === 'unavailable' ? 'No jobs marked not available' : 'No jobs found yet'}
+          </p>
           <p style={{ color: 'var(--text-2)', fontSize: '0.85rem' }}>
-            {isBasic || !engine
+            {stateTab === 'applied' ? 'Press "Mark as applied" on a job once you have applied.'
+              : stateTab === 'unavailable' ? 'Jobs you mark as closed or impossible to apply to land here.'
+              : isBasic || !engine
               ? 'Click "Run discovery" to search across all job boards — new jobs are scored automatically.'
               : `New jobs appear here after ${JOB_ENGINE_LABELS[engine]} runs.`}
           </p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
-          {items.map(opp => (
-            <OpportunityCard
-              key={opp.id}
-              opp={opp}
-              goodThreshold={goodThreshold}
-              nearMissThreshold={nearMissThreshold}
-              onUpdate={() => load()}
-            />
-          ))}
+          {items.map((opp, i) => {
+            // The list is sorted routine-first; label the groups when both are on this page.
+            const hasRoutine = items.some(o => o.routine)
+            const startsGroup = hasRoutine && (i === 0 || !!items[i - 1].routine !== !!opp.routine)
+            return (
+              <div key={opp.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
+                {startsGroup && <SectionHeading text={opp.routine ? 'From your Claude routine' : 'Other jobs (Applaut Basic)'} />}
+                <OpportunityCard
+                  opp={opp}
+                  goodThreshold={goodThreshold}
+                  nearMissThreshold={nearMissThreshold}
+                  onUpdate={() => load()}
+                  onTracked={onTracked}
+                />
+              </div>
+            )
+          })}
         </div>
       )}
 

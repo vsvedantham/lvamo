@@ -37,6 +37,25 @@ export interface Assessment {
   times_seen: number
 }
 
+export type TrackingState = 'open' | 'applied' | 'unavailable'
+
+/** Where you are with a job (backed by your application for it). */
+export interface Tracking {
+  state: TrackingState
+  application_id: string | null
+  /** pending_review | submitted | interviewing | offered | rejected | closed | withdrawn … */
+  status: string | null
+  applied_at: string | null
+  updated_at: string | null
+}
+
+/** The job's folder in your own routine's output (and on your Mac, via its sync). */
+export interface RoutineJobRef {
+  uid: string
+  docs_ready: boolean
+  removed: boolean
+}
+
 export interface Opportunity {
   id: string
   source: string
@@ -54,6 +73,8 @@ export interface Opportunity {
   is_private: boolean
   score: OpportunityScore | null
   assessment: Assessment | null
+  tracking: Tracking
+  routine: RoutineJobRef | null
 }
 
 export interface OpportunityDetail extends Opportunity {
@@ -80,6 +101,7 @@ export interface OpportunityList {
   page_size: number
   good_threshold: number
   near_miss_threshold: number
+  counts: Record<TrackingState | 'all', number>
 }
 
 export interface DiscoveryRunResponse {
@@ -102,9 +124,38 @@ export async function listOpportunities(params?: {
   source?: string
   match?: MatchFilter
   engine?: EngineFilter
+  state?: TrackingState | 'all'
 }): Promise<OpportunityList> {
   const { data } = await client.get<OpportunityList>('/opportunities', { params })
   return data
+}
+
+export async function setTracking(
+  id: string, state: TrackingState, reason?: 'closed' | 'cannot_apply',
+): Promise<Tracking> {
+  const { data } = await client.put<Tracking>(`/opportunities/${id}/tracking`, { state, reason })
+  return data
+}
+
+// The folder your Mac's sync copies the routine's documents into. It's a
+// per-computer setting, so it lives in this browser, not on the server.
+const LOCAL_FOLDER_KEY = 'applaut_local_docs_folder'
+export const DEFAULT_LOCAL_FOLDER = '~/JobSearchDocuments'
+
+export function getLocalDocsFolder(): string {
+  try {
+    return localStorage.getItem(LOCAL_FOLDER_KEY) || DEFAULT_LOCAL_FOLDER
+  } catch {
+    return DEFAULT_LOCAL_FOLDER
+  }
+}
+
+export function setLocalDocsFolder(path: string): void {
+  try {
+    const clean = path.trim().replace(/\/+$/, '')
+    if (clean && clean !== DEFAULT_LOCAL_FOLDER) localStorage.setItem(LOCAL_FOLDER_KEY, clean)
+    else localStorage.removeItem(LOCAL_FOLDER_KEY)
+  } catch { /* storage blocked: the default is used */ }
 }
 
 export async function getOpportunity(id: string): Promise<OpportunityDetail> {

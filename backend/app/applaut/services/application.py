@@ -170,3 +170,56 @@ async def delete_application(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
     await db.delete(app)
     await db.commit()
+
+
+TRACKING_STATUS = {"applied": "submitted", "open": "pending_review"}
+UNAVAILABLE_STATUS = {"closed": "closed", "cannot_apply": "withdrawn"}
+
+
+async def set_tracking(
+    opportunity_id: str,
+    state: str,
+    reason: str | None,
+    user: User,
+    db: AsyncSession,
+) -> Application:
+    """Opportunities page actions: Mark as applied, Not available (posting
+    closed / can't apply), and Undo (back to review). Creates the
+    application if the job has none yet."""
+    opp = await require_visible_opportunity(opportunity_id, user.id, db, active_only=False)
+    app = await db.scalar(
+        select(Application).where(Application.user_id == user.id, Application.opportunity_id == opp.id)
+    )
+    before = app.status if app else None
+    if app is None:
+        profile = await get_active_profile(user, db)
+        app = Application(user_id=user.id, opportunity_id=opp.id, profile_id=profile.id)
+        db.add(app)
+
+    now = datetime.now(timezone.utc)
+    if state == "applied":
+        app.status = TRACKING_STATUS["applied"]
+        app.applied_at = app.applied_at or now
+        app.submitted_at = app.submitted_at or now
+    elif state == "unavailable":
+        app.status = UNAVAILABLE_STATUS[reason or "closed"]
+    else:
+        # Undo: back to review, as if the job had not been acted on.
+        app.status = TRACKING_STATUS["open"]
+        app.applied_at = None
+        app.submitted_at = None
+
+    from app.applaut.services.audit import log_action
+    await log_action(
+        action="application.tracking",
+        db=db,
+        user_id=str(user.id),
+        entity_type="opportunity",
+        entity_id=str(opp.id),
+        before_state={"status": getattr(before, "value", before)},
+        after_state={"status": getattr(app.status, "value", app.status), "state": state, "reason": reason,
+                     "company": opp.company_name, "title": opp.title},
+    )
+    await db.commit()
+    await db.refresh(app)
+    return app

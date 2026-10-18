@@ -12,9 +12,15 @@ from app.applaut.schemas.opportunity import (
     OpportunityListResponse,
     OpportunityScoreInfo,
     OpportunityWithScoreResponse,
+    RoutineJobInfo,
+    SetTrackingRequest,
+    TrackingInfo,
 )
 from app.applaut.services.auth import get_current_user
-from app.applaut.services.opportunity import get_opportunity_for_user, list_opportunities_with_scores, trigger_discovery
+from app.applaut.services.application import set_tracking
+from app.applaut.services.opportunity import (
+    get_opportunity_for_user, list_opportunities_with_scores, tracking_state, trigger_discovery,
+)
 
 router = APIRouter()
 
@@ -41,19 +47,24 @@ async def list_opps(
     source: Optional[str] = Query(None),
     match: Literal["all", "good", "near_miss", "below", "unscored"] = Query("all"),
     engine: Optional[Literal["basic", "applaut_ai", "own_routine"]] = Query(None),
+    state: Literal["all", "open", "applied", "unavailable"] = Query("all"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    rows, total, good_threshold, near_miss_threshold = await list_opportunities_with_scores(
-        current_user, db, page, page_size, country_code, source, match, engine
+    rows, total, good_threshold, near_miss_threshold, counts = await list_opportunities_with_scores(
+        current_user, db, page, page_size, country_code, source, match, engine, state
     )
     items = []
-    for opp, score, assessment in rows:
+    for opp, score, assessment, application, routine_job in rows:
         item = OpportunityWithScoreResponse.model_validate(opp)
         if score:
             item.score = OpportunityScoreInfo.model_validate(score)
         if assessment:
             item.assessment = AssessmentInfo.model_validate(assessment)
+        item.tracking = _tracking(application)
+        if routine_job:
+            item.routine = RoutineJobInfo(uid=routine_job.uid, docs_ready=routine_job.docs_status == "done",
+                                          removed=routine_job.removed_at is not None)
         items.append(item)
     return OpportunityListResponse(
         items=items,
@@ -62,7 +73,29 @@ async def list_opps(
         page_size=page_size,
         good_threshold=good_threshold,
         near_miss_threshold=near_miss_threshold,
+        counts=counts,
     )
+
+
+def _tracking(application) -> TrackingInfo:
+    if application is None:
+        return TrackingInfo(state="open")
+    return TrackingInfo(
+        state=tracking_state(application.status), application_id=application.id,
+        status=getattr(application.status, "value", application.status), applied_at=application.applied_at, updated_at=application.updated_at,
+    )
+
+
+@router.put("/opportunities/{opportunity_id}/tracking", response_model=TrackingInfo)
+async def set_opp_tracking(
+    opportunity_id: str,
+    payload: SetTrackingRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark as applied, not available (posting closed / can't apply), or back to review."""
+    app = await set_tracking(opportunity_id, payload.state, payload.reason, current_user, db)
+    return _tracking(app)
 
 
 @router.get("/opportunities/{opportunity_id}", response_model=OpportunityDetailResponse)

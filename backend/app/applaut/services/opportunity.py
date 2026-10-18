@@ -1,8 +1,10 @@
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
+from app.applaut.models.application import Application
 from app.applaut.models.job_assessment import JobAssessment
+from app.applaut.models.routine import RoutineJob
 from app.applaut.models.opportunity import Opportunity
 from app.applaut.models.score import Score
 from app.applaut.models.user import User
@@ -45,7 +47,10 @@ async def list_opportunities_with_scores(
     source: str | None = None,
     match: str = "all",
     engine: str | None = None,
-) -> tuple[list[tuple[Opportunity, Score | None, JobAssessment | None]], int, int, int]:
+    state: str = "all",
+) -> tuple[list, int, int, int, dict[str, int]]:
+    """Rows of (opportunity, score, assessment, application, routine_job).
+    Jobs from the user's own routine come first."""
     profile = await get_active_profile(user, db)
     good_threshold = profile.good_threshold
     near_miss_threshold = good_threshold - 15
@@ -65,12 +70,14 @@ async def list_opportunities_with_scores(
     effective_score = func.coalesce(assessment.match_score, Score.total_score)
 
     query = (
-        select(Opportunity, Score, assessment)
+        select(Opportunity, Score, assessment, Application, RoutineJob)
         .outerjoin(
             Score,
             (Score.opportunity_id == Opportunity.id) & (Score.profile_id == profile.id),
         )
         .outerjoin(assessment, assessment.opportunity_id == Opportunity.id)
+        .outerjoin(Application, (Application.opportunity_id == Opportunity.id) & (Application.user_id == user.id))
+        .outerjoin(RoutineJob, (RoutineJob.opportunity_id == Opportunity.id) & (RoutineJob.user_id == user.id))
         .where(
             Opportunity.is_active == True,
             visible_to(user.id),
@@ -95,11 +102,46 @@ async def list_opportunities_with_scores(
     elif match == "unscored":
         query = query.where(effective_score.is_(None))
 
+    state_expr = tracking_state_expr()
+    counted = query.with_only_columns(state_expr.label("state"), func.count()).group_by(state_expr)
+    counts = {"open": 0, "applied": 0, "unavailable": 0}
+    for st, n in (await db.execute(counted)).all():
+        counts[st] = n
+    counts["all"] = sum(counts.values())
+    if state in ("open", "applied", "unavailable"):
+        query = query.where(state_expr == state)
+
     total = await db.scalar(select(func.count()).select_from(query.subquery()))
 
-    query = query.order_by(effective_score.desc().nulls_last(), Opportunity.posted_at.desc().nulls_last())
+    query = query.order_by(
+        RoutineJob.id.is_(None),  # the user's own routine first
+        effective_score.desc().nulls_last(),
+        Opportunity.posted_at.desc().nulls_last(),
+        Opportunity.id,
+    )
     rows = await db.execute(query.offset((page - 1) * page_size).limit(page_size))
-    return list(rows.all()), total or 0, good_threshold, near_miss_threshold
+    return list(rows.all()), total or 0, good_threshold, near_miss_threshold, counts
+
+
+APPLIED_STATUSES = ("submitted", "interviewing", "offered", "rejected")
+UNAVAILABLE_STATUSES = ("closed", "withdrawn")
+
+
+def tracking_state_expr():
+    """open (no application, or to review) | applied | unavailable."""
+    return case(
+        (Application.status.in_(APPLIED_STATUSES), "applied"),
+        (Application.status.in_(UNAVAILABLE_STATUSES), "unavailable"),
+        else_="open",
+    )
+
+
+def tracking_state(status: str | None) -> str:
+    if status in APPLIED_STATUSES:
+        return "applied"
+    if status in UNAVAILABLE_STATUSES:
+        return "unavailable"
+    return "open"
 
 
 async def get_opportunity_for_user(

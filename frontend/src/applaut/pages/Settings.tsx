@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import {
   errorMessage, getJobEngine, listRoutineRuns, listRoutineSyncs, removeRoutineConnection, saveRoutineConnection,
   setJobEngine, testRoutineConnection,
   type CheckResult, type ConnectionInput, type JobEngineState, type RoutineRun, type RoutineSync,
 } from '../api/jobEngine'
+import { DEFAULT_LOCAL_FOLDER, getLocalDocsFolder, setLocalDocsFolder } from '../api/opportunity'
 import { JOB_ENGINE_LABELS, type JobEngine } from '../api/profile'
 import RoutineEngineCard, { buttonStyle, formatWhen } from '../components/RoutineEngineCard'
 
@@ -273,6 +274,37 @@ function ConnectionForm({ state, onSaved }: { state: JobEngineState; onSaved: (s
   )
 }
 
+// --- the documents folder on this computer (for "Copy folder path")
+
+function LocalFolderSetting() {
+  const [value, setValue] = useState(getLocalDocsFolder())
+  const [saved, setSaved] = useState(false)
+  const save = () => {
+    setLocalDocsFolder(value)
+    setValue(getLocalDocsFolder())
+    setSaved(true)
+    window.setTimeout(() => setSaved(false), 2500)
+  }
+  return (
+    <div style={card}>
+      <div>
+        <h2 style={h2}>Documents on this computer</h2>
+        <p style={{ ...muted, marginTop: '0.3rem' }}>
+          The folder your Mac's sync copies the routine's CVs and cover letters into (one subfolder per job).
+          <strong> Copy folder path</strong> on Opportunities copies <code>{value || DEFAULT_LOCAL_FOLDER}/&lt;job&gt;</code>;
+          paste it in Finder with ⇧⌘G. Saved in this browser only.
+        </p>
+      </div>
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <label style={{ ...label, flex: '1 1 240px' }}>Folder
+          <input value={value} onChange={e => setValue(e.target.value)} placeholder={DEFAULT_LOCAL_FOLDER} />
+        </label>
+        <button type="button" onClick={save} style={buttonStyle()}>{saved ? 'Saved ✓' : 'Save'}</button>
+      </div>
+    </div>
+  )
+}
+
 // --- history
 
 const OUTCOME_COLOR: Record<string, string> = {
@@ -366,12 +398,16 @@ function History({ refreshKey }: { refreshKey: number }) {
 export default function Settings() {
   const [state, setState] = useState<JobEngineState | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [noProfile, setNoProfile] = useState(false)
   const [switching, setSwitching] = useState<JobEngine | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const location = useLocation()
 
   const load = useCallback(() => {
-    getJobEngine().then(s => { setState(s); setError(null) }).catch(err => setError(errorMessage(err, 'Could not load your settings')))
+    getJobEngine().then(s => { setState(s); setError(null) }).catch(err => {
+      if (err?.response?.status === 404) setNoProfile(true)
+      else setError(errorMessage(err, 'Could not load your settings'))
+    })
   }, [])
   useEffect(load, [load])
 
@@ -406,7 +442,13 @@ export default function Settings() {
         <p style={{ ...muted, fontSize: '0.875rem' }}>Job engine: what finds jobs for you and writes your CV and cover letter.</p>
       </div>
       {error && <p style={{ ...muted, color: 'var(--danger)' }}>{error}</p>}
-      {!state ? (!error && <p style={muted}>Loading…</p>) : (
+      {noProfile ? (
+        <div style={card}>
+          <h2 style={h2}>Set up your profile first</h2>
+          <p style={muted}>Your job engine belongs to your profile. Create it (roles, countries, skills), then come back here to choose an engine.</p>
+          <Link to="/applaut/onboarding" style={{ ...buttonStyle('primary'), alignSelf: 'flex-start' }}>Set up profile</Link>
+        </div>
+      ) : !state ? (!error && <p style={muted}>Loading…</p>) : (
         <>
           <div style={card}>
             <h2 style={h2}>Job engine</h2>
@@ -443,6 +485,7 @@ export default function Settings() {
               ) : (
                 <div style={card}><p style={{ ...muted, color: 'var(--warn)' }}>Applaut can't store connection details on this server yet (no encryption key configured).</p></div>
               )}
+              <LocalFolderSetting />
               {state.connection && <History refreshKey={refreshKey} />}
             </>
           )}

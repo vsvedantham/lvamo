@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, computed_field
 
@@ -67,9 +67,37 @@ class OpportunityScoreInfo(BaseModel):
     model_config = {"from_attributes": True}
 
 
+TrackingState = Literal["open", "applied", "unavailable"]
+
+
+class TrackingInfo(BaseModel):
+    """Where the user is with a job: to review, applied, or unavailable
+    (posting closed / can't apply). Backed by their Application row."""
+    state: TrackingState
+    application_id: Optional[uuid.UUID] = None
+    status: Optional[str] = None
+    applied_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class RoutineJobInfo(BaseModel):
+    """The job's place in the user's own routine output."""
+    uid: str
+    docs_ready: bool
+    removed: bool
+
+
 class OpportunityWithScoreResponse(OpportunityResponse):
     score: Optional[OpportunityScoreInfo] = None
     assessment: Optional[AssessmentInfo] = None
+    tracking: TrackingInfo = TrackingInfo(state="open")
+    routine: Optional[RoutineJobInfo] = None
+
+
+class SetTrackingRequest(BaseModel):
+    state: TrackingState
+    # For state "unavailable": the posting closed, or the user can't apply.
+    reason: Optional[Literal["closed", "cannot_apply"]] = None
 
 
 class DiscoveryRunResponse(BaseModel):
@@ -87,3 +115,5 @@ class OpportunityListResponse(BaseModel):
     page_size: int
     good_threshold: int
     near_miss_threshold: int
+    # Jobs per tracking state, for the tabs (same filters except the state).
+    counts: dict[str, int] = {}
