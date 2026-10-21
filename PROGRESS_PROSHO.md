@@ -12,20 +12,13 @@
 checks both need the real HeatRisk EU repo, so the next step is the same
 for both — get the pilot onto ProSho:
 
-1. **First, two loose ends from 2026-10-17 (5 minutes):**
-   - The first *scheduled* source check runs at **05:00 UTC on 2026-10-18**.
-     Confirm it ran in production: the throwaway project
-     `prod-p2-check-zz` (owner `prod-check-p2`, github_id `9190000020`) should
-     have 3 new `source.*` evidence rows with `payload->>'trigger' = 'daily'`.
-     Then **delete that user** (cascades to its project, claims, evidence,
-     tokens) plus its audit rows — it's leftover test data.
-   - The Jobref API cert (`api.jobref.lvamo.com`, expires 2026-11-16) should
-     have auto-renewed at the 09:46 UTC certbot run on 2026-10-17 — the first
-     real renewal since the 2026-10-11 fix. Confirm the new expiry.
-2. **Founder dry run on `testproj1`** (signed in already, 2026-10-15): install
+*(The 2026-10-17 loose ends — scheduled source check, test-data cleanup,
+Jobref cert renewal — were closed on 2026-10-21; see the session log.)*
+
+1. **Founder dry run on `testproj1`** (signed in already, 2026-10-15): install
    the App on a scratch repo, add `prosho.yaml`, push → confirm the webhook
    sync; then create a CI token and run the GitHub Actions step once.
-3. **Invite the HeatRisk EU student** (`PROSHO_SIGNUP_ALLOWLIST`, then
+2. **Invite the HeatRisk EU student** (`PROSHO_SIGNUP_ALLOWLIST`, then
    restart the backend) → they connect the repo, add `prosho.yaml` with
    `data.sources` and metric claims, add the CI step → page **unlisted**.
    That closes Phase 1's exit check, and Phase 2's once their CI reports
@@ -103,8 +96,10 @@ source rows**; from the VM, Eurostat up, dead domain down, cloud metadata
 address refused; Check now right after → 429; page rendered on
 `www.lvamo.com` with all panels, no console errors.
 
-**Not verified yet:** the first *scheduled* 05:00 UTC run in production
-(see banner, step 1).
+**Verified in production, 2026-10-21:** the scheduled 05:00 UTC run fired
+on 18, 19, 20 and 21 Oct, writing exactly 3 `source.*` rows each day
+(`trigger = daily`; Eurostat pass, dead domain fail, metadata address
+refused). So the advisory lock held across both workers on real runs.
 
 **Phase 1 (Core page) — code complete and live, 2026-10-15.** Exit check
 pending real users (see the banner above). Shipped in four slices, each
@@ -327,6 +322,17 @@ first API call is the check.
   project (TransitBuddy). All example values in it are illustrative.
 
 ## Session log
+
+### 2026-10-21 — 2026-10-17 loose ends closed
+- Scheduled source checks confirmed in prod (18–21 Oct, 3 rows per day, no
+  double runs — see Phase 2 "Verified in production").
+- Deleted the throwaway user `prod-check-p2` (cascade: project
+  `prod-p2-check-zz`, 1 claim, 17 evidence rows, 1 token) and its 3 audit
+  rows. ProSho prod data is now: 1 user (`vsvedantham`), 1 project
+  (`testproj1`), 1 audit row.
+- `api.jobref.lvamo.com` auto-renewed on 2026-10-17 at 08:48 UTC; new
+  expiry 2027-01-15, and nginx serves the new cert (the reload hook worked).
+  Other certs: applaut and `api.lvamo.com` 2027-01-09, prosho 2027-01-11.
 
 ### 2026-10-17 — Phase 2 built and deployed
 - Evidence ingestion with per-project tokens, computed claim statuses, the
