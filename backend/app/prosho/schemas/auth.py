@@ -23,3 +23,7 @@ class ProshoUserResponse(BaseModel):
     role: ProshoUserRole
 
     model_config = {"from_attributes": True}
+
+
+class AccountDelete(BaseModel):
+    confirm: str = Field(max_length=100)

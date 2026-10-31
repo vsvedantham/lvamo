@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
+import { deleteAccount, GITHUB_INSTALLATIONS_URL } from '../api/auth'
 import { apiErrorMessage, listProjects, PROJECT_TYPE_LABEL, type Project } from '../api/projects'
+import DeleteCard from '../components/DeleteCard'
 import ProshoShell from '../components/ProshoShell'
 import { Banner, publicPageUrl, VisibilityPill } from '../components/ui'
+import { useProshoAuth } from '../context/AuthContext'
 
 export default function ProshoDashboard() {
   useDocumentTitle('Your projects | ProSho')
@@ -42,7 +45,37 @@ export default function ProshoDashboard() {
           <ProjectGrid projects={mentored} />
         </>
       )}
+
+      {projects !== null && <div style={{ marginTop: '3rem' }}><AccountCard projectCount={owned.length} /></div>}
     </ProshoShell>
+  )
+}
+
+function AccountCard({ projectCount }: { projectCount: number }) {
+  const { user, logout } = useProshoAuth()
+  const navigate = useNavigate()
+  if (!user) return null
+  if (user.role === 'admin') {
+    return (
+      <p style={{ fontSize: '0.8rem', color: 'var(--text-3)' }}>
+        Admins can&apos;t delete their own account — ask another admin to change your role first. <Link to="/prosho/privacy" style={{ color: 'var(--text-2)' }}>Privacy</Link>
+      </p>
+    )
+  }
+  return (
+    <DeleteCard title="Delete your account" confirmWord={user.github_login} action="Delete account"
+      onDelete={async () => {
+        await deleteAccount(user.github_login)
+        logout()
+        navigate('/prosho?deleted=1', { replace: true })
+      }}>
+      <p>
+        Removes your ProSho account{projectCount ? <> and your {projectCount === 1 ? 'project' : `${projectCount} projects`} with everything on {projectCount === 1 ? 'it' : 'them'}</> : null}.
+        Shared page addresses stay retired. Notes you left on other students&apos; projects stay, signed &ldquo;Former member&rdquo;.
+        Nothing on GitHub changes — remove ProSho&apos;s GitHub App in <a href={GITHUB_INSTALLATIONS_URL} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>GitHub settings</a> too.
+        {' '}<Link to="/prosho/privacy" style={{ color: 'var(--accent)' }}>How ProSho handles your data</Link>
+      </p>
+    </DeleteCard>
   )
 }
 

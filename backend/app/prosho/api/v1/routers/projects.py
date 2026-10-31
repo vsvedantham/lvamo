@@ -1,11 +1,12 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.prosho.models.prosho_user import ProshoUser
 from app.prosho.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
+from app.prosho.services import deletion
 from app.prosho.services import project as project_service
 from app.prosho.services.auth import get_current_user
 from app.prosho.services.project_view import respond, respond_many
@@ -33,3 +34,10 @@ async def get_project(project_id: uuid.UUID, user: ProshoUser = Depends(get_curr
 async def update_project(project_id: uuid.UUID, body: ProjectUpdate, user: ProshoUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     project = await project_service.get_owned(project_id, user, db)
     return await respond(await project_service.update_project(project, body, user, db), db)
+
+
+@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project(project_id: uuid.UUID, user: ProshoUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    project = await project_service.get_owned(project_id, user, db)
+    await deletion.delete_project(project, user, db)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

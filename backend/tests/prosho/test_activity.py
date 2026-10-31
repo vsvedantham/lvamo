@@ -8,6 +8,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.db.session import AsyncSessionLocal
 from app.prosho.models import ProshoPageStatDaily
+from app.prosho.services import rate_limit
 from app.prosho.services.page_stats import referrer_domain
 from tests.prosho.test_github_sync import REPO, FakeGitHub
 
@@ -100,6 +101,7 @@ async def test_page_events_and_stats(client, make_user):
         assert list(await db.scalars(select(ProshoPageStatDaily).where(ProshoPageStatDaily.project_id == uuid.UUID(pid)))) == []
 
     await client.patch(f"{API}/projects/{pid}", json={"visibility": "unlisted"}, headers=h)
+    rate_limit.reset()  # the private-page hit above used up some of this address's hourly budget
     for body in ({"referrer": "https://www.linkedin.com/feed/?trk=x"}, {}, {"event": "view", "referrer": "junk"},
                  {"event": "hub_click", "referrer": "https://linkedin.com/"}):
         assert (await client.post(events, json=body)).status_code == 204

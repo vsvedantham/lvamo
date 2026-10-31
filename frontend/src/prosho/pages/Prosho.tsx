@@ -1,15 +1,18 @@
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import BrandedPage from '../../components/BrandedPage'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
+import { Banner } from '../components/ui'
 
-// Phase 0 placeholder (docs/prosho/BETA_PLAN.md §12): sign-in, the project
-// dashboard and the public gallery replace this in later phases.
+// Closed-beta landing: what ProSho is, sign-in, and the guide and privacy
+// notice a pilot student needs before starting. A gallery comes later.
 export default function Prosho() {
   useDocumentTitle('ProSho — project showcase | LVAMO')
+  const [params] = useSearchParams()
 
   return (
     <BrandedPage>
       <div style={{ textAlign: 'center', maxWidth: '560px' }}>
+        {params.get('deleted') && <div style={{ textAlign: 'left' }}><Banner kind="success">Your account and projects have been deleted.</Banner></div>}
         <div style={{
           display: 'inline-block',
           padding: '0.3rem 0.8rem',
@@ -54,7 +57,9 @@ export default function Prosho() {
           Closed beta — invited students only for now.
         </p>
 
-        <p style={{ marginTop: '1.75rem' }}>
+        <p style={{ marginTop: '1.75rem', display: 'flex', gap: '1.25rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Link to="/prosho/help" style={{ color: 'var(--accent)', fontSize: '0.85rem' }}>Set up in 15 minutes</Link>
+          <Link to="/prosho/privacy" style={{ color: 'var(--text-3)', fontSize: '0.85rem' }}>Privacy</Link>
           <Link to="/" style={{ color: 'var(--text-3)', fontSize: '0.85rem' }}>Back to LVAMO</Link>
         </p>
       </div>

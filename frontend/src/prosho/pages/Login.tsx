@@ -52,11 +52,13 @@ export default function ProshoLogin() {
 
           <p style={{ marginTop: '1.1rem', color: 'var(--text-2)', fontSize: '0.78rem', lineHeight: 1.55 }}>
             We only read your GitHub name, username, avatar and primary email.
-            Nothing is posted to GitHub on your behalf.
+            Nothing is posted to GitHub on your behalf.{' '}
+            <Link to="/prosho/privacy" style={{ color: 'var(--text-2)', textDecoration: 'underline' }}>How we handle your data</Link>
           </p>
         </div>
 
-        <p style={{ marginTop: '1.25rem', textAlign: 'center' }}>
+        <p style={{ marginTop: '1.25rem', textAlign: 'center', display: 'flex', gap: '1.25rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Link to="/prosho/help" style={{ color: 'var(--text-3)', fontSize: '0.85rem' }}>Setup guide</Link>
           <Link to="/prosho" style={{ color: 'var(--text-3)', fontSize: '0.85rem' }}>Back to ProSho</Link>
         </p>
       </div>

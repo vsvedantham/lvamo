@@ -4,10 +4,20 @@
 # Postgres on a new, empty volume and the existing data looks "lost".
 name: lvamo
 
+# Container logs rotate by size. nginx logs every request with the client's
+# IP; at ~3.5 MB/day (Oct 2026) 5 x 20 MB is about 30 days, which is what the
+# ProSho privacy notice promises. More traffic means fewer days, never more.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   postgres:
     image: postgres:16-alpine
     restart: always
+    logging: *logging
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -27,6 +37,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod
     restart: always
+    logging: *logging
     env_file:
       - .env.production
     environment:
@@ -38,6 +49,7 @@ services:
   nginx:
     image: nginx:alpine
     restart: always
+    logging: *logging
     ports:
       - "80:80"
       - "443:443"

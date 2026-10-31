@@ -1,17 +1,18 @@
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.prosho.models.prosho_user import ProshoUser
 from app.prosho.schemas.public import PageEventIn, PublicProject
-from app.prosho.services import page_stats
+from app.prosho.services import page_stats, rate_limit
 from app.prosho.services.auth import get_optional_user
 from app.prosho.services.public import get_public_project
 
 router = APIRouter(prefix="/public")
 
 
-@router.get("/projects/{slug}", response_model=PublicProject)
+@router.get("/projects/{slug}", response_model=PublicProject,
+            dependencies=[Depends(rate_limit.per_ip("public-page", 120))])
 async def public_project(slug: str, response: Response, viewer: ProshoUser | None = Depends(get_optional_user),
                          db: AsyncSession = Depends(get_db)):
     page = await get_public_project(slug, viewer, db)
@@ -21,9 +22,13 @@ async def public_project(slug: str, response: Response, viewer: ProshoUser | Non
     return page
 
 
-@router.post("/projects/{slug}/events", status_code=status.HTTP_204_NO_CONTENT)
-async def page_event(slug: str, body: PageEventIn, db: AsyncSession = Depends(get_db)):
+@router.post("/projects/{slug}/events", status_code=status.HTTP_204_NO_CONTENT,
+             dependencies=[Depends(rate_limit.per_ip("page-event", 60))])
+async def page_event(slug: str, body: PageEventIn, request: Request, db: AsyncSession = Depends(get_db)):
     """A page view or a click to the LVAMO hub. Always 204, counted or not,
-    so it can't be used to find private pages."""
-    await page_stats.record(slug, body.event, body.referrer, db)
+    so it can't be used to find private pages. One address counts at most
+    a few times an hour per page, so reloading can't pump the numbers."""
+    key = f"page-count:{rate_limit.client_ip(request)}:{slug}:{body.event.value}"
+    if rate_limit.hit(key, page_stats.COUNTS_PER_IP_HOUR, per_seconds=3600):
+        await page_stats.record(slug, body.event, body.referrer, db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

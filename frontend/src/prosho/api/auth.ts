@@ -24,3 +24,10 @@ export async function getMe(): Promise<ProshoUser> {
   const { data } = await client.get<ProshoUser>('/auth/me')
   return data
 }
+
+/** Deletes the account and every project it owns. `confirm` is the GitHub username. */
+export async function deleteAccount(confirm: string): Promise<void> {
+  await client.delete('/auth/me', { data: { confirm } })
+}
+
+export const GITHUB_INSTALLATIONS_URL = 'https://github.com/settings/installations'

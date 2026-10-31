@@ -11,7 +11,7 @@ SLUG_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{1,58}[a-z0-9])$")
 # Path segments under /prosho/ that pages or the app itself use (BETA_PLAN §6).
 RESERVED_SLUGS = frozenset({
     "login", "dashboard", "projects", "admin", "gallery", "auth", "new",
-    "api", "github", "settings", "help", "about",
+    "api", "github", "settings", "help", "about", "privacy",
 })
 
 

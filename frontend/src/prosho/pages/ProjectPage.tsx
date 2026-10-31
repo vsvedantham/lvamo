@@ -219,11 +219,12 @@ function Demo({ kind, url }: { kind: 'streamlit' | 'url' | 'video'; url: string 
 
 function Footer({ onClick }: { onClick?: () => void }) {
   return (
-    <footer style={{ borderTop: '1px solid var(--border)', padding: '1.25rem', display: 'flex', justifyContent: 'center' }}>
+    <footer style={{ borderTop: '1px solid var(--border)', padding: '1.25rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
       <Link to="/" onClick={onClick} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', color: 'var(--text-3)', fontSize: '0.78rem', textDecoration: 'none' }}>
         <Logo size={16} />
         Built with LVAMO ProSho
       </Link>
+      <Link to="/prosho/privacy" style={{ color: 'var(--text-3)', fontSize: '0.78rem' }}>Privacy</Link>
     </footer>
   )
 }

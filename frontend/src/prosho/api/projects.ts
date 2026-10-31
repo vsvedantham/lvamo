@@ -72,6 +72,10 @@ export async function updateProject(id: string, body: ProjectUpdate): Promise<Pr
   return (await client.patch<Project>(`/projects/${id}`, body)).data
 }
 
+export async function deleteProject(id: string): Promise<void> {
+  await client.delete(`/projects/${id}`)
+}
+
 /** FastAPI errors are a string (409/404) or a list of field errors (422). */
 export function apiErrorMessage(err: any, fallback = 'Something went wrong. Please try again.'): string {
   const detail = err?.response?.data?.detail

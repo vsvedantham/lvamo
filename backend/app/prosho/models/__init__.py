@@ -19,6 +19,7 @@ from app.prosho.models.prosho_page_stat import ProshoPageStatDaily
 from app.prosho.models.prosho_project import ProshoProject
 from app.prosho.models.prosho_project_mentor import ProshoProjectMentor
 from app.prosho.models.prosho_repo_event import ProshoRepoEvent
+from app.prosho.models.prosho_retired_slug import ProshoRetiredSlug
 from app.prosho.models.prosho_user import ProshoUser
 
 __all__ = [
@@ -33,6 +34,7 @@ __all__ = [
     "ProshoFeedback",
     "ProshoRepoEvent",
     "ProshoPageStatDaily",
+    "ProshoRetiredSlug",
     "PageEvent",
     "EvidenceKind",
     "EvidenceSource",

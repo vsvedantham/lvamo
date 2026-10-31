@@ -24,6 +24,8 @@ from app.prosho.schemas.activity import PageStats, StatsDay, StatsReferrer
 
 _HOSTNAME = re.compile(r"^[a-z0-9](?:[a-z0-9.-]{0,98}[a-z0-9])?$")
 MAX_DAYS = 90
+# How often one address can add to a page's count in an hour (routers/public.py).
+COUNTS_PER_IP_HOUR = 3
 
 
 def referrer_domain(referrer: str | None) -> str:

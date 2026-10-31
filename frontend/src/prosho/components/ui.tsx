@@ -31,11 +31,12 @@ export function Field({ label, hint, children }: { label: string; hint?: ReactNo
 export function Button({ children, disabled, variant = 'primary', type = 'button', onClick }: {
   children: ReactNode
   disabled?: boolean
-  variant?: 'primary' | 'secondary'
+  variant?: 'primary' | 'secondary' | 'danger'
   type?: 'button' | 'submit'
   onClick?: () => void
 }) {
   const primary = variant === 'primary'
+  const danger = variant === 'danger'
   return (
     <button
       type={type}
@@ -43,8 +44,9 @@ export function Button({ children, disabled, variant = 'primary', type = 'button
       onClick={onClick}
       style={{
         padding: '0.6rem 1.1rem', borderRadius: 'var(--radius-xs)', fontWeight: 600, fontSize: '0.875rem',
-        background: primary ? 'var(--accent)' : 'transparent', color: primary ? '#fff' : 'var(--text-1)',
-        border: primary ? 'none' : '1px solid var(--border-strong)',
+        background: primary ? 'var(--accent)' : danger ? 'var(--danger)' : 'transparent',
+        color: primary || danger ? '#fff' : 'var(--text-1)',
+        border: primary || danger ? 'none' : '1px solid var(--border-strong)',
         opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer',
       }}
     >

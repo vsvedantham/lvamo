@@ -1,17 +1,19 @@
 import { type FormEvent, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import {
-  apiErrorMessage, getProject, PROJECT_TYPE_LABEL, updateProject,
+  apiErrorMessage, deleteProject, getProject, PROJECT_TYPE_LABEL, updateProject,
   type DemoKind, type Project, type ProjectUpdate, type Visibility,
 } from '../api/projects'
 import ClaimsCard from '../components/ClaimsCard'
+import DeleteCard from '../components/DeleteCard'
 import { DataSourcesCard, RecentEvidenceCard } from '../components/DataSourcesCard'
 import EvidenceCard from '../components/EvidenceCard'
 import FeedbackCard from '../components/FeedbackCard'
 import MilestonesCard from '../components/MilestonesCard'
 import PageStatsCard from '../components/PageStatsCard'
 import { TimelineCard } from '../components/TimelinePanel'
+import { GITHUB_INSTALLATIONS_URL } from '../api/auth'
 import { listClaims, type Claim } from '../api/github'
 import ProshoShell from '../components/ProshoShell'
 import RepositoryCard from '../components/RepositoryCard'
@@ -103,9 +105,29 @@ export default function ProshoProjectManage() {
           <VisibilityCard project={project} onSaved={setProject} />
           <DetailsCard project={project} onSaved={setProject} />
           <DemoCard project={project} onSaved={setProject} />
+          <DeleteProjectCard project={project} />
         </>
       )}
     </ProshoShell>
+  )
+}
+
+function DeleteProjectCard({ project }: { project: Project }) {
+  const navigate = useNavigate()
+  const shared = project.published_at !== null
+  return (
+    <DeleteCard title="Delete project" confirmWord={project.slug} action="Delete project"
+      onDelete={async () => { await deleteProject(project.id); navigate('/prosho/dashboard', { replace: true }) }}>
+      <p>
+        Deletes the page, its claims, evidence, milestones, mentor feedback, commit history and visit counts. This can&apos;t be undone.
+        {shared && <> The address <code>{publicPageUrl(project.slug)}</code> has been shared, so it stays retired — nobody can reuse it.</>}
+      </p>
+      {project.repo_full_name && (
+        <p style={{ marginTop: '0.5rem' }}>
+          Your repo isn&apos;t touched. ProSho&apos;s GitHub App stays installed until you remove it in <a href={GITHUB_INSTALLATIONS_URL} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>GitHub settings</a>.
+        </p>
+      )}
+    </DeleteCard>
   )
 }
 

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.prosho.models.enums import Visibility
 from app.prosho.models.prosho_project import ProshoProject
 from app.prosho.models.prosho_project_mentor import ProshoProjectMentor
+from app.prosho.models.prosho_retired_slug import ProshoRetiredSlug
 from app.prosho.models.prosho_user import ProshoUser
 from app.prosho.schemas.project import ProjectCreate, ProjectUpdate
 from app.prosho.services import audit
@@ -83,7 +84,9 @@ async def _slug_taken(slug: str, db: AsyncSession, exclude: uuid.UUID | None = N
     q = select(ProshoProject.id).where(ProshoProject.slug == slug)
     if exclude:
         q = q.where(ProshoProject.id != exclude)
-    return (await db.scalar(q)) is not None
+    if (await db.scalar(q)) is not None:
+        return True
+    return (await db.scalar(select(ProshoRetiredSlug.slug).where(ProshoRetiredSlug.slug == slug))) is not None
 
 
 async def create_project(payload: ProjectCreate, user: ProshoUser, db: AsyncSession) -> ProshoProject:

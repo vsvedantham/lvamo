@@ -7,7 +7,7 @@ that each promise was met, a live demo, and the work behind it.
 
 | | |
 |---|---|
-| Status | Phases 0–3 built and verified locally (Phase 3: 2026-10-21); see [`PROGRESS_PROSHO.md`](../../PROGRESS_PROSHO.md) |
+| Status | Phases 0–3 live in prod (Phase 3 deployed 2026-10-31). Pilot-ready slice (deletion, rate limits, privacy notice, setup guide) built 2026-10-31; see [`PROGRESS_PROSHO.md`](../../PROGRESS_PROSHO.md) |
 | Plan written | 2026-10-11 |
 | Beta launch target | Mid-January 2027, before end-of-semester capstone presentations (assumed Feb 2027) |
 | First pilot | HeatRisk EU — MSc Data Science capstone, University of Europe for Applied Sciences (Potsdam) |
@@ -212,7 +212,8 @@ All tables carry `id UUID`, `created_at`, `updated_at` (the shared
 | `milestones` | `project_id`, `title`, `due_on`, `completed_at`, `reviewed_by`, `reviewed_at`, `position` | Student plans and completes; mentor reviews completed ones (renaming or reopening drops the review). Public page shows title, due, done, reviewed |
 | `feedback` | `project_id`, `author_id`, `parent_id` (one level of replies), `claim_id`/`milestone_id` (nullable), `body`, `resolved_at`, `resolved_by` | Mentor ↔ student threads; either side can start, reply, resolve; a reply reopens a resolved thread. Never public |
 | `page_stats_daily` | PK (`project_id`, `day`, `event`, `referrer_domain`), `count`; `event` = `view` / `hub_click` | Aggregates only; no IPs, no cookies. Domain only, never path/query. Hub clicks cover §3 criterion 6 |
-| `audit_logs` | `actor_id` (nullable for system), `action`, `entity`, `entity_id`, `before`, `after` (JSONB), `created_at` | Every write to projects/claims/visibility/tokens/mentors |
+| `audit_logs` | `actor_id` (nullable for system), `action`, `entity`, `entity_id`, `before`, `after` (JSONB), `created_at` | Every write to projects/claims/visibility/tokens/mentors. Deleting a project or account removes the rows about it and keeps one tombstone (`project.delete` / `user.delete`) |
+| `retired_slugs` | PK `slug`, `retired_at` | Addresses of deleted pages that were ever shared (`published_at` set). Never reused, so a link on a CV can't start pointing at a stranger's page. No link back to the project or person |
 
 Enums live in the `prosho` schema (declared with `schema="prosho"` on the
 model, as Applaut's do).
@@ -222,12 +223,14 @@ model, as Applaut's do).
 **Auth**
 - `GET /auth/github/authorize` → 302 to GitHub's authorize page (the GitHub App's client id; no separate OAuth App)
 - `GET /auth/github/callback` → upsert user, 302 to frontend with token
-- `GET /auth/me`
+- `POST /auth/exchange` — one-time login code → access token
+- `GET /auth/me`, `DELETE /auth/me` — `{confirm: <github_login>}`; deletes the account and every project it owns (409 for admins)
 
 **Projects (owner/mentor, JWT)**
 - `GET /projects` — mine (student) or mentored (mentor)
 - `POST /projects` — `{title, slug, project_type}`
 - `GET|PATCH /projects/{id}` — visibility, demo, university, supervisor confirmation
+- `DELETE /projects/{id}` — owner only; everything cascades, a shared slug is retired
 - `POST /projects/{id}/github/connect` — link an installation + repo the user owns
 - `POST /projects/{id}/sync` — re-read `prosho.yaml` now
 - `GET|POST /projects/{id}/milestones`, `PATCH|DELETE /projects/{id}/milestones/{mid}`
@@ -251,18 +254,27 @@ model, as Applaut's do).
 **Admin**
 - `GET /admin/users`, `PATCH /admin/users/{id}` (`is_active`, `role`; not on yourself), `GET /admin/projects`, `PATCH /admin/projects/{id}` (`is_active`), `POST /admin/projects/{id}/mentors`, `DELETE /admin/projects/{id}/mentors/{mentor_id}`, `GET /admin/audit?limit=&before=`
 
-Ownership failures return 404 (platform rule). Rate limits on `/ingest/*`
-(per token) and `/public/*` (per IP, not stored).
+Ownership failures return 404 (platform rule).
+
+**Rate limits** (`services/rate_limit.py`, in memory, per uvicorn worker —
+prod runs 2, so the real ceiling is up to twice these; 429 + `Retry-After`):
+`/ingest/evidence` 30/min per token (keyed by a hash) and 120/min per IP;
+`GET /public/projects/{slug}` 120/min per IP; page events 60/min per IP,
+and one IP adds to a page's count at most 3 times an hour per event (the
+rest still return 204); `/auth/github/*` and `/auth/exchange` 30/min per IP.
+The IP is nginx's `X-Real-IP` (api.* is not behind Cloudflare's proxy).
 
 ## 10. Frontend pages (`frontend/src/prosho/`)
 
 | Route | Page | Who |
 |---|---|---|
 | `/prosho` | Landing + public gallery | Everyone |
-| `/prosho/login` | "Continue with GitHub" | Everyone |
-| `/prosho/dashboard` | My projects (student) / mentored projects (mentor) | Signed in |
+| `/prosho/login` | "Continue with GitHub", links to the guide and privacy notice | Everyone |
+| `/prosho/help` | "Set up ProSho in 15 minutes" student guide | Everyone |
+| `/prosho/privacy` | Privacy notice (plain language; contact privacy@lvamo.com) | Everyone |
+| `/prosho/dashboard` | My projects (student) / mentored projects (mentor); "Delete your account" at the bottom (not for admins) | Signed in |
 | `/prosho/projects/new` | Create project → install GitHub App → pick repo | Student |
-| `/prosho/projects/:id` | Manage: sync status + manifest errors, visibility, demo, tokens + CI snippet, milestones, feedback, work timeline, page views, evidence history (mentors get a read-only view plus feedback and milestone review) | Owner, mentor |
+| `/prosho/projects/:id` | Manage: sync status + manifest errors, visibility, demo, tokens + CI snippet, milestones, feedback, work timeline, page views, evidence history, "Delete project" (type the slug to confirm) (mentors get a read-only view plus feedback and milestone review) | Owner, mentor |
 | `/prosho/admin` | Projects (assign/remove mentors, deactivate), people (role, deactivate), audit log | Admin |
 | `/prosho/:slug` | **The project page** (see the concept deck): header + type chip + "Mentored via LVAMO" badge, claims tracker, demo, module evidence panels, work timeline, "Built with LVAMO ProSho" footer linking to the hub | Visitors |
 
@@ -293,10 +305,17 @@ Mobile-first per platform rules.
   screenshots of student URLs): http/https only, resolve DNS and refuse
   private/loopback/link-local ranges, 10 s timeout, size cap, no
   redirects to blocked ranges, max 1 browser at a time.
-- **GDPR:** students are EU users. Privacy notice before sign-up; no
-  tracking cookies; page views stored only as daily aggregates; deleting a
-  project deletes its evidence rows and R2 objects; deleting an account
-  deletes everything owned.
+- **GDPR:** students are EU users. Privacy notice at `/prosho/privacy`,
+  linked from sign-in and every project page; no cookies; page views
+  stored only as daily aggregates (domain-only referrer). Self-service
+  deletion: a project (cascade + audit rows, shared slug retired) or the
+  whole account (all owned projects; feedback left on other students'
+  projects stays as "Former member"; `mentor_login` scrubbed from audit
+  rows). The GitHub App installation is the user's to remove on GitHub.
+  Server logs (nginx, with IPs) rotate at 5 × 20 MB per container ≈ 30
+  days (`docker-compose.prod.yml`). One-off pre-upgrade DB dumps in
+  `/home/ubuntu/backups/` are deleted within 30 days (the notice promises
+  this). No R2 objects yet (`/ingest/artifact` not built).
 - **Upload limits:** type allowlist, 5 MB cap, R2 keys never derived from
   user-supplied filenames.
 

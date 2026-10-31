@@ -8,8 +8,12 @@
 
 ## 🎯 NEXT SESSION PRIMARY TASK
 
-**Phase 3 (work over time) is live (2026-10-31, `35a41b8`, migration
-`0028`).** Signed-in checks are still open. Next:
+**Pilot-ready slice built locally (2026-10-31), not deployed yet:**
+deletion, rate limits, privacy notice, setup guide, log rotation
+(migration `0029`). Before deploying: **create `privacy@lvamo.com` in Zoho
+Mail** (lvamo.com MX is Zoho; the notice and guide name that address), then
+deploy and verify (section "Pilot-ready slice" below). Phase 3 is live
+(2026-10-31, `35a41b8`, migration `0028`). Then:
 
 1. **Signed-in checks — mostly done (2026-10-31).** The founder
    (`vsvedantham`) was made admin in prod (one-off SQL approved by the
@@ -53,6 +57,57 @@ founder's own browser): `/auth/exchange` and `/auth/me` 200;
 `data-module`, `evidence`, `tokens` — all 200, no 5xx.
 **Not verified yet:** a write (milestone) in prod, the mentor view and
 feedback (need a second account), a timeline from a real repo — see banner.
+
+### Pilot-ready slice — what was built (2026-10-31, local)
+
+Everything a pilot student needs before their data goes in. 164 backend
+tests pass (99 ProSho, 7 new); `npm run build` clean; checked in the
+browser at desktop and 375 px (help, privacy, landing with `?deleted=1`,
+login links, public-page footer, delete project end to end, account card).
+
+- **Deletion** (`services/deletion.py`). `DELETE /projects/{id}` (owner):
+  children cascade, audit rows about the project/claims/milestones/tokens
+  (by `entity_id` or `project_id` in `before`/`after`) are removed, one
+  `project.delete` tombstone (`{slug_retired}`) stays. A slug that was
+  ever shared (`published_at`) goes into **`prosho.retired_slugs`**
+  (migration `0029`) and `_slug_taken` refuses it forever.
+  `DELETE /auth/me` `{confirm: github_login}` (case-insensitive; 422 if
+  wrong; 409 for admins): purges every owned project the same way
+  (deactivated ones too), drops `entity="user"` audit rows, strips
+  `mentor_login` from mentor-assign/remove rows that name them, keeps a
+  `user.delete` tombstone (`{projects_deleted}`, actor NULL). Feedback they
+  wrote elsewhere stays (author SET NULL → "Former member"). UI:
+  `components/DeleteCard.tsx` (type the slug / username to arm a red
+  button); "Delete project" at the bottom of the manage page (owner), "Delete
+  your account" at the bottom of the dashboard (admins get a one-line note
+  instead); both remind that the GitHub App must be removed on GitHub.
+  After account deletion → `/prosho?deleted=1` with a confirmation banner.
+- **Rate limits** (`services/rate_limit.py`, in-memory fixed windows, per
+  worker; numbers in `BETA_PLAN.md` §9). IP from nginx's `X-Real-IP`
+  (`api.prosho` DNS is not proxied, checked). Ingest token kept only as a
+  hash prefix. Page events: beyond 3 counts/hour per IP+page+event they
+  still return 204 but aren't counted. Tests reset the limiter per test.
+- **Privacy notice** `/prosho/privacy` (`pages/Privacy.tsx`, shared
+  `components/DocPage.tsx` with `PRIVACY_EMAIL`): what's kept, visit
+  counts, server logs (~30 days), who sees what, processors (Oracle
+  Frankfurt, Cloudflare, GitHub, Zoho), retention (pre-upgrade dumps ≤ 30
+  days), rights. Linked from login, landing, every public page footer and
+  the account card. Written by me in plain language — **not legal review**.
+- **Guide** `/prosho/help` (`pages/Help.tsx`): six timed steps (sign in,
+  create, connect repo, `prosho.yaml`, CI evidence, milestones + sharing)
+  plus troubleshooting; labels match the manage page.
+- **Landing** (`pages/Prosho.tsx`): links to the guide and privacy notice.
+- **Shared files (approved by the founder):** `App.tsx` routes
+  `prosho/help` and `prosho/privacy`; `docker-compose.prod.yml` json-file
+  logging `max-size 20m`, `max-file 5` on all three services (nginx was
+  70 MB over 20 days ≈ 3.5 MB/day → ≈ 30 days). `"privacy"` added to
+  `RESERVED_SLUGS` (0 prod projects use `privacy`/`help`, checked).
+- **Deploy notes:** the compose change recreates postgres, backend and
+  nginx (brief blip) and drops the current 70 MB nginx log with the old
+  container; recreating nginx also picks up the bind-mounted config fresh.
+  **Ops promise:** delete dumps in `/home/ubuntu/backups/` older than 30
+  days (oldest today: 2026-10-11 → due 2026-11-10; they're whole-DB dumps,
+  so that's a platform-level task to agree with the founder).
 
 ### Phase 3 — what was built
 
@@ -405,6 +460,15 @@ first API call is the check.
   project (TransitBuddy). All example values in it are illustrative.
 
 ## Session log
+
+### 2026-10-31 — Phase 3 deployed; pilot-ready slice built (local)
+- Phase 3 deployed and checked signed-in (Status). Founder made admin.
+- Founder chose the pilot-ready slice: deletion, rate limits, privacy
+  notice, 15-minute guide. Decisions: contact `privacy@lvamo.com` (founder
+  creates it in Zoho; my Cloudflare token can't manage mail and MX is
+  Zoho anyway); rotate logs to ~30 days; add `/prosho/help` and
+  `/prosho/privacy` routes in `App.tsx`.
+- Built and tested locally (section above). Not committed or deployed yet.
 
 ### 2026-10-21 — Phase 3 built (local)
 - Closed the 2026-10-17 loose ends first (entry below).
