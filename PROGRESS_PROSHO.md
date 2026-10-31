@@ -8,28 +8,96 @@
 
 ## 🎯 NEXT SESSION PRIMARY TASK
 
-**Phases 1 and 2 are code-complete and live (2026-10-17).** Their exit
-checks both need the real HeatRisk EU repo, so the next step is the same
-for both — get the pilot onto ProSho:
+**Phase 3 (work over time) is built and verified locally (2026-10-21), not
+yet deployed or committed.** Next:
 
-*(The 2026-10-17 loose ends — scheduled source check, test-data cleanup,
-Jobref cert renewal — were closed on 2026-10-21; see the session log.)*
+1. **Deploy Phase 3** (migration `0028`), then in prod:
+   - make the founder admin (one-off, audited):
+     `UPDATE prosho.users SET role='admin' WHERE github_login='vsvedantham'`
+     plus a `user.update` audit row with `actor_id` NULL;
+   - verify: `/admin/*` 403 for a non-admin; admin page loads; assign a
+     mentor to a throwaway project, mentor sees it read-only; milestone
+     review; feedback thread; `/public/projects/{slug}/events` 204 and
+     counted only for unlisted/public; timeline from a real repo (the
+     founder's dry run below covers it). Delete throwaway data afterwards.
+2. **Founder dry run on `testproj1`** — install the App on a scratch repo,
+   add `prosho.yaml`, push → webhook sync + commit timeline; create a CI
+   token and run the Actions step once. Deferred by the founder on
+   2026-10-21 (the pilot has no repo yet) — do it when convenient.
+3. **Invite the HeatRisk EU student** once they have a repo
+   (`PROSHO_SIGNUP_ALLOWLIST`, restart) → closes Phase 1's and Phase 2's
+   exit checks; assign the founder as their mentor → Phase 3's exit check
+   ("founder mentors HeatRisk EU through ProSho for 1 week").
 
-1. **Founder dry run on `testproj1`** (signed in already, 2026-10-15): install
-   the App on a scratch repo, add `prosho.yaml`, push → confirm the webhook
-   sync; then create a CI token and run the GitHub Actions step once.
-2. **Invite the HeatRisk EU student** (`PROSHO_SIGNUP_ALLOWLIST`, then
-   restart the backend) → they connect the repo, add `prosho.yaml` with
-   `data.sources` and metric claims, add the CI step → page **unlisted**.
-   That closes Phase 1's exit check, and Phase 2's once their CI reports
-   evidence and the daily source check shows on the page.
-
-Then Phase 3 (work over time: commit timeline, milestones, mentor role +
-feedback, admin mentor assignment, page-view counts).
+Then Phase 4 (frontend module: Playwright screenshots, uptime, Lighthouse,
+artifact upload — no core/schema changes).
 
 ---
 
 ## Status
+
+**Phase 3 (Work over time) — built and verified locally, 2026-10-21**
+(migration `0028`). Not deployed yet (banner).
+
+### Phase 3 — what was built
+
+- **Tables** (`0028`): `project_mentors` (unique pair), `milestones`
+  (CHECK: reviewed ⇒ completed), `feedback` (threads, one level of
+  replies, optional milestone/claim link), `repo_events` (unique per
+  project+commit), `page_stats_daily` (PK project/day/event/referrer,
+  `event` = `view`|`hub_click`), `projects.repo_private`.
+- **Access** (`services/project.py`): `get_owned` (owner only, for
+  changes) and `get_for_team` (owner or assigned mentor, read + feedback +
+  milestone review). Anyone else → 404. Mentors see private pages as a
+  preview. `GET /projects` returns owned then mentored, each with
+  `access`, `has_mentor`, `open_feedback`.
+- **Admin** (`/admin/*`, role `admin`, else 403): list/patch users (role,
+  `is_active`; never yourself; can't demote someone still mentoring),
+  list/patch projects (`is_active`), assign/remove mentors (only active
+  `mentor`/`admin` users, never the owner), audit log with paging. All
+  audited (`user.update`, `project.update`, `mentor.assign/remove`).
+- **Milestones**: owner creates/edits/completes/deletes (max 50); mentor
+  reviews completed ones; renaming or reopening drops the review; sorted
+  by due date (undated last). Audited. Public page: title, due, done,
+  "Mentor-reviewed".
+- **Feedback**: either side starts a thread (optionally about a milestone
+  or claim), replies, resolves; a reply reopens; open threads first. Never
+  public. No email notifications in beta — the dashboard shows "N open
+  feedback threads".
+- **Commit timeline** (`services/timeline.py`): every manifest sync also
+  reads the default branch's commits (first sync up to 300, then latest
+  100; `ON CONFLICT DO NOTHING`); a GitHub failure here never fails the
+  sync. Weekly counts (Monday UTC, 8–26 weeks) always public; latest
+  commit messages only when the repo is public (owner/mentor always see
+  them). Cleared on disconnect or switching repo.
+- **Page stats** (`services/page_stats.py`): `POST /public/projects/
+  {slug}/events` always 204; counts only unlisted/public pages of active
+  owners; keeps the referrer's *domain* only. The page counts once per tab
+  session and skips the owner/mentors (`viewer_is_team`), previews and
+  `navigator.webdriver`. Footer click → `hub_click` (§3 criterion 6).
+  Manage-page card: 30-day views, per-day bars, referrers, hub clicks.
+- **UI**: `/prosho/admin` (one new route in shared `App.tsx`, approved by
+  the founder 2026-10-21), "Admin" link in the header for admins,
+  dashboard "Projects you mentor", manage page mentor view (read-only
+  claims/sources, no repo/tokens/visibility/details/demo cards), cards for
+  milestones, feedback, work timeline, page views; public page "Mentored
+  via LVAMO" badge (never the name), milestones, "Work over time" chart.
+  Charts are single-series bars with a hover/focus readout.
+
+**Tests:** 13 new (admin 3, mentor access 2, milestones 2, feedback 1,
+timeline 3, page stats 2) → **92 ProSho, 157 total**. Also: the GitHub
+fake now fakes `list_commits` (no test reaches GitHub), and the daily-job
+test counts its own project's rows instead of fetches (it failed when a
+local dev project happened to be due).
+
+**Verified locally:** migration `0028` up/down/up, zero model-vs-DB diffs
+in `prosho`; `tsc` + `vite build` clean. Real browser, desktop + phone
+(375 px, no horizontal scroll, no console errors): admin assigned a
+mentor; mentor saw the project under "Projects you mentor", reviewed a
+milestone, posted feedback on it; student saw "1 open feedback thread"
+and replied; public page showed the badge, milestones and the activity
+chart with messages hidden (private repo) and no feedback text; owner
+visits not counted, anonymous view and footer click counted.
 
 **Phase 2 (Evidence + data module) — code complete and live, 2026-10-17**
 (`083ed1b`, migration `0025`). Exit check pending the real pilot (banner).
@@ -322,6 +390,20 @@ first API call is the check.
   project (TransitBuddy). All example values in it are illustrative.
 
 ## Session log
+
+### 2026-10-21 — Phase 3 built (local)
+- Closed the 2026-10-17 loose ends first (entry below).
+- Founder decisions: public page shows weekly commit activity always and
+  messages only for public repos; milestones public without feedback;
+  admin tools on their own `/prosho/admin` page (the one shared-file
+  edit: a route in `App.tsx`). Repo/App dry run deferred until the pilot
+  has a repo.
+- Plan tweaks recorded in `BETA_PLAN.md` §8–§10: `page_view_daily` became
+  `page_stats_daily` (adds hub clicks); `repo_events` are read from
+  GitHub's commit list on sync rather than from push payloads; the public
+  counter endpoint is `/events`.
+- Local dev data added for UI checks: user `ui-test-founder` (admin,
+  mentor of `heatrisk-eu-summer-heat`), 41 fake commits, fake page stats.
 
 ### 2026-10-21 — 2026-10-17 loose ends closed
 - Scheduled source checks confirmed in prod (18–21 Oct, 3 rows per day, no

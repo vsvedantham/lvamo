@@ -4,16 +4,32 @@ import Logo from '../../components/Logo'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { describeTarget } from '../api/github'
 import { PROJECT_TYPE_LABEL } from '../api/projects'
-import { getPublicProject, type PublicClaim, type PublicProject } from '../api/public'
+import { getPublicProject, recordPageEvent, type PublicClaim, type PublicProject } from '../api/public'
+import { formatDay } from '../api/team'
 import { formatValue, timeAgo } from '../api/evidence'
 import DataModulePanels from '../components/DataModulePanels'
 import StatusPill from '../components/StatusPill'
+import { TimelinePanel } from '../components/TimelinePanel'
 
 // The public project page (BETA_PLAN §10): the student's work first, LVAMO
 // branding kept to the small footer.
 
 const sectionTitle: React.CSSProperties = {
   fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-2)', marginBottom: '0.9rem',
+}
+
+// One view per page per browser tab session. Not counted: the owner and
+// mentors (viewer_is_team), previews, and automated browsers.
+function useCountView(page: PublicProject | null) {
+  useEffect(() => {
+    if (!page || page.preview || page.viewer_is_team || navigator.webdriver) return
+    const key = `prosho_viewed_${page.slug}`
+    try {
+      if (sessionStorage.getItem(key)) return
+      sessionStorage.setItem(key, '1')
+    } catch { /* storage blocked — count anyway */ }
+    recordPageEvent(page.slug, 'view')
+  }, [page])
 }
 
 function useNoIndex(active: boolean) {
@@ -34,6 +50,7 @@ export default function ProshoProjectPage() {
   useDocumentTitle(page ? `${page.title} | ProSho` : 'ProSho')
   // Only public pages may be indexed; unlisted means "anyone with the link".
   useNoIndex(page?.visibility !== 'public')
+  useCountView(page)
 
   useEffect(() => {
     setPage(null)
@@ -50,7 +67,7 @@ export default function ProshoProjectPage() {
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {page.preview && (
         <div role="status" style={{ padding: '0.7rem 1.25rem', background: 'var(--warn-bg)', borderBottom: '1px solid var(--warn-border)', fontSize: '0.85rem', color: 'var(--warn)', textAlign: 'center' }}>
-          Preview — this page is private, so only you can see it.{' '}
+          Preview — this page is private, so only the student{page.mentored ? ' and their mentor' : ''} can see it.{' '}
           <Link to="/prosho/dashboard" style={{ color: 'var(--warn)', textDecoration: 'underline' }}>Change who can see it</Link>
         </div>
       )}
@@ -69,6 +86,13 @@ export default function ProshoProjectPage() {
               {byline && <span style={{ display: 'block', color: 'var(--text-2)', fontSize: '0.82rem' }}>{byline}</span>}
             </span>
           </a>
+          {page.mentored && (
+            <p style={{ marginTop: '0.9rem' }}>
+              <span style={{ display: 'inline-block', padding: '0.2rem 0.65rem', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 600, border: '1px solid var(--border-strong)', color: 'var(--text-2)' }}>
+                Mentored via LVAMO
+              </span>
+            </p>
+          )}
         </header>
 
         {page.problem && (
@@ -94,11 +118,46 @@ export default function ProshoProjectPage() {
 
         {page.demo_kind && page.demo_url && <Demo kind={page.demo_kind} url={page.demo_url} />}
 
+        {page.milestones.length > 0 && <Milestones items={page.milestones} />}
+
+        {page.timeline && (
+          <section style={{ marginBottom: '2.5rem' }}>
+            <h2 style={sectionTitle}>Work over time</h2>
+            <TimelinePanel timeline={page.timeline} hiddenNote="The repository is private, so only weekly activity is shown." />
+          </section>
+        )}
+
         <p style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>Last updated {new Date(page.updated_at).toLocaleDateString()}</p>
       </main>
 
-      <Footer />
+      <Footer onClick={() => recordPageEvent(page.slug, 'hub_click')} />
     </div>
+  )
+}
+
+function Milestones({ items }: { items: PublicProject['milestones'] }) {
+  const today = new Date().toISOString().slice(0, 10)
+  const done = items.filter(m => m.completed_at).length
+  return (
+    <section style={{ marginBottom: '2.5rem' }}>
+      <h2 style={sectionTitle}>Milestones · {done} of {items.length} done</h2>
+      <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        {items.map((m, i) => {
+          const isDone = m.completed_at !== null
+          const overdue = !isDone && m.due_on !== null && m.due_on < today
+          return (
+            <li key={i} style={{ display: 'flex', gap: '0.8rem', alignItems: 'baseline', padding: '0.7rem 0.9rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
+              <span aria-label={isDone ? 'Done' : 'Not done yet'} style={{ flexShrink: 0, width: '1rem', textAlign: 'center', color: isDone ? 'var(--success)' : 'var(--text-3)' }}>{isDone ? '✓' : '○'}</span>
+              <span style={{ flex: 1, minWidth: 0, fontSize: '0.92rem', overflowWrap: 'anywhere', color: isDone ? 'var(--text-1)' : 'var(--text-2)' }}>{m.title}</span>
+              <span style={{ flexShrink: 0, fontSize: '0.75rem', color: 'var(--text-3)', textAlign: 'right' }}>
+                {isDone ? `Done ${formatDay(m.completed_at!.slice(0, 10), { day: 'numeric', month: 'short' })}` : m.due_on ? `${overdue ? 'Was due' : 'Due'} ${formatDay(m.due_on, { day: 'numeric', month: 'short' })}` : ''}
+                {m.reviewed && <span style={{ display: 'block', color: 'var(--success)' }}>Mentor-reviewed</span>}
+              </span>
+            </li>
+          )
+        })}
+      </ol>
+    </section>
   )
 }
 
@@ -158,10 +217,10 @@ function Demo({ kind, url }: { kind: 'streamlit' | 'url' | 'video'; url: string 
   )
 }
 
-function Footer() {
+function Footer({ onClick }: { onClick?: () => void }) {
   return (
     <footer style={{ borderTop: '1px solid var(--border)', padding: '1.25rem', display: 'flex', justifyContent: 'center' }}>
-      <Link to="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', color: 'var(--text-3)', fontSize: '0.78rem', textDecoration: 'none' }}>
+      <Link to="/" onClick={onClick} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', color: 'var(--text-3)', fontSize: '0.78rem', textDecoration: 'none' }}>
         <Logo size={16} />
         Built with LVAMO ProSho
       </Link>

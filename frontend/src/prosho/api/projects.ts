@@ -33,6 +33,11 @@ export interface Project {
   updated_at: string
   manifest_managed: boolean
   repo_access_lost: boolean
+  // A mentor can view the project, leave feedback and review milestones,
+  // but can't change it.
+  access: 'owner' | 'mentor'
+  has_mentor: boolean
+  open_feedback: number
 }
 
 export interface ProjectUpdate {

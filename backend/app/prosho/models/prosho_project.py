@@ -56,6 +56,9 @@ class ProshoProject(Base, UUIDPrimaryKey, TimestampMixin):
     repo_full_name: Mapped[Optional[str]] = mapped_column(String(200))
     repo_id: Mapped[Optional[int]] = mapped_column(BigInteger)
     github_installation_id: Mapped[Optional[int]] = mapped_column(BigInteger)
+    # From GitHub on each sync. A private repo's commit messages never reach
+    # the public page; its weekly activity counts do.
+    repo_private: Mapped[Optional[bool]] = mapped_column(Boolean)
     demo_kind: Mapped[Optional[DemoKind]] = mapped_column(_enum(DemoKind, "demo_kind_enum"))
     demo_url: Mapped[Optional[str]] = mapped_column(String(500))
     manifest_sha: Mapped[Optional[str]] = mapped_column(String(40))

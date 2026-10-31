@@ -20,6 +20,7 @@ import ProshoDashboard from './prosho/pages/Dashboard'
 import ProshoNewProject from './prosho/pages/NewProject'
 import ProshoProjectManage from './prosho/pages/ProjectManage'
 import ProshoProjectPage from './prosho/pages/ProjectPage'
+import ProshoAdmin from './prosho/pages/Admin'
 import ProshoProtectedRoute from './prosho/components/ProtectedRoute'
 import Login from './applaut/pages/Login'
 import Register from './applaut/pages/Register'
@@ -95,6 +96,14 @@ export default function App() {
             element={
               <ProshoProtectedRoute>
                 <ProshoProjectManage />
+              </ProshoProtectedRoute>
+            }
+          />
+          <Route
+            path="prosho/admin"
+            element={
+              <ProshoProtectedRoute>
+                <ProshoAdmin />
               </ProshoProtectedRoute>
             }
           />

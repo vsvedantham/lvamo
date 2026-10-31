@@ -39,6 +39,7 @@ class FakeGitHub:
         self.files = {"prosho.yaml": MANIFEST}
         self.fail = None
         self.synced_refs = []
+        self.commits = []  # GitHub's list-commits items, newest first
 
     def install(self, monkeypatch):
         async def get_user_installation(login):
@@ -62,6 +63,9 @@ class FakeGitHub:
         async def get_file(token, full_name, path, ref, max_bytes):
             self.synced_refs.append(ref)
             return self.files.get(path)
+
+        async def list_commits(token, full_name, ref, pages=1):
+            return list(self.commits)
 
         for name, fn in locals().items():
             if callable(fn) and name != "self":

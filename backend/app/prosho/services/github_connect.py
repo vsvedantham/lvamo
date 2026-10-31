@@ -11,12 +11,13 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.prosho.models.prosho_claim import ProshoClaim
 from app.prosho.models.prosho_project import ProshoProject
+from app.prosho.models.prosho_repo_event import ProshoRepoEvent
 from app.prosho.models.prosho_user import ProshoUser
 from app.prosho.services import audit, github
 from app.prosho.services.manifest_sync import sync_project
@@ -70,6 +71,8 @@ async def connect_repo(project: ProshoProject, repo_id: int, user: ProshoUser, d
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="That repo is already connected to another ProSho project")
 
     before = {"repo_full_name": project.repo_full_name}
+    if project.repo_id is not None and project.repo_id != repo["id"]:  # switching repos
+        await db.execute(delete(ProshoRepoEvent).where(ProshoRepoEvent.project_id == project.id))
     project.repo_id = repo["id"]
     project.repo_full_name = repo["full_name"]
     project.github_installation_id = inst["id"]
@@ -85,13 +88,17 @@ async def connect_repo(project: ProshoProject, repo_id: int, user: ProshoUser, d
 
 async def disconnect_repo(project: ProshoProject, user: ProshoUser, db: AsyncSession) -> ProshoProject:
     """The story fields become editable on ProSho again; claims are archived
-    (they only exist through the manifest) and come back on reconnect."""
+    (they only exist through the manifest) and come back on reconnect. The
+    commit timeline belonged to that repo, so it goes (a reconnect reads it
+    back from GitHub)."""
     if project.repo_id is None:
         return project
     before = {"repo_full_name": project.repo_full_name}
     project.repo_id = project.repo_full_name = project.github_installation_id = None
     project.manifest_sha = project.manifest_synced_at = project.manifest_checked_at = None
     project.manifest_errors = None
+    project.repo_private = None
+    await db.execute(delete(ProshoRepoEvent).where(ProshoRepoEvent.project_id == project.id))
     await db.execute(update(ProshoClaim)
                      .where(ProshoClaim.project_id == project.id, ProshoClaim.archived_at.is_(None))
                      .values(archived_at=datetime.now(timezone.utc)))

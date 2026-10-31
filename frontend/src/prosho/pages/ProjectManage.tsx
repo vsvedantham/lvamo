@@ -8,13 +8,17 @@ import {
 import ClaimsCard from '../components/ClaimsCard'
 import { DataSourcesCard, RecentEvidenceCard } from '../components/DataSourcesCard'
 import EvidenceCard from '../components/EvidenceCard'
+import FeedbackCard from '../components/FeedbackCard'
+import MilestonesCard from '../components/MilestonesCard'
+import PageStatsCard from '../components/PageStatsCard'
+import { TimelineCard } from '../components/TimelinePanel'
 import { listClaims, type Claim } from '../api/github'
 import ProshoShell from '../components/ProshoShell'
 import RepositoryCard from '../components/RepositoryCard'
 import { Banner, Button, Card, Field, hintStyle, publicPagePath, publicPageUrl, VisibilityPill } from '../components/ui'
 
 const VISIBILITY_OPTIONS: { value: Visibility; label: string; help: string }[] = [
-  { value: 'private', label: 'Private', help: 'Only you can see the page.' },
+  { value: 'private', label: 'Private', help: 'Only you (and your mentor, if you have one) can see the page.' },
   { value: 'unlisted', label: 'Unlisted', help: 'Anyone with the link can see it — good for sharing with your supervisor or examiners. Not listed anywhere.' },
   { value: 'public', label: 'Public', help: 'Listed in the ProSho gallery. Needs your supervisor’s agreement first.' },
 ]
@@ -53,10 +57,11 @@ export default function ProshoProjectManage() {
     )
   }
   if (!project) return <ProshoShell><p style={{ color: 'var(--text-2)' }}>Loading…</p></ProshoShell>
+  const isMentor = project.access === 'mentor'
 
   return (
     <ProshoShell>
-      <p style={{ marginBottom: '1rem' }}><Link to="/prosho/dashboard" style={{ color: 'var(--text-2)', fontSize: '0.85rem' }}>← Your projects</Link></p>
+      <p style={{ marginBottom: '1rem' }}><Link to="/prosho/dashboard" style={{ color: 'var(--text-2)', fontSize: '0.85rem' }}>← {isMentor ? 'Projects' : 'Your projects'}</Link></p>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '0.35rem' }}>
@@ -70,18 +75,36 @@ export default function ProshoProjectManage() {
         </Link>
       </div>
 
-      {project.manifest_managed && (
-        <Banner kind="info">Title, summary, problem and demo come from <code>prosho.yaml</code> in your repo — edit them there and push.</Banner>
+      {isMentor ? (
+        <>
+          <Banner kind="info">You&apos;re mentoring this project. You can leave feedback and review completed milestones; everything else is the student&apos;s to change.</Banner>
+          <FeedbackCard project={project} claims={claims ?? []} />
+          <MilestonesCard project={project} />
+          <ClaimsCard project={project} claims={claims} onChange={() => {}} />
+          <TimelineCard project={project} />
+          <DataSourcesCard project={project} />
+          <RecentEvidenceCard project={project} />
+          <PageStatsCard project={project} />
+        </>
+      ) : (
+        <>
+          {project.manifest_managed && (
+            <Banner kind="info">Title, summary, problem and demo come from <code>prosho.yaml</code> in your repo — edit them there and push.</Banner>
+          )}
+          <RepositoryCard project={project} onChange={setProject} />
+          <ClaimsCard project={project} claims={claims} onChange={c => setClaims(cs => cs?.map(x => (x.id === c.id ? { ...x, ...c } : x)) ?? null)} />
+          <MilestonesCard project={project} />
+          <FeedbackCard project={project} claims={claims ?? []} />
+          <TimelineCard project={project} />
+          <EvidenceCard project={project} claims={claims ?? []} />
+          <DataSourcesCard project={project} />
+          <RecentEvidenceCard project={project} />
+          <PageStatsCard project={project} />
+          <VisibilityCard project={project} onSaved={setProject} />
+          <DetailsCard project={project} onSaved={setProject} />
+          <DemoCard project={project} onSaved={setProject} />
+        </>
       )}
-
-      <RepositoryCard project={project} onChange={setProject} />
-      <ClaimsCard project={project} claims={claims} onChange={c => setClaims(cs => cs?.map(x => (x.id === c.id ? { ...x, ...c } : x)) ?? null)} />
-      <EvidenceCard project={project} claims={claims ?? []} />
-      <DataSourcesCard project={project} />
-      <RecentEvidenceCard project={project} />
-      <VisibilityCard project={project} onSaved={setProject} />
-      <DetailsCard project={project} onSaved={setProject} />
-      <DemoCard project={project} onSaved={setProject} />
     </ProshoShell>
   )
 }

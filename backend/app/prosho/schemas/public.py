@@ -1,9 +1,12 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel
 
-from app.prosho.models.enums import DemoKind, ProjectType, Visibility
+from pydantic import Field
+
+from app.prosho.models.enums import DemoKind, PageEvent, ProjectType, Visibility
+from app.prosho.schemas.activity import Timeline
 
 # A measured claim's status comes from evidence (Phase 2); until then it's
 # "awaiting_evidence". A self-reported claim shows the student's own status.
@@ -69,6 +72,14 @@ class DataModule(BaseModel):
     runs: list[RunPanelItem]
 
 
+class PublicMilestone(BaseModel):
+    title: str
+    due_on: Optional[date]
+    completed_at: Optional[datetime]
+    # A mentor has reviewed it. Who, and what they said, stays private.
+    reviewed: bool
+
+
 class PublicProject(BaseModel):
     slug: str
     title: str
@@ -84,6 +95,19 @@ class PublicProject(BaseModel):
     claims: list[PublicClaim]
     # Present for data-science projects (BETA_PLAN §2 data module).
     data_module: Optional[DataModule] = None
+    milestones: list[PublicMilestone] = []
+    # Commit activity; messages only if the repo itself is public.
+    timeline: Optional[Timeline] = None
+    # "Mentored via LVAMO" — never the mentor's name (§16.2).
+    mentored: bool = False
     updated_at: datetime
-    # True when the owner is looking at their own not-yet-shared page.
+    # True when the owner (or a mentor) is looking at a not-yet-shared page.
     preview: bool
+    # The owner or a mentor is looking: their visits aren't counted.
+    viewer_is_team: bool = False
+
+
+class PageEventIn(BaseModel):
+    event: PageEvent = PageEvent.view
+    # document.referrer; only its domain is kept.
+    referrer: Optional[str] = Field(default=None, max_length=2000)

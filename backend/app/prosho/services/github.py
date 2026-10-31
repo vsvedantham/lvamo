@@ -175,6 +175,23 @@ async def get_branch_head_sha(token: str, full_name: str, branch: str) -> str:
     return resp.text.strip()
 
 
+async def list_commits(token: str, full_name: str, ref: str, pages: int = 1) -> list[dict[str, Any]]:
+    """Newest-first commits reachable from `ref`, 100 per page."""
+    commits: list[dict[str, Any]] = []
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        for page in range(1, pages + 1):
+            resp = await _get(client, f"{API}/repos/{full_name}/commits", token, sha=ref, per_page=100, page=page)
+            if resp.status_code == 409:  # empty repository
+                break
+            if resp.status_code != 200:
+                raise GitHubError("Couldn't read the commit history")
+            batch = resp.json()
+            commits += batch
+            if len(batch) < 100:
+                break
+    return commits
+
+
 async def get_file(token: str, full_name: str, path: str, ref: str, max_bytes: int) -> bytes | None:
     """File contents at `ref`, None if it doesn't exist. Raises if larger
     than `max_bytes` (checked before the body is read in full)."""

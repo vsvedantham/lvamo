@@ -1,7 +1,7 @@
 import re
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
@@ -98,13 +98,23 @@ class ProjectResponse(BaseModel):
     manifest_managed: bool
     # Connected, but the App lost access (uninstalled / repo removed from it).
     repo_access_lost: bool
+    # The signed-in user's relation to the project: a mentor can view it,
+    # leave feedback and review milestones, but not change it.
+    access: Literal["owner", "mentor"]
+    has_mentor: bool
+    # Feedback threads not yet resolved (filled in on the list endpoint).
+    open_feedback: int
 
     model_config = {"from_attributes": True}
 
     @classmethod
-    def from_project(cls, p: Any) -> "ProjectResponse":
+    def from_project(cls, p: Any, access: str = "owner", has_mentor: bool = False,
+                     open_feedback: int = 0) -> "ProjectResponse":
         computed = {
             "manifest_managed": p.manifest_synced_at is not None,
             "repo_access_lost": p.repo_id is not None and p.github_installation_id is None,
+            "access": access,
+            "has_mentor": has_mentor,
+            "open_feedback": open_feedback,
         }
         return cls.model_validate({**{k: getattr(p, k) for k in cls.model_fields if k not in computed}, **computed})

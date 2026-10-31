@@ -177,21 +177,26 @@ async def test_data_module_panels_and_check_now(client, project, fake_checks):
 
 
 async def test_daily_job_skips_recent_and_checks_due(client, project, fake_checks):
+    # Counted by this project's rows, not by fetches: the job also checks
+    # any other due projects in the local dev database.
     pid = uuid.UUID(project["id"])
+
+    async def rows():
+        async with AsyncSessionLocal() as db:
+            return list(await db.scalars(select(ProshoEvidence).where(ProshoEvidence.project_id == pid)))
+
     await source_checks.run_daily_checks()
-    assert len(fake_checks) == 2  # both sources of the one due project…
+    assert len(await rows()) == 2  # both sources of the due project…
     await source_checks.run_daily_checks()
-    assert len(fake_checks) == 2  # …and not again within 20 hours (second worker)
+    assert len(await rows()) == 2  # …and not again within 20 hours (second worker)
 
     async with AsyncSessionLocal() as db:
         await db.execute(update(ProshoEvidence).where(ProshoEvidence.project_id == pid)
                          .values(recorded_at=datetime.now(timezone.utc) - timedelta(hours=21)))
         await db.commit()
     await source_checks.run_daily_checks()
-    assert len(fake_checks) == 4
-    async with AsyncSessionLocal() as db:
-        rows = list(await db.scalars(select(ProshoEvidence).where(ProshoEvidence.project_id == pid)))
-    assert all(e.source == EvidenceSource.scheduler and e.key.startswith("source.") for e in rows)
+    assert len(await rows()) == 4
+    assert all(e.source == EvidenceSource.scheduler and e.key.startswith("source.") for e in await rows())
 
 
 async def test_check_now_needs_sources(client, make_user):

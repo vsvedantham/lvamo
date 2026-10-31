@@ -20,6 +20,9 @@ export default function ProshoShell({ children }: { children: ReactNode }) {
         </Link>
         {user && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
+            {user.role === 'admin' && (
+              <Link to="/prosho/admin" style={{ fontSize: '0.85rem', color: 'var(--text-2)' }}>Admin</Link>
+            )}
             {user.avatar_url && (
               <img src={user.avatar_url} alt="" width={28} height={28} style={{ borderRadius: '50%' }} />
             )}

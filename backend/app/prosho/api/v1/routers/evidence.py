@@ -15,7 +15,7 @@ from app.prosho.schemas.public import DataModule
 from app.prosho.services import claims_view, ingest_tokens
 from app.prosho.services import evidence as evidence_service
 from app.prosho.services.auth import get_current_user
-from app.prosho.services.project import get_owned
+from app.prosho.services.project import get_for_team, get_owned
 
 router = APIRouter(prefix="/projects/{project_id}")
 
@@ -41,12 +41,13 @@ async def revoke_token(project_id: uuid.UUID, token_id: uuid.UUID, user: ProshoU
 @router.get("/evidence", response_model=list[EvidenceResponse])
 async def evidence_history(project_id: uuid.UUID, key: str | None = None, limit: int = Query(default=50, ge=1, le=200),
                            user: ProshoUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    return await evidence_service.history(await get_owned(project_id, user, db), db, key=key, limit=limit)
+    project, _ = await get_for_team(project_id, user, db)
+    return await evidence_service.history(project, db, key=key, limit=limit)
 
 
 @router.get("/data-module", response_model=DataModule)
 async def data_module(project_id: uuid.UUID, user: ProshoUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    project = await get_owned(project_id, user, db)
+    project, _ = await get_for_team(project_id, user, db)
     return await data_science_page.build(project, await claims_view.active_claims(project, db), db)
 
 

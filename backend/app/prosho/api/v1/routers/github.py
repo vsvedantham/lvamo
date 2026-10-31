@@ -12,7 +12,8 @@ from app.prosho.services import claims_view
 from app.prosho.services import github_connect
 from app.prosho.services.auth import get_current_user
 from app.prosho.services.manifest_sync import sync_project
-from app.prosho.services.project import get_owned
+from app.prosho.services.project import get_for_team, get_owned
+from app.prosho.services.project_view import respond
 
 router = APIRouter(prefix="/projects/{project_id}")
 
@@ -26,24 +27,24 @@ async def available_repos(project_id: uuid.UUID, user: ProshoUser = Depends(get_
 @router.post("/github/connect", response_model=ProjectResponse)
 async def connect(project_id: uuid.UUID, body: ConnectRepo, user: ProshoUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     project = await get_owned(project_id, user, db)
-    return ProjectResponse.from_project(await github_connect.connect_repo(project, body.repo_id, user, db))
+    return await respond(await github_connect.connect_repo(project, body.repo_id, user, db), db)
 
 
 @router.delete("/github", response_model=ProjectResponse)
 async def disconnect(project_id: uuid.UUID, user: ProshoUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     project = await get_owned(project_id, user, db)
-    return ProjectResponse.from_project(await github_connect.disconnect_repo(project, user, db))
+    return await respond(await github_connect.disconnect_repo(project, user, db), db)
 
 
 @router.post("/sync", response_model=ProjectResponse)
 async def sync_now(project_id: uuid.UUID, user: ProshoUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     project = await get_owned(project_id, user, db)
-    return ProjectResponse.from_project(await sync_project(project, db, actor_id=user.id))
+    return await respond(await sync_project(project, db, actor_id=user.id), db)
 
 
 @router.get("/claims", response_model=list[ClaimResponse])
 async def list_claims(project_id: uuid.UUID, user: ProshoUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    project = await get_owned(project_id, user, db)
+    project, _ = await get_for_team(project_id, user, db)
     claims = await claims_service.list_claims(project, db)
     resolved = {c.key: c for c in await claims_view.resolve(project, claims, db)}
     return [ClaimResponse.model_validate(c).model_copy(update={

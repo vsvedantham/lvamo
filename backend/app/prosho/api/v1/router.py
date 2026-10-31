@@ -1,6 +1,8 @@
 from fastapi import APIRouter
 
-from app.prosho.api.v1.routers import auth, evidence, github, github_webhook, health, ingest, projects, public
+from app.prosho.api.v1.routers import (
+    admin, auth, evidence, github, github_webhook, health, ingest, projects, public, team,
+)
 
 router = APIRouter()
 router.include_router(health.router, tags=["prosho-health"])
@@ -11,3 +13,5 @@ router.include_router(github_webhook.router, tags=["prosho-github"])
 router.include_router(public.router, tags=["prosho-public"])
 router.include_router(evidence.router, tags=["prosho-evidence"])
 router.include_router(ingest.router, tags=["prosho-ingest"])
+router.include_router(team.router, tags=["prosho-team"])
+router.include_router(admin.router, tags=["prosho-admin"])

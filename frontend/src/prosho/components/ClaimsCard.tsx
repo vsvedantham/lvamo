@@ -36,11 +36,11 @@ export default function ClaimsCard({ project, claims, onChange }: { project: Pro
                       ? <> · latest <strong style={{ color: 'var(--text-1)' }}>{formatValue(c.latest_value, c.latest_unit)}</strong> ({timeAgo(c.latest_at)})</>
                       : ' · no evidence yet'}
                   </>
-                ) : 'Self-reported — you set the status'}
+                ) : project.access === 'owner' ? 'Self-reported — you set the status' : 'Self-reported by the student'}
               </p>
             </div>
-            {c.metric_key ? (
-              <span style={{ alignSelf: 'center' }}><StatusPill status={c.status} /></span>
+            {c.metric_key || project.access !== 'owner' ? (
+              <span style={{ alignSelf: 'center' }}><StatusPill status={c.status ?? c.manual_status} /></span>
             ) : (
               <select value={c.manual_status} onChange={e => update(c, e.target.value as ManualStatus)} aria-label={`Status of "${c.text}"`} style={{ width: 'auto', alignSelf: 'center' }}>
                 {(Object.keys(MANUAL_STATUS_LABEL) as ManualStatus[]).map(s => <option key={s} value={s}>{MANUAL_STATUS_LABEL[s]}</option>)}

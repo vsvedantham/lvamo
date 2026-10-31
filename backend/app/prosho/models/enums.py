@@ -53,3 +53,8 @@ class EvidenceSource(str, enum.Enum):
     webhook = "webhook"
     scheduler = "scheduler"  # LVAMO's own scheduled checks
     manual = "manual"
+
+
+class PageEvent(str, enum.Enum):
+    view = "view"            # the public page was opened
+    hub_click = "hub_click"  # the "Built with LVAMO ProSho" footer was clicked (§3 criterion 6)

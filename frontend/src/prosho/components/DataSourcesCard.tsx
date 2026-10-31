@@ -31,7 +31,9 @@ export function DataSourcesCard({ project }: { project: Project }) {
       ) : (
         <>
           <SourcesList sources={data.sources} />
-          <div style={{ marginTop: '0.9rem' }}><Button variant="secondary" onClick={check} disabled={busy}>{busy ? 'Checking…' : 'Check now'}</Button></div>
+          {project.access === 'owner' && (
+            <div style={{ marginTop: '0.9rem' }}><Button variant="secondary" onClick={check} disabled={busy}>{busy ? 'Checking…' : 'Check now'}</Button></div>
+          )}
         </>
       )}
     </Card>

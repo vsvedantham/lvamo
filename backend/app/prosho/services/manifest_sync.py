@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.prosho.models.prosho_claim import ProshoClaim
 from app.prosho.models.prosho_project import ProshoProject
-from app.prosho.services import audit, github
+from app.prosho.services import audit, github, timeline
 from app.prosho.services.manifest import MANIFEST_PATH, MAX_BYTES, TYPE_FROM_MANIFEST, ManifestV1, parse_manifest
 
 STORY_FIELDS = ("title", "summary", "problem", "project_type", "demo_kind", "demo_url", "module_config")
@@ -53,7 +53,9 @@ async def sync_project(
         token = await github.installation_token(project.github_installation_id)
         repo = await github.get_repo(token, project.repo_id)
         project.repo_full_name = repo["full_name"]
+        project.repo_private = bool(repo.get("private", True))
         sha = commit_sha or await github.get_branch_head_sha(token, repo["full_name"], repo["default_branch"])
+        await timeline.refresh(project, token, repo["full_name"], sha, db)
         raw = await github.get_file(token, repo["full_name"], MANIFEST_PATH, sha, MAX_BYTES)
     except github.GitHubError as e:
         project.manifest_errors = _error(e.message)

@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.prosho.models.enums import Visibility
 from app.prosho.models.prosho_project import ProshoProject
+from app.prosho.models.prosho_project_mentor import ProshoProjectMentor
 from app.prosho.models.prosho_user import ProshoUser
 from app.prosho.schemas.project import ProjectCreate, ProjectUpdate
 from app.prosho.services import audit
@@ -20,22 +22,61 @@ def _conflict(detail: str) -> HTTPException:
     return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
 
 
-async def list_projects(user: ProshoUser, db: AsyncSession) -> list[ProshoProject]:
-    rows = await db.scalars(
+# How the signed-in user relates to a project: its owner (the student) or
+# one of its assigned mentors (BETA_PLAN §5).
+Access = Literal["owner", "mentor"]
+
+
+def _not_found() -> HTTPException:
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+
+async def list_projects(user: ProshoUser, db: AsyncSession) -> list[tuple[ProshoProject, Access]]:
+    """The user's own projects, then the ones they mentor."""
+    owned = await db.scalars(
         select(ProshoProject)
         .where(ProshoProject.owner_id == user.id, ProshoProject.is_active.is_(True))
         .order_by(ProshoProject.created_at.desc())
     )
-    return list(rows)
+    mentored = await db.scalars(
+        select(ProshoProject)
+        .join(ProshoProjectMentor, ProshoProjectMentor.project_id == ProshoProject.id)
+        .where(ProshoProjectMentor.mentor_id == user.id, ProshoProject.is_active.is_(True))
+        .order_by(ProshoProject.created_at.desc())
+    )
+    return [(p, "owner") for p in owned] + [(p, "mentor") for p in mentored]
+
+
+async def is_mentor(project_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession) -> bool:
+    return (await db.scalar(select(ProshoProjectMentor.id).where(
+        ProshoProjectMentor.project_id == project_id, ProshoProjectMentor.mentor_id == user_id))) is not None
+
+
+async def has_mentor(project_id: uuid.UUID, db: AsyncSession) -> bool:
+    return (await db.scalar(select(ProshoProjectMentor.id).where(
+        ProshoProjectMentor.project_id == project_id).limit(1))) is not None
 
 
 async def get_owned(project_id: uuid.UUID, user: ProshoUser, db: AsyncSession) -> ProshoProject:
     """404 for missing, inactive or someone else's project — never 403, so
-    existence isn't leaked (CLAUDE.md API rules)."""
+    existence isn't leaked (CLAUDE.md API rules). A mentor gets 404 here too:
+    this is for changes only the student can make."""
     project = await db.get(ProshoProject, project_id)
     if not project or not project.is_active or project.owner_id != user.id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        raise _not_found()
     return project
+
+
+async def get_for_team(project_id: uuid.UUID, user: ProshoUser, db: AsyncSession) -> tuple[ProshoProject, Access]:
+    """The owner or an assigned mentor; 404 for anyone else."""
+    project = await db.get(ProshoProject, project_id)
+    if not project or not project.is_active:
+        raise _not_found()
+    if project.owner_id == user.id:
+        return project, "owner"
+    if await is_mentor(project.id, user.id, db):
+        return project, "mentor"
+    raise _not_found()
 
 
 async def _slug_taken(slug: str, db: AsyncSession, exclude: uuid.UUID | None = None) -> bool:

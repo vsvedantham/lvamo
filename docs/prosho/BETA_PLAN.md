@@ -7,7 +7,7 @@ that each promise was met, a live demo, and the work behind it.
 
 | | |
 |---|---|
-| Status | Planning — nothing built yet |
+| Status | Phases 0–3 built and verified locally (Phase 3: 2026-10-21); see [`PROGRESS_PROSHO.md`](../../PROGRESS_PROSHO.md) |
 | Plan written | 2026-10-11 |
 | Beta launch target | Mid-January 2027, before end-of-semester capstone presentations (assumed Feb 2027) |
 | First pilot | HeatRisk EU — MSc Data Science capstone, University of Europe for Applied Sciences (Potsdam) |
@@ -203,15 +203,15 @@ All tables carry `id UUID`, `created_at`, `updated_at` (the shared
 | Table | Key columns | Notes |
 |---|---|---|
 | `users` | `github_id` (unique), `github_login`, `name`, `email`, `avatar_url`, `role` (`student`/`mentor`/`admin`), `is_active` | Identity from GitHub sign-in (the GitHub App's user authorization flow) |
-| `projects` | `owner_id`, `slug` (unique), `title`, `summary`, `problem`, `project_type`, `university`, `programme`, `visibility` (`private`/`unlisted`/`public`), `supervisor_ok_at`, `repo_full_name`, `github_installation_id`, `demo_kind`, `demo_url`, `manifest_sha`, `manifest_synced_at`, `manifest_error`, `is_active`, `published_at` | `supervisor_ok_at` must be set before `public` (see §11) |
+| `projects` | `owner_id`, `slug` (unique), `title`, `summary`, `problem`, `project_type`, `university`, `programme`, `visibility` (`private`/`unlisted`/`public`), `supervisor_ok_at`, `repo_full_name`, `github_installation_id`, `repo_private` (from GitHub on each sync), `demo_kind`, `demo_url`, `manifest_sha`, `manifest_synced_at`, `manifest_error`, `is_active`, `published_at` | `supervisor_ok_at` must be set before `public` (see §11) |
 | `project_mentors` | `project_id`, `mentor_id` | Unique pair |
 | `claims` | `project_id`, `key` (from manifest), `text`, `metric_key`, `target_op`, `target_value`, `target_value_hi`, `manual_status`, `position` | Unique (`project_id`, `key`); upserted on manifest sync, removed claims soft-archived |
 | `evidence` | `project_id`, `claim_id` (nullable), `module`, `kind` (`metric`/`check`/`artifact`/`run`), `key`, `value_num`, `value_text`, `unit`, `payload` (JSONB), `r2_key`, `commit_sha`, `source` (`ci`/`webhook`/`scheduler`/`manual`), `recorded_at` | **Append-only** — history is the audit trail. Index (`project_id`, `key`, `recorded_at desc`). Idempotency: unique (`project_id`, `key`, `commit_sha`) when `commit_sha` is set |
 | `ingest_tokens` | `project_id`, `token_hash` (SHA-256), `label`, `last_used_at`, `revoked_at`, `created_by` | Token shown once; stored hashed |
-| `repo_events` | `project_id`, `commit_sha`, `message`, `author_login`, `committed_at` | From push webhooks — powers the work timeline |
-| `milestones` | `project_id`, `title`, `due_on`, `completed_at`, `reviewed_by`, `reviewed_at`, `position` | |
-| `feedback` | `project_id`, `author_id`, `claim_id`/`milestone_id` (nullable), `body`, `resolved_at` | Mentor ↔ student; never public in beta |
-| `page_view_daily` | `project_id`, `day`, `views`, `referrer_domain` | Aggregates only; no IPs, no cookies |
+| `repo_events` | `project_id`, `commit_sha`, `message` (first line), `author_login`, `committed_at` | Read from GitHub's commit list on every manifest sync (connect, Sync now, push webhook), so pushes of > 20 commits and pre-connect history are covered. Unique (`project_id`, `commit_sha`); cleared on disconnect. Weekly activity is always public; messages only when the repo is public |
+| `milestones` | `project_id`, `title`, `due_on`, `completed_at`, `reviewed_by`, `reviewed_at`, `position` | Student plans and completes; mentor reviews completed ones (renaming or reopening drops the review). Public page shows title, due, done, reviewed |
+| `feedback` | `project_id`, `author_id`, `parent_id` (one level of replies), `claim_id`/`milestone_id` (nullable), `body`, `resolved_at`, `resolved_by` | Mentor ↔ student threads; either side can start, reply, resolve; a reply reopens a resolved thread. Never public |
+| `page_stats_daily` | PK (`project_id`, `day`, `event`, `referrer_domain`), `count`; `event` = `view` / `hub_click` | Aggregates only; no IPs, no cookies. Domain only, never path/query. Hub clicks cover §3 criterion 6 |
 | `audit_logs` | `actor_id` (nullable for system), `action`, `entity`, `entity_id`, `before`, `after` (JSONB), `created_at` | Every write to projects/claims/visibility/tokens/mentors |
 
 Enums live in the `prosho` schema (declared with `schema="prosho"` on the
@@ -230,8 +230,9 @@ model, as Applaut's do).
 - `GET|PATCH /projects/{id}` — visibility, demo, university, supervisor confirmation
 - `POST /projects/{id}/github/connect` — link an installation + repo the user owns
 - `POST /projects/{id}/sync` — re-read `prosho.yaml` now
-- `GET|POST /projects/{id}/milestones`, `PATCH /milestones/{id}`
-- `GET|POST /projects/{id}/feedback`, `PATCH /feedback/{id}`
+- `GET|POST /projects/{id}/milestones`, `PATCH|DELETE /projects/{id}/milestones/{mid}`
+- `GET|POST /projects/{id}/feedback`, `PATCH /projects/{id}/feedback/{fid}` (`resolved`)
+- `GET /projects/{id}/timeline`, `GET /projects/{id}/stats?days=` (owner or mentor)
 - `GET|POST /projects/{id}/tokens`, `DELETE /tokens/{id}` (revoke)
 - `GET /projects/{id}/evidence?key=&limit=` — history for the dashboard
 
@@ -245,10 +246,10 @@ model, as Applaut's do).
 **Public (no auth)**
 - `GET /public/projects/{slug}` — 404 for private, unknown, or inactive
 - `GET /public/gallery?type=&cursor=` — public projects only
-- `POST /public/projects/{slug}/view` — increments the daily aggregate
+- `POST /public/projects/{slug}/events` — `{event: view|hub_click, referrer?}`; increments the daily aggregate; always 204 (nothing counted for private/unknown pages)
 
 **Admin**
-- `POST /admin/projects/{id}/mentors`, `PATCH /admin/users/{id}` (`is_active`, `role`), `GET /admin/audit`
+- `GET /admin/users`, `PATCH /admin/users/{id}` (`is_active`, `role`; not on yourself), `GET /admin/projects`, `PATCH /admin/projects/{id}` (`is_active`), `POST /admin/projects/{id}/mentors`, `DELETE /admin/projects/{id}/mentors/{mentor_id}`, `GET /admin/audit?limit=&before=`
 
 Ownership failures return 404 (platform rule). Rate limits on `/ingest/*`
 (per token) and `/public/*` (per IP, not stored).
@@ -261,7 +262,8 @@ Ownership failures return 404 (platform rule). Rate limits on `/ingest/*`
 | `/prosho/login` | "Continue with GitHub" | Everyone |
 | `/prosho/dashboard` | My projects (student) / mentored projects (mentor) | Signed in |
 | `/prosho/projects/new` | Create project → install GitHub App → pick repo | Student |
-| `/prosho/projects/:id` | Manage: sync status + manifest errors, visibility, demo, tokens + CI snippet, milestones, feedback, evidence history | Owner, mentor |
+| `/prosho/projects/:id` | Manage: sync status + manifest errors, visibility, demo, tokens + CI snippet, milestones, feedback, work timeline, page views, evidence history (mentors get a read-only view plus feedback and milestone review) | Owner, mentor |
+| `/prosho/admin` | Projects (assign/remove mentors, deactivate), people (role, deactivate), audit log | Admin |
 | `/prosho/:slug` | **The project page** (see the concept deck): header + type chip + "Mentored via LVAMO" badge, claims tracker, demo, module evidence panels, work timeline, "Built with LVAMO ProSho" footer linking to the hub | Visitors |
 
 Demo embedding: Streamlit apps load in an iframe (`?embed=true`) **below**
