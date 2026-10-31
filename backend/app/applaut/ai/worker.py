@@ -8,7 +8,7 @@ import logging
 
 from app.applaut.ai import queue
 from app.applaut.ai.handlers import HANDLERS, PermanentError, mark_failed
-from app.applaut.ai.provider import ModelError, Provider, get_provider
+from app.applaut.ai.provider import AnswerCutOff, ModelError, Provider, get_provider
 from app.applaut.models.ai_queue import AIQueueItem
 from app.config import settings
 from app.db.session import AsyncSessionLocal
@@ -30,7 +30,7 @@ async def run_once(provider: Provider | None = None) -> bool:
         error, retry = None, True
         try:
             usage = await handler(db, item, provider or get_provider())
-        except PermanentError as exc:
+        except (PermanentError, AnswerCutOff) as exc:
             error, retry = str(exc), False
         except ModelError as exc:
             error = str(exc)

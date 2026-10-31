@@ -18,6 +18,15 @@ PARAGRAPH_WORDS = (35, 160)
 LETTER_BODY_MAX_WORDS = 430  # the routine's one-page limit, whole body
 
 
+# The letter is the candidate speaking. A model told about "the candidate"
+# sometimes writes "In your recent role you built…"; "you" may only be the company.
+FIRST_PERSON_RE = re.compile(r"\b(I|I'm|I've|my|me)\b")
+ABOUT_CANDIDATE_AS_YOU_RE = re.compile(
+    r"\b(you|your)\s+(recent\s+|previous\s+|current\s+)?(established|engineered|owned|built|led|implemented|"
+    r"migrated|designed|developed|automated|maintained|managed|created|delivered|role at|experience|background|"
+    r"work on|work at|capability|skills)\b", re.I)
+
+
 def _numbers(text: str) -> set[str]:
     return set(NUM_RE.findall(text))
 
@@ -46,6 +55,9 @@ def check_written(written: dict, profile: dict, job_text: str) -> list[str]:
             errors.append(f"paragraph {i} has {words} words; use {PARAGRAPH_WORDS[0]}-{PARAGRAPH_WORDS[1]}")
         for n in sorted(_numbers(p) - allowed):
             errors.append(f"paragraph {i}: number '{n}' is not in the profile or the job posting - remove it")
+        if ABOUT_CANDIDATE_AS_YOU_RE.search(p) or not FIRST_PERSON_RE.search(p):
+            errors.append(f"paragraph {i} must be in the first person, as the candidate (I, my); "
+                          "'you'/'your' may only mean the company")
     return errors
 
 

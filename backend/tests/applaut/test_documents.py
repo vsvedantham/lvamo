@@ -166,6 +166,16 @@ def test_wrong_paragraph_count_and_length():
     assert any("paragraph 1 has 2 words" in e for e in errors)
 
 
+def test_letter_must_be_first_person():
+    w = copy.deepcopy(WRITTEN)
+    w["paragraphs"][1] = w["paragraphs"][1].replace("At Acme GmbH I rewrote", "In your role at Acme GmbH you rewrote").replace(
+        "I built", "You built")
+    errors = check_written(w, profile(), JOB.description)
+    assert errors == ["paragraph 2 must be in the first person, as the candidate (I, my); "
+                      "'you'/'your' may only mean the company"]
+    assert check_written(WRITTEN, profile(), JOB.description) == []  # "your team of 8" is the company
+
+
 # ---------------------------------------------------------------- letter + rendering
 
 def test_letter_code_parts():
@@ -186,6 +196,20 @@ def test_build_documents_renders_pdfs():
     assert WRITTEN["headline"] in docs.cv.text
     assert "Dear Hiring Team," in docs.cover_letter.text
     assert len(docs.cv.sha256) == 64
+
+
+def test_long_letter_loses_sentences_until_it_fits(monkeypatch):
+    """Under the word limit but still over a page (long words, long title): code
+    drops whole sentences instead of failing the job."""
+    from app.applaut.documents import render
+    monkeypatch.setattr(render, "LETTER_BODY_MAX_WORDS", 10_000)
+    w = copy.deepcopy(WRITTEN)
+    extra = " Spark performance engineering on Azure underpinned that responsibility for downstream analytics." * 10
+    w["paragraphs"] = [" ".join((p + extra).split()[:155]) + "." for p in w["paragraphs"]]
+    assert check_written(w, profile(), JOB.description) == []
+    docs = build_documents(profile(), JOB, w)
+    assert docs.cover_letter.pages == 1 and docs.sentences_dropped > 0
+    assert "I rewrote the Spark billing job" in docs.cover_letter.text  # the first sentences stay
 
 
 def test_long_profile_is_trimmed_to_two_pages():

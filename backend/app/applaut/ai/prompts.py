@@ -63,7 +63,7 @@ SCORE_SCHEMA = {
     "required": ["role_fit", "must_have", "nice_to_have", "german_required", "years_required",
                  "seniority", "contract", "work_mode", "flags"],
 }
-SCORE_MAX_TOKENS = 450
+SCORE_MAX_TOKENS = 1000  # Phase 0 answers: 300–630 tokens
 
 
 def score_system(profile: dict, target_roles: list[str]) -> str:
@@ -80,6 +80,7 @@ Rules:
 - years_required: minimum years of experience asked for, or null.
 - flags: up to 3 short things the candidate must check (e.g. "fixed-term contract", "security clearance", "on-call").
 - Postings may be in German; always answer in English.
+- Write the JSON on one line, without indentation.
 
 Candidate:
 {candidate_summary(profile)}"""
@@ -95,7 +96,7 @@ WRITE_SCHEMA = {
     },
     "required": ["headline", "paragraphs"],
 }
-WRITE_MAX_TOKENS = 700
+WRITE_MAX_TOKENS = 1000  # Phase 0 answers: 260–510 tokens
 
 
 def _facts(p: dict) -> str:
@@ -119,10 +120,11 @@ Hard rules:
 - Say nothing about the company that is not in the posting.
 - No filler, no generic enthusiasm ("I am eager", "I am excited"), no claims about how the candidate works that the facts do not state. Specific and true beats long.
 - headline: rewrite this default for THIS job, same style and length, naming the job's role family and 2-4 of the job's skills the candidate really has: "{profile['default_headline']}". Do not copy the default unchanged.
-- paragraph 1 (hook, 60-90 words): what the company does and the specific problem this role solves (from the posting), and why the candidate's background fits.
+- paragraph 1 (hook, 60-90 words): what the company does and the specific problem this role solves (from the posting), and why my background fits.
 - paragraph 2 (evidence, 80-120 words): the most relevant role's facts matched to the posting's must-haves, with their real numbers.
 - paragraph 3 (second angle, 50-90 words): another role or the project that fits a different part of the job.
-- English, first person, plain professional tone. No greeting, sign-off, availability, location or visa details (other code adds those).{f'''
+- Write AS the candidate, in the first person ("I built", "my work at"). "You"/"your" may only mean the company or the team, never the candidate.
+- English, plain professional tone. No greeting, sign-off, availability, location or visa details (other code adds those).{f'''
 - Style: {style}''' if style else ''}
 
 Candidate:

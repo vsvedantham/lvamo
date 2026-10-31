@@ -4,10 +4,11 @@ so both always look the same)."""
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from app.applaut.documents.fact_guard import LETTER_BODY_MAX_WORDS, check_cv_skills, check_written
+from app.applaut.documents.fact_guard import LETTER_BODY_MAX_WORDS, PARAGRAPH_WORDS, check_cv_skills, check_written
 from app.applaut.documents.letter import JobInfo, build_letter
 from app.applaut.documents.tailor import drop_one, job_skills, order_skill_rows, pick_entries
 
@@ -39,7 +40,23 @@ class DocumentSet:
     cv: Rendered
     cover_letter: Rendered
     bullets_dropped: int = 0
+    sentences_dropped: int = 0
     job_skills: list[str] = field(default_factory=list)
+
+
+SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z])")
+
+
+def _drop_sentence(paras: list[str]) -> bool:
+    """Drop the last sentence of the longest paragraph that keeps its minimum
+    length. What stays is still the model's checked text, so it stays true."""
+    for i in sorted(range(len(paras)), key=lambda k: -len(paras[k].split())):
+        sentences = SENTENCE_END.split(paras[i])
+        shorter = " ".join(sentences[:-1])
+        if len(sentences) > 1 and len(shorter.split()) >= PARAGRAPH_WORDS[0]:
+            paras[i] = shorter
+            return True
+    return False
 
 
 def render_pdf(template: str, ctx: dict, templates: Path = STANDARD_TEMPLATES) -> tuple[bytes, int]:
@@ -110,7 +127,13 @@ def build_documents(profile: dict, job: JobInfo, written: dict, skill_hints: lis
         raise DocumentError([f"the CV is {cv_pages} pages even with every role at its minimum bullets; "
                              "shorten the profile's bullets or lower cv_bullets"])
 
-    cl_pdf, cl_pages = render_pdf("cover_letter.html.j2", {"p": profile, "cl": cl})
+    trimmed = 0
+    while True:
+        cl_pdf, cl_pages = render_pdf("cover_letter.html.j2", {"p": profile, "cl": cl})
+        if cl_pages == 1 or not _drop_sentence(paras):
+            break
+        cl = build_letter(profile, job, paras)
+        trimmed += 1
     if cl_pages != 1:
         raise DocumentError([f"the cover letter is {cl_pages} pages; shorten paragraphs 1-3"])
 
@@ -118,6 +141,7 @@ def build_documents(profile: dict, job: JobInfo, written: dict, skill_hints: lis
         cv=Rendered(cv_pdf, cv_pages, _cv_text(ctx)),
         cover_letter=Rendered(cl_pdf, cl_pages, _letter_text(profile, cl)),
         bullets_dropped=dropped,
+        sentences_dropped=trimmed,
         job_skills=sorted(wanted),
     )
 

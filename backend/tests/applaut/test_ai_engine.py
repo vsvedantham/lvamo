@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import delete, func, select, update
 
 from app.applaut.ai import handlers, nightly, queue, scoring, worker
-from app.applaut.ai.provider import Completion, ModelError
+from app.applaut.ai.provider import AnswerCutOff, Completion, ModelError
 from app.applaut.discovery.base import JobListing
 from app.applaut.models.ai_queue import AIQueueItem, NightRun
 from app.applaut.models.engine_task import EngineTask
@@ -189,6 +189,17 @@ async def test_model_failure_retries_at_the_back_then_fails(ai_user, make_opport
         item = await db.scalar(select(AIQueueItem).where(AIQueueItem.assessment_id == third.id))
     assert item.status == "failed" and item.attempts == queue.MAX_ATTEMPTS
     assert (await _get(JobAssessment, third.id)).status == "failed"
+
+
+async def test_cut_off_answer_is_not_retried(ai_user, make_opportunity):
+    u, p = await ai_user()
+    a = await _raw(u, p, await _job(make_opportunity))
+    await _enqueue("score_job", a)
+    await worker.run_once(FakeModel(script=[AnswerCutOff("answer cut off at 1000 tokens")]))
+    async with AsyncSessionLocal() as db:
+        item = await db.scalar(select(AIQueueItem).where(AIQueueItem.assessment_id == a.id))
+    assert item.status == "failed" and item.attempts == 1
+    assert (await _get(JobAssessment, a.id)).status == "failed"
 
 
 async def test_no_master_profile_fails_without_retrying(ai_user, make_opportunity):

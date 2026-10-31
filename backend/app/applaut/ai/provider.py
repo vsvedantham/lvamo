@@ -15,6 +15,10 @@ class ModelError(RuntimeError):
     """The model call failed or returned something unusable."""
 
 
+class AnswerCutOff(ModelError):
+    """The answer hit max_tokens. The same prompt would be cut off again, so it isn't retried."""
+
+
 @dataclass
 class Completion:
     data: dict
@@ -54,6 +58,8 @@ class LlamaServerProvider:
         except Exception as exc:  # noqa: BLE001  (network, timeout, server error: all retryable)
             raise ModelError(f"model call failed: {type(exc).__name__}: {exc}") from exc
         text = resp.choices[0].message.content or ""
+        if resp.choices[0].finish_reason == "length":
+            raise AnswerCutOff(f"answer cut off at {max_tokens} tokens: {text[:200]!r}")
         try:
             data = json.loads(text)
         except json.JSONDecodeError as exc:
