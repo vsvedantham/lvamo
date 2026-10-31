@@ -364,11 +364,11 @@ same jobs are the reference.
 
 ### 10.1 Speed and capacity
 
-| Model (GGUF) | Prompt tok/s | Output tok/s | Score one job | Write one set |
-|---|---|---|---|---|
-| Qwen3.5-9B Q4_0 | 16.8 | 4.2–4.4 | 153 s avg | 145 s (250 s with a cold cache) |
-| Ministral-3-8B-Instruct Q4_K_M | 9.0 | 3.0–3.4 | 180–310 s | (see 10.3) |
-| Gemma-4-E4B q4_0 | (see 10.3) | | | |
+| Model (GGUF) | Prompt tok/s | Output tok/s | Score one job | Write one set | Peak memory |
+|---|---|---|---|---|---|
+| Qwen3.5-9B Q4_0 | 16.8 | 4.2–4.4 | 153 s avg | 145 s (250 s with a cold cache) | ~5 GB |
+| Ministral-3-8B-Instruct Q4_K_M | 8.8 | 2.8–3.4 | 261 s avg | 250–300 s (456 s cold) | 6.8 GB |
+| Gemma-4-E4B q4_0 (~4B active) | 29 | 7.1 | 97 s avg | 67–87 s (127 s cold) | 4.0 GB |
 
 - **Use Q4_0 files.** llama.cpp repacks Q4_0 weights for these ARM cores;
   Q4_K_M isn't repacked and reads prompts at about half the speed.
@@ -392,10 +392,22 @@ Capacity with the measured Qwen times (~2.5 min per item, 525 min a night,
 On a VM that runs only the model, 4 threads instead of 3 should be about a
 third faster (not measured).
 
-### 10.2 Scoring quality (Qwen3.5-9B)
+### 10.2 Scoring quality
 
-Compared with the routine on the 20 jobs: rank correlation 0.29, mean
-absolute difference 11.6 points, and the same side of 80 for 13 of 20 (65%).
+Compared with the routine on the 20 jobs (same prompt for all three, scored
+by `ai/scoring.py`'s rules):
+
+| Model | Rank correlation | Mean abs. difference | Same side of 80 | ≥ 80 only for the local model | Skill "matches" not in the profile |
+|---|---|---|---|---|---|
+| Qwen3.5-9B | 0.29 | 11.6 | 13/20 (65%) | 4 | 21 |
+| Ministral-3-8B | 0.32 | 14.2 | 11/20 (55%) | 2 | 16 |
+| Gemma-4-E4B | 0.11 | 10.7 | 10/20 (50%) | 7 | 37 |
+
+Ministral is too strict (it missed 7 of the routine's ≥ 80 jobs) and the
+slowest. Gemma is 1.6× faster than Qwen but generous: 7 jobs ≥ 80 that the
+routine put below, each of which would cost a document set, and nearly
+twice as many invented skill matches (code discards those, but they show
+it reads the profile loosely). **Qwen3.5-9B is the pick for scoring.**
 
 The first comparison was much worse (0.11, 55%) because of how code read
 the model's answer, not the model: it gave combined answers ("React,
@@ -412,5 +424,14 @@ the profile or the job. Two faults, both now in the prompt and the fact
 guard's feedback: it often copied the profile's headline unchanged, and it
 sometimes credited a fact from one role to another.
 
-Ministral and Gemma were still running when this was written; their numbers
-and the blind comparison against the routine's Opus paragraphs follow.
+Ministral-3-8B: 206–266 words, one unsupported number (`90`, caught by the
+fact guard). Gemma-4-E4B: 155–193 words, no unsupported numbers, but plainer:
+it lists the profile's facts without tying them to the job, where Qwen opens
+with what the role needs and closes each paragraph on why the fact matters
+for it. All three copied the profile headline unchanged in the benchmark
+(prompt since fixed).
+
+Provisional pick for writing: Qwen3.5-9B, the same model as scoring, so the
+model host loads one model. Waiting on Venkat's blind comparison of the five
+jobs (routine Opus vs the three local models) to confirm, or to fall back to
+the Claude API for writing (§8, Phase 0).
