@@ -116,9 +116,9 @@ async def run_nightly(today: date | None = None) -> NightRun | None:
             ))
             raws.sort(key=lambda r: -_pre_score(r[1], master, p.skills or []))
             n = 0
-            for a, _ in raws[:settings.applaut_ai_score_cap]:
+            for a, _ in (raws[:settings.applaut_ai_score_cap] if master else []):  # no master profile: they wait
                 n += await enqueue(db, "score_job", a, night.id)
-            stats[str(p.user_id)].update(queued=n, waiting=max(0, len(raws) - settings.applaut_ai_score_cap))
+            stats[str(p.user_id)].update(queued=n, waiting=len(raws) - n)
             queued += n
 
         night.users, night.jobs_found, night.jobs_queued, night.stats = len(profiles), len(listings), queued, stats

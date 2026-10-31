@@ -300,6 +300,7 @@ async def test_ensure_nightly_task_is_idempotent():
 async def test_nightly_creates_raw_jobs_and_queues_in_opt_in_order(ai_user, make_user, monkeypatch):
     first, first_p = await ai_user()
     second, second_p = await ai_user()
+    no_master, _ = await ai_user(master=False)  # its jobs wait until it has a master profile
     await make_user()  # a Basic user: no AI work
     listings = [JobListing(source=TEST_SOURCE, external_id=f"n{i}", title=t, company_name="Night GmbH",
                            application_url=f"https://example.invalid/{i}", location_raw="Berlin, Germany",
@@ -315,9 +316,10 @@ async def test_nightly_creates_raw_jobs_and_queues_in_opt_in_order(ai_user, make
     monkeypatch.setattr(settings, "applaut_ai_score_cap", 2)
 
     night = await nightly.run_nightly(today=date(1999, 1, 1))
-    assert night.users >= 2 and night.jobs_found == 4
+    assert night.users >= 3 and night.jobs_found == 4
     s = night.stats[str(first.id)]
     assert s == {"matched": 3, "new": 3, "queued": 2, "waiting": 1}
+    assert night.stats[str(no_master.id)] == {"matched": 3, "new": 3, "queued": 0, "waiting": 3}
     async with AsyncSessionLocal() as db:
         items = list(await db.scalars(select(AIQueueItem).where(AIQueueItem.night_run_id == night.id).order_by(AIQueueItem.seq)))
     owners = [i.user_id for i in items]

@@ -161,6 +161,20 @@ async def test_applaut_ai_not_selectable(client, make_user, routine_env):
     _, _, headers = await make_user()
     r = await client.put(API, json={"engine": "applaut_ai"}, headers=headers)
     assert r.status_code == 422
+    assert (await client.get(API, headers=headers)).json()["applaut_ai_available"] is False
+
+
+async def test_applaut_ai_for_allowlisted_users(client, make_user, routine_env, monkeypatch):
+    from app.config import settings
+    user, profile, headers = await make_user()
+    monkeypatch.setattr(settings, "applaut_ai_allowlist", f"someone@else.test, {user.email.upper()}")
+    monkeypatch.setattr(settings, "applaut_llm_base_url", "")
+    assert (await client.put(API, json={"engine": "applaut_ai"}, headers=headers)).status_code == 422  # no model yet
+    monkeypatch.setattr(settings, "applaut_llm_base_url", "http://llm:8080/v1")
+    assert (await client.get(API, headers=headers)).json()["applaut_ai_available"] is True
+    r = await client.put(API, json={"engine": "applaut_ai"}, headers=headers)
+    assert r.status_code == 200 and r.json()["engine"] == "applaut_ai"
+    assert [t for t in await _tasks(profile.id) if t.kind == "basic_discovery" and t.status == "pending"] == []
 
 
 async def test_remove_connection(client, make_user, fake_source, fake_r2, routine_env):

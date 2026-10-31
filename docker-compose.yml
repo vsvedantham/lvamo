@@ -38,6 +38,24 @@ services:
       - ./backend:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
+  # Applaut AI queue worker. Off by default (it would take queue items the
+  # tests create): `docker compose --profile ai up ai-worker`, with
+  # APPLAUT_LLM_BASE_URL in .env pointing at a llama-server.
+  ai-worker:
+    build:
+      context: ./backend
+    profiles: ["ai"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://lvamo:applaut_dev@postgres:5432/lvamo
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: python -m app.applaut.ai.worker
+
   frontend:
     build:
       context: ./frontend

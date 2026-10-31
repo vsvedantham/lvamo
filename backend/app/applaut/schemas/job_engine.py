@@ -199,6 +199,7 @@ class JobEngineResponse(BaseModel):
     credentials_storage_ready: bool
     connection: Optional[RoutineConnectionInfo] = None
     card: Optional[EngineCard] = None
+    applaut_ai_available: bool = False
 
 
 class SyncNowResponse(BaseModel):

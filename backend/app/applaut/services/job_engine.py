@@ -23,6 +23,7 @@ from app.applaut.schemas.job_engine import (
 )
 from app.applaut.services.audit import log_action
 from app.applaut.services.profile import get_active_profile
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +59,15 @@ async def _reschedule(profile: Profile, db: AsyncSession, reschedule: bool = Fal
 
 # ----------------------------------------------------------------------------- engine choice
 
+def applaut_ai_available(user: User) -> bool:
+    """Early access: the model serves a handful of users (APPLAUT_AI_ALLOWLIST)."""
+    allowed = {e.strip().lower() for e in settings.applaut_ai_allowlist.split(",") if e.strip()}
+    return bool(settings.applaut_llm_base_url) and user.email.lower() in allowed
+
+
 async def set_engine(user: User, engine: str, confirm_delete_credentials: bool, db: AsyncSession) -> Profile:
     profile = await get_active_profile(user, db)
-    if engine == "applaut_ai":
+    if engine == "applaut_ai" and not applaut_ai_available(user):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                             detail="Applaut AI isn't available yet")
     before = profile.job_engine
@@ -381,4 +388,5 @@ async def get_job_engine(user: User, db: AsyncSession) -> JobEngineResponse:
         engine=profile.job_engine, engine_changed_at=profile.job_engine_changed_at,
         credentials_storage_ready=credentials.is_configured(),
         connection=RoutineConnectionInfo.model_validate(conn) if conn else None, card=card,
+        applaut_ai_available=applaut_ai_available(user),
     )

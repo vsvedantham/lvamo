@@ -46,6 +46,24 @@ services:
       postgres:
         condition: service_healthy
 
+  # Applaut AI: the one process that feeds the model, one job at a time in
+  # queue order (backend/app/applaut/ai/worker.py). The model itself runs on
+  # the model host (model-host/), reached through APPLAUT_LLM_BASE_URL.
+  ai-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: always
+    logging: *logging
+    env_file:
+      - .env.production
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    command: python -m app.applaut.ai.worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   nginx:
     image: nginx:alpine
     restart: always

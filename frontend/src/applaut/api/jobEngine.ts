@@ -92,6 +92,7 @@ export interface JobEngineState {
   credentials_storage_ready: boolean
   connection: RoutineConnection | null
   card: EngineCard | null
+  applaut_ai_available: boolean
 }
 
 export interface ConnectionInput {

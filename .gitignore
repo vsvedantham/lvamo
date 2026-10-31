@@ -39,3 +39,7 @@ Thumbs.db
 
 # Local design source (1024px app-icon render of the LVAMO mark) — not shipped
 frontend/public/lvamo-logo-1024.png
+
+# Applaut AI model host: weights live only on the model VM
+model-host/models/
+*.gguf

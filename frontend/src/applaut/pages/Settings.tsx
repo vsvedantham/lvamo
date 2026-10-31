@@ -27,7 +27,7 @@ const pre: React.CSSProperties = {
 }
 
 const ENGINES: { id: JobEngine; badge: string; text: string; disabled?: boolean }[] = [
-  { id: 'applaut_ai', badge: 'Coming soon', text: "Applaut's AI searches German job sites, reads every new job against your profile and writes a tailored CV and cover letter. Nothing to set up.", disabled: true },
+  { id: 'applaut_ai', badge: 'Coming soon', text: "Applaut's AI searches company job boards every night at 22:00, reads every new job against your master profile and writes a tailored CV and cover letter for the best matches. Ready by morning.", disabled: true },
   { id: 'own_routine', badge: 'For IT professionals', text: 'Run the AI job search in your own Claude account. Applaut collects your jobs and documents an hour after each run, reading your Neon database and R2 bucket with read-only keys.' },
   { id: 'basic', badge: 'Ready now · free', text: 'Applaut searches company job boards for you and scores every job against your profile. Nothing to set up; turn automatic searching on or off on the dashboard.' },
 ]
@@ -455,7 +455,9 @@ export default function Settings() {
           <div style={card}>
             <h2 style={h2}>Job engine</h2>
             <div role="radiogroup" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
-              {ENGINES.map(e => {
+              {ENGINES.map(engine => {
+                const early = engine.id === 'applaut_ai' && state.applaut_ai_available
+                const e = early ? { ...engine, badge: 'Early access', disabled: false } : engine
                 const active = state.engine === e.id
                 return (
                   <button key={e.id} type="button" role="radio" aria-checked={active} disabled={e.disabled || switching !== null}
