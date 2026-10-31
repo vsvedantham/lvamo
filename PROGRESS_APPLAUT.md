@@ -64,6 +64,21 @@ Quick start for next session:
 
 ---
 
+## 2026-10-31: Applaut AI redesigned around an in-house model (design only)
+
+Engine 2 is now planned to run on a 7–8B model on `lvamo-backend`, capped
+at 3 cores, in a nightly 22:00 pipeline: code-only discovery for all users,
+then one FIFO AI queue for scoring (model extracts facts, code computes the
+score, ≥ 80 → documents) and document writing (code picks bullets, model
+writes headline + 3 cover-letter paragraphs, code renders PDFs). Two
+templates: the routine's standard one, or the user's own .docx turned into a
+template once. Full design, capacity estimates and build order:
+[`docs/applaut/APPLAUT_AI_ENGINE_DESIGN.md`](docs/applaut/APPLAUT_AI_ENGINE_DESIGN.md).
+**Nothing built.** Phase 0 (benchmark the model on the VM, blind-compare
+writing against Sonnet) comes first.
+
+---
+
 ## What Is Built and Working
 
 ### Auth

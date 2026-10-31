@@ -150,6 +150,11 @@ matches.
 
 ## 5. Engine 2 — Applaut AI (summary; detailed design later)
 
+> **Superseded 2026-10-31** by [`APPLAUT_AI_ENGINE_DESIGN.md`](APPLAUT_AI_ENGINE_DESIGN.md):
+> engine 2 now runs on an in-house model on our VM in a nightly pipeline, not
+> on the Claude API, so there are no per-user AI costs and no credits (§7.4).
+> The summary below is kept for history.
+
 Built after engine 3. Plain code does everything that doesn't need judgment;
 AI is used only where it adds value.
 
