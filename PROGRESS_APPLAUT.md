@@ -74,8 +74,32 @@ writes headline + 3 cover-letter paragraphs, code renders PDFs). Two
 templates: the routine's standard one, or the user's own .docx turned into a
 template once. Full design, capacity estimates and build order:
 [`docs/applaut/APPLAUT_AI_ENGINE_DESIGN.md`](docs/applaut/APPLAUT_AI_ENGINE_DESIGN.md).
-**Nothing built.** Phase 0 (benchmark the model on the VM, blind-compare
-writing against Sonnet) comes first.
+
+**Built since, on branch `applaut-ai-local` only (not merged, not deployed).**
+It waits for a second Oracle VM, owned by a partner, to run the model; until
+then nothing goes to `main` or prod.
+- Phase 0: Qwen3.5-9B Q4_0 measured on `lvamo-backend` in a separate
+  `llm-bench` container (cores 1–3). ~2.5 min per scoring item or document
+  set; prod API latency unaffected. Results in the design doc §10; Ministral
+  and Gemma runs still being compared.
+- Phase 1: master profile (`applaut.master_profiles`, Settings → Master
+  profile YAML editor with PDF previews), document engine in
+  `backend/app/applaut/documents/` (bullet picker, fact guard, code-written
+  letter parts, WeasyPrint rendering with the routine's templates, 2-page CV
+  / 1-page letter fit).
+- Phase 2: `applaut.ai_queue` (FIFO by `seq`, retries to the back, 3 tries),
+  `applaut.night_runs`, migration `0030`; `ai/worker.py` (`ai-worker`
+  compose service), `score_job` (model extracts facts, `ai/scoring.py`
+  scores) and `write_docs` handlers; `applaut_ai_nightly` engine task at
+  22:00 Europe/Berlin. Basic keeps its own schedule for now.
+- `model-host/`: compose file and setup notes for the model VM (llama-server
+  on a WireGuard address with an API key).
+- Early access: Applaut AI is selectable in Settings only for emails in
+  `APPLAUT_AI_ALLOWLIST`, and only when `APPLAUT_LLM_BASE_URL` is set.
+- Backend tests: 205 pass locally (`test_documents.py`,
+  `test_master_profile_api.py`, `test_ai_engine.py`).
+- Before real users' data goes to the partner's VM: a processing agreement
+  and a privacy-notice line (model-host/README.md).
 
 ---
 

@@ -48,15 +48,18 @@ only ever produces text in fixed slots. Two layout options (§7):
   │
   └─ Stage 3  DOCUMENTS
        model, FIFO queue: write headline + cover-letter paragraphs (JSON)
-       code, parallel:    pick bullets, render PDFs, check, upload to R2
+       code, same worker: pick bullets, render PDFs, check, upload to R2
+                          (rendering takes ~0.2 s a set, so no render workers)
        → docs_status = done, generated_documents rows
 07:00  users log in: everything ready
 ```
 
-**Which users:** every active Applaut user with `job_engine` `basic` or
-`applaut_ai` gets Stage 1 (code only, free). Stages 2–3 run only for
-`applaut_ai` users. `own_routine` users are skipped; their routine finds
-their jobs.
+**Which users:** the 22:00 run covers active `applaut_ai` users only.
+Basic users keep their own 6/12/24-hour discovery for now (built
+2026-10-31: changing live Basic behaviour can wait until Applaut AI has run
+for a while; §9.2). `own_routine` users are skipped; their routine finds
+their jobs. An Applaut AI user without a master profile gets raw jobs but no
+scoring until they add one.
 
 **Order in the queue:** all scoring items are queued as soon as Stage 1
 finishes. A user's document items are queued as each of their jobs scores
@@ -71,18 +74,19 @@ documents. Users are queued in the order they turned Applaut AI on
 
 | | |
 |---|---|
-| Runtime | `llama.cpp` server (`llama-server`), ARM64 image, new compose service `llm` |
+| Runtime | `llama.cpp` server (`llama-server`), ARM64 image pinned by digest. Planned on its own VM (`model-host/`, reached over WireGuard); the app VM runs only the `ai-worker` that calls it |
 | Limits | `cpuset: "1-3"` (core 0 stays free for API/Postgres/nginx), `--threads 3`, `--parallel 1` (one request at a time), `mem_limit: 8g` |
 | Model | One 7–8B instruct model, 4-bit (~5 GB). Candidates for Phase 0: Qwen 2.5/3 7–8B, Llama 3.1 8B, Mistral-class 7–8B. Prefer an Apache-2.0 licence. Must handle English **and German** job descriptions |
-| Network | Internal Docker network only; no port published to the host |
+| Network | Published only on the model VM's WireGuard address, with `--api-key`; nothing open to the internet (`model-host/README.md`) |
 | API | OpenAI-compatible (`/v1/chat/completions`), so it plugs into `core/ai.py`'s client with a `base_url`. Behind a provider interface (principle 7), so a Claude provider can replace it per task later |
 | Output | JSON constrained by a JSON schema (`response_format`), so a small model can't return broken JSON |
 | Speed trick | Prompt order is fixed instructions → the user's profile → the job. The server reuses the cached prefix, so for each job only the job's own tokens are processed |
 
-### 3.1 Capacity (estimates; Phase 0 measures the real numbers)
+### 3.1 Capacity
 
-Assumed with 3 cores, 4-bit 7–8B: ~15 tokens/s reading the prompt, ~4
-tokens/s writing.
+The estimates below were written before Phase 0; the measured numbers are in
+§10.1, and they are about 1.5× slower per scoring item. Assumed with 3 cores,
+4-bit 7–8B: ~15 tokens/s reading the prompt, ~4 tokens/s writing.
 
 | Queue item | New prompt tokens | Output tokens | Time |
 |---|---|---|---|
@@ -259,8 +263,10 @@ can tailor without the model.
 ### 7.2 Option 1 — Standard template
 
 The routine's `cv.html.j2` and `cover_letter.html.j2` with their fonts
-(Carlito, Roboto), moved from `routine/setup_kit/templates/` to a shared
-`generation/templates/standard/` that both the setup kit and the engine read.
+(Carlito, Roboto). The engine reads them where they are, in
+`routine/setup_kit/templates/` (the plan was to move them to a shared
+`generation/` folder; reading them in place keeps one copy without moving
+files the setup kit ships). The engine's code is `applaut/documents/`.
 WeasyPrint is added to the backend image (needs Pango on the slim base). For
 Venkat, Phase 1 checks that Applaut renders **the same PDF** as his routine
 from the same content.
@@ -324,8 +330,10 @@ production, record in `PROGRESS_APPLAUT.md`.
 Assumed (smallest reasonable choice; say if any is wrong):
 
 1. **22:00 is Europe/Berlin time** (DST handled), the same for every user.
-2. **The nightly 22:00 discovery replaces Basic's 6/12/24-hour setting**:
-   one schedule for everyone. Basic users keep the manual "Run discovery".
+2. **Basic keeps its 6/12/24-hour setting for now.** The plan was for the
+   22:00 discovery to replace it (one schedule for everyone); the build
+   leaves live Basic behaviour alone until Applaut AI has run for a while.
+   Moving Basic over is then one change in `nightly._profiles`.
 3. **Users are queued in the order they turned Applaut AI on.** The same
    early users are always first; if that becomes unfair, rotate the start
    user each night (a one-line change).
@@ -342,3 +350,67 @@ To decide after Phase 0:
 
 6. **Local or API for writing**, from the blind comparison (§8, Phase 0).
 7. **Admission cap** on Applaut AI users, from measured times (§3.1).
+
+---
+
+## 10. Phase 0 results (2026-10-31)
+
+Run on `lvamo-backend` itself (Ampere A1, Neoverse-N1 cores: dot-product
+instructions, no i8mm) in a separate `llm-bench` container limited to
+cores 1–3 and 8 GB, with prod running next to it. Inputs: Venkat's master
+profile, 20 real jobs from prod for scoring (German and English postings),
+5 jobs ≥ 80 for writing. The routine's Opus scores and paragraphs for the
+same jobs are the reference.
+
+### 10.1 Speed and capacity
+
+| Model (GGUF) | Prompt tok/s | Output tok/s | Score one job | Write one set |
+|---|---|---|---|---|
+| Qwen3.5-9B Q4_0 | 16.8 | 4.2–4.4 | 153 s avg | 145 s (250 s with a cold cache) |
+| Ministral-3-8B-Instruct Q4_K_M | 9.0 | 3.0–3.4 | 180–310 s | (see 10.3) |
+| Gemma-4-E4B q4_0 | (see 10.3) | | | |
+
+- **Use Q4_0 files.** llama.cpp repacks Q4_0 weights for these ARM cores;
+  Q4_K_M isn't repacked and reads prompts at about half the speed.
+- **Scoring writes ~400 output tokens, not ~150.** The facts JSON is longer
+  than estimated, and output is the slow part (~95 s of the 153 s). Shorter
+  field names and fewer listed requirements are the first thing to tune.
+- **`--cache-ram 0`.** The default 8 GB prompt cache got the server
+  OOM-killed at the 8 GB memory limit. With it off the server holds ~5 GB.
+  The per-request prefix reuse (`cache_prompt`) still works.
+- **Prod was unaffected:** API median latency 42 ms during the run vs 37 ms
+  before, worst 134 ms.
+
+Capacity with the measured Qwen times (~2.5 min per item, 525 min a night,
+3 cores):
+
+| | Items | Model time per user | Users per night |
+|---|---|---|---|
+| A user's first night (40 scored, ~8 doc sets) | 48 | ~120 min | **~4** |
+| A normal night (~12 scored, ~3 doc sets) | 15 | ~38 min | **~14** |
+
+On a VM that runs only the model, 4 threads instead of 3 should be about a
+third faster (not measured).
+
+### 10.2 Scoring quality (Qwen3.5-9B)
+
+Compared with the routine on the 20 jobs: rank correlation 0.29, mean
+absolute difference 11.6 points, and the same side of 80 for 13 of 20 (65%).
+
+The first comparison was much worse (0.11, 55%) because of how code read
+the model's answer, not the model: it gave combined answers ("React,
+TypeScript") for one requirement, and listed spoken languages as skills.
+`ai/scoring.py` now accepts any real profile skill in a combined answer and
+leaves languages to the German rule. One real model error remains: it read
+"Deutsch- oder Englischkenntnisse" (German *or* English) as German C1; the
+prompt now says so explicitly.
+
+### 10.3 Writing quality
+
+Qwen3.5-9B: 226–275 words for the three paragraphs, no number that isn't in
+the profile or the job. Two faults, both now in the prompt and the fact
+guard's feedback: it often copied the profile's headline unchanged, and it
+sometimes credited a fact from one role to another.
+
+Ministral and Gemma were still running when this was written; their numbers
+and the blind comparison against the routine's Opus paragraphs follow.
