@@ -11,20 +11,12 @@
 **Phase 3 (work over time) is live (2026-10-31, `35a41b8`, migration
 `0028`).** Signed-in checks are still open. Next:
 
-1. **Make the founder admin in prod, then finish the signed-in checks.**
-   Claude's attempt was blocked by its permission check (it grants admin),
-   so the founder runs it, or tells Claude to:
-   ```sql
-   BEGIN;
-   INSERT INTO prosho.audit_logs (actor_id, action, entity, entity_id, before, after)
-   SELECT NULL, 'user.update', 'user', id, jsonb_build_object('role', role::text), '{"role":"admin"}'
-   FROM prosho.users WHERE github_login = 'vsvedantham' AND role <> 'admin';
-   UPDATE prosho.users SET role = 'admin' WHERE github_login = 'vsvedantham';
-   COMMIT;
-   ```
-   Then (signed in on www.lvamo.com): "Admin" link shows; `/prosho/admin`
-   lists users, projects, audit; add a milestone on `testproj1`. Mentor
-   flows need a second account (the HeatRisk student, once invited).
+1. **Finish the signed-in checks.** The founder (`vsvedantham`) was made
+   admin in prod on 2026-10-31 (one-off SQL, approved by the founder; audit
+   row `user.update` with `actor_id` NULL, `student → admin`). Still to
+   do, signed in on www.lvamo.com: "Admin" link shows; `/prosho/admin`
+   lists users, projects and the audit log; add a milestone on `testproj1`.
+   Mentor flows need a second account (the HeatRisk student, once invited).
 2. **Founder dry run on `testproj1`** — install the App on a scratch repo,
    add `prosho.yaml`, push → webhook sync + commit timeline; create a CI
    token and run the Actions step once. Deferred by the founder on
