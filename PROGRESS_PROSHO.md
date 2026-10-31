@@ -8,12 +8,13 @@
 
 ## 🎯 NEXT SESSION PRIMARY TASK
 
-**Pilot-ready slice built locally (2026-10-31), not deployed yet:**
-deletion, rate limits, privacy notice, setup guide, log rotation
-(migration `0029`). Before deploying: **create `privacy@lvamo.com` in Zoho
-Mail** (lvamo.com MX is Zoho; the notice and guide name that address), then
-deploy and verify (section "Pilot-ready slice" below). Phase 3 is live
-(2026-10-31, `35a41b8`, migration `0028`). Then:
+**Pilot-ready slice is live (2026-10-31, `9b93650`, migration `0029`):**
+deletion, rate limits, privacy notice, setup guide, log rotation. Open:
+confirm `privacy@lvamo.com` receives mail (founder set it up in Zoho;
+not tested by me); a signed-in delete in prod (e.g. a throwaway project
+on `testproj1`'s account); delete pre-upgrade dumps older than 30 days
+(`lvamo-pre-rename-20261011.dump` due 2026-11-10 — whole-DB dumps, agree
+with the founder). Phase 3 is live (`35a41b8`, `0028`). Then:
 
 1. **Signed-in checks — mostly done (2026-10-31).** The founder
    (`vsvedantham`) was made admin in prod (one-off SQL approved by the
@@ -58,7 +59,25 @@ founder's own browser): `/auth/exchange` and `/auth/me` 200;
 **Not verified yet:** a write (milestone) in prod, the mentor view and
 feedback (need a second account), a timeline from a real repo — see banner.
 
-### Pilot-ready slice — what was built (2026-10-31, local)
+### Pilot-ready slice — what was built (2026-10-31, live)
+
+**Verified in production (2026-10-31):** backup
+`/home/ubuntu/backups/prosho-pre-0029-20261031.dump` (600 KB, 32 data
+tables) taken first; `deploy.sh` (run as `bash deploy.sh` — the file isn't
+executable) ran `0028 → 0029`, recreated all three containers;
+`alembic_version` = `0029`, 12 `prosho` tables. ProSho, Applaut, Jobref
+health and platform settings 200. Without a token `DELETE /projects/{id}`
+and `DELETE /auth/me` → 401; ingest with a bad token 401; events on an
+unknown slug 204. Rate limit: 300 parallel requests to a public page with a
+*spoofed* `X-Real-IP` each → 214 × 404 then 86 × 429 (`Retry-After: 60`),
+so nginx's header wins and the 2-worker ceiling holds. All containers log
+`json-file` `max-size 20m` / `max-file 5`; the old 70 MB nginx log went with
+the old container (new one 128 KB). Pages bundle `index-qYIVmipk.js`
+serves `/prosho/privacy`, `/prosho/help`, the landing links and the
+"Privacy" footer link (private `testproj1` → not-found page). No backend
+5xx, no console errors.
+**Not verified yet:** deleting a project or account signed in, in prod
+(done locally in the browser and in tests).
 
 Everything a pilot student needs before their data goes in. 164 backend
 tests pass (99 ProSho, 7 new); `npm run build` clean; checked in the
@@ -468,7 +487,8 @@ first API call is the check.
   creates it in Zoho; my Cloudflare token can't manage mail and MX is
   Zoho anyway); rotate logs to ~30 days; add `/prosho/help` and
   `/prosho/privacy` routes in `App.tsx`.
-- Built and tested locally (section above). Not committed or deployed yet.
+- Built and tested locally, committed (`9b93650`), deployed and verified
+  in prod (section above).
 
 ### 2026-10-21 — Phase 3 built (local)
 - Closed the 2026-10-17 loose ends first (entry below).
