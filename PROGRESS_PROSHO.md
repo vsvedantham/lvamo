@@ -11,12 +11,12 @@
 **Phase 3 (work over time) is live (2026-10-31, `35a41b8`, migration
 `0028`).** Signed-in checks are still open. Next:
 
-1. **Finish the signed-in checks.** The founder (`vsvedantham`) was made
-   admin in prod on 2026-10-31 (one-off SQL, approved by the founder; audit
-   row `user.update` with `actor_id` NULL, `student → admin`). Still to
-   do, signed in on www.lvamo.com: "Admin" link shows; `/prosho/admin`
-   lists users, projects and the audit log; add a milestone on `testproj1`.
-   Mentor flows need a second account (the HeatRisk student, once invited).
+1. **Signed-in checks — mostly done (2026-10-31).** The founder
+   (`vsvedantham`) was made admin in prod (one-off SQL approved by the
+   founder; audit row `user.update`, `actor_id` NULL, `student → admin`)
+   and signed in. Still open: a *write* in prod (add a milestone on
+   `testproj1`, then delete it), and the mentor view + feedback, which
+   need a second account (the HeatRisk student, once invited).
 2. **Founder dry run on `testproj1`** — install the App on a scratch repo,
    add `prosho.yaml`, push → webhook sync + commit timeline; create a CI
    token and run the Actions step once. Deferred by the founder on
@@ -46,8 +46,13 @@ unknown slug 204, private `testproj1` 204 **and not counted** (0 rows),
 bad event 422, CORS preflight from `www.lvamo.com` 200. Pages bundle
 `index-OGevNCdq.js` has the Phase 3 code; `/prosho/admin` signed out →
 login page; unknown slug → not-found page.
-**Not verified yet:** anything signed in (admin page, milestones,
-feedback, mentor view, timeline from a real repo) — see banner.
+Signed in as the founder (verified from the prod access log, the
+founder's own browser): `/auth/exchange` and `/auth/me` 200;
+`/admin/users`, `/admin/projects`, `/admin/audit` 200 as admin; the
+`testproj1` manage page loaded `milestones`, `feedback`, `stats`,
+`data-module`, `evidence`, `tokens` — all 200, no 5xx.
+**Not verified yet:** a write (milestone) in prod, the mentor view and
+feedback (need a second account), a timeline from a real repo — see banner.
 
 ### Phase 3 — what was built
 
