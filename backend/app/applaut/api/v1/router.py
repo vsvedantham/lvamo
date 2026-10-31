@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.applaut.api.v1.routers import applications, audit, auth, documents, health, job_engine, notifications, opportunity, profile, resume, scheduler, scoring, settings, stats
+from app.applaut.api.v1.routers import applications, audit, auth, documents, health, job_engine, master_profile, notifications, opportunity, profile, resume, scheduler, scoring, settings, stats
 
 router = APIRouter()
 router.include_router(health.router, tags=["health"])
@@ -17,3 +17,4 @@ router.include_router(scheduler.router, tags=["scheduler"])
 router.include_router(notifications.router, tags=["notifications"])
 router.include_router(audit.router, tags=["audit"])
 router.include_router(job_engine.router, tags=["job-engine"])
+router.include_router(master_profile.router, tags=["master-profile"])

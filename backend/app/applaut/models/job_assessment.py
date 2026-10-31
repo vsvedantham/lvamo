@@ -57,3 +57,7 @@ class JobAssessment(Base, UUIDPrimaryKey, TimestampMixin):
         DateTime(timezone=True), server_default=sa.func.now(), nullable=False
     )
     times_seen: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Applaut AI's nightly pipeline: raw (found, not yet scored) -> scored | failed;
+    # docs_status 'pending' = score >= 80 and documents not written yet.
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="scored")
+    docs_status: Mapped[str] = mapped_column(String(20), nullable=False, default="not_needed")
