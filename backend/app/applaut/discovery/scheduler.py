@@ -7,7 +7,9 @@ in exactly one worker, every worker sees the same schedule, and the schedule
 survives restarts (docs/applaut/JOB_ENGINES_DESIGN.md §3.3).
 
 Task kinds: Applaut Basic's discovery run for a profile, and engine 3's
-status checks and syncs (routine/schedule.py); engine 2 runs come later.
+status checks and syncs (routine/schedule.py), and Applaut AI's one nightly
+run at 22:00 Berlin (ai/nightly.py; its model work then goes through the
+ai-worker's own FIFO queue, ai/queue.py).
 """
 import asyncio
 import logging
@@ -249,15 +251,27 @@ async def _run_routine_sync(task: EngineTask) -> None:
         logger.info("Routine sync for user %s already running elsewhere; skipping", task.user_id)
 
 
+async def _run_ai_nightly(task: EngineTask) -> None:
+    from app.applaut.ai.nightly import run_nightly_task
+    await run_nightly_task(task)
+
+
+async def _after_ai_nightly(task: EngineTask, db: AsyncSession) -> None:
+    from app.applaut.ai.nightly import after_nightly
+    await after_nightly(task, db)
+
+
 _HANDLERS: dict[str, Callable[[EngineTask], Awaitable[None]]] = {
     KIND_BASIC_DISCOVERY: _run_basic_discovery,
     "routine_check": _run_routine_check,
     "routine_sync": _run_routine_sync,
+    "applaut_ai_nightly": _run_ai_nightly,
 }
 # Runs after a task is closed (done or finally failed), e.g. to queue the next run.
 _FOLLOW_UPS: dict[str, Callable[[EngineTask, AsyncSession], Awaitable[None]]] = {
     KIND_BASIC_DISCOVERY: _after_basic_discovery,
     "routine_check": _after_routine_check,
+    "applaut_ai_nightly": _after_ai_nightly,
 }
 
 
@@ -341,12 +355,14 @@ def kick_dispatcher() -> None:
 async def _bootstrap() -> None:
     """Bring the queue in line with every active profile (idempotent, so every
     worker can run it at startup)."""
+    from app.applaut.ai.nightly import ensure_nightly_task
     from app.applaut.routine.schedule import ensure_routine_tasks
     async with AsyncSessionLocal() as db:
         profile_ids = list(await db.scalars(select(Profile.id).where(Profile.is_active == True)))
         for profile_id in profile_ids:
             await sync_discovery_task(profile_id, db)
             await ensure_routine_tasks(profile_id, db)
+        await ensure_nightly_task(db)
 
 
 def start_scheduler() -> None:

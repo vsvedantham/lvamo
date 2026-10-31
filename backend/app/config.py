@@ -34,6 +34,18 @@ class Settings(BaseSettings):
     # AI providers
     openai_api_key: str = ""
 
+    # Applaut AI — the in-house model (docs/applaut/APPLAUT_AI_ENGINE_DESIGN.md).
+    # An OpenAI-compatible llama.cpp server; empty = the engine's AI steps don't run.
+    applaut_llm_base_url: str = ""          # e.g. http://llm:8080/v1, or the model host over a private tunnel
+    applaut_llm_api_key: str = ""           # llama-server --api-key, when the model runs on another machine
+    applaut_llm_model: str = "local"        # recorded on every assessment and document
+    applaut_llm_timeout_seconds: int = 900
+    applaut_ai_doc_threshold: int = 80      # match score from which documents are written
+    applaut_ai_score_cap: int = 40          # most jobs the model scores per user per night
+    applaut_nightly_hour: int = 22          # Europe/Berlin
+    # Comma-separated emails allowed to choose Applaut AI (capacity, §3.1). Empty = nobody.
+    applaut_ai_allowlist: str = ""
+
     # Google OAuth
     google_client_id: str = ""
     google_client_secret: str = ""

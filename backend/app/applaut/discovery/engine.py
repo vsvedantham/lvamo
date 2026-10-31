@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.applaut.discovery.base import JobListing
 from app.applaut.discovery.companies import COMPANY_BOARDS
 from app.applaut.models.opportunity import Opportunity
 from app.applaut.models.profile import Profile
@@ -19,18 +20,9 @@ logger = logging.getLogger(__name__)
 DISCOVERY_CONCURRENCY = int(os.environ.get("DISCOVERY_CONCURRENCY", "20"))
 
 
-async def run_discovery_for_profile(profile: Profile, db: AsyncSession) -> int:
-    """
-    Runs discovery for all company boards, filters against the profile's
-    target countries and roles, and upserts new opportunities.
-    Returns the count of newly inserted opportunities.
-    """
-    target_countries = profile.target_countries or []
-    target_roles = profile.target_roles or []
-
-    if not target_countries or not target_roles:
-        return 0
-
+async def fetch_listings(target_countries: list[str], target_roles: list[str]) -> list[JobListing]:
+    """Fetch every company board once, keeping postings that match any of the
+    given countries and roles. Board errors are logged and skipped."""
     # Fetch from all boards concurrently, capped so we don't hammer any
     # single ATS host when COMPANY_BOARDS is large.
     semaphore = asyncio.Semaphore(DISCOVERY_CONCURRENCY)
@@ -48,7 +40,27 @@ async def run_discovery_for_profile(profile: Profile, db: AsyncSession) -> int:
             logger.warning("Discovery adapter error: %s", result)
             continue
         listings.extend(result)
+    return listings
 
+
+async def run_discovery_for_profile(profile: Profile, db: AsyncSession) -> int:
+    """
+    Runs discovery for all company boards, filters against the profile's
+    target countries and roles, and upserts new opportunities.
+    Returns the count of newly inserted opportunities.
+    """
+    target_countries = profile.target_countries or []
+    target_roles = profile.target_roles or []
+
+    if not target_countries or not target_roles:
+        return 0
+
+    listings = await fetch_listings(target_countries, target_roles)
+    return await store_listings(listings, db)
+
+
+async def store_listings(listings: list[JobListing], db: AsyncSession) -> int:
+    """Insert postings not yet in Basic's shared pool. Returns how many were new."""
     if not listings:
         return 0
 
