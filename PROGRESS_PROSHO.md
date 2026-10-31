@@ -8,18 +8,23 @@
 
 ## 🎯 NEXT SESSION PRIMARY TASK
 
-**Phase 3 (work over time) is built and verified locally (2026-10-21), not
-yet deployed or committed.** Next:
+**Phase 3 (work over time) is live (2026-10-31, `35a41b8`, migration
+`0028`).** Signed-in checks are still open. Next:
 
-1. **Deploy Phase 3** (migration `0028`), then in prod:
-   - make the founder admin (one-off, audited):
-     `UPDATE prosho.users SET role='admin' WHERE github_login='vsvedantham'`
-     plus a `user.update` audit row with `actor_id` NULL;
-   - verify: `/admin/*` 403 for a non-admin; admin page loads; assign a
-     mentor to a throwaway project, mentor sees it read-only; milestone
-     review; feedback thread; `/public/projects/{slug}/events` 204 and
-     counted only for unlisted/public; timeline from a real repo (the
-     founder's dry run below covers it). Delete throwaway data afterwards.
+1. **Make the founder admin in prod, then finish the signed-in checks.**
+   Claude's attempt was blocked by its permission check (it grants admin),
+   so the founder runs it, or tells Claude to:
+   ```sql
+   BEGIN;
+   INSERT INTO prosho.audit_logs (actor_id, action, entity, entity_id, before, after)
+   SELECT NULL, 'user.update', 'user', id, jsonb_build_object('role', role::text), '{"role":"admin"}'
+   FROM prosho.users WHERE github_login = 'vsvedantham' AND role <> 'admin';
+   UPDATE prosho.users SET role = 'admin' WHERE github_login = 'vsvedantham';
+   COMMIT;
+   ```
+   Then (signed in on www.lvamo.com): "Admin" link shows; `/prosho/admin`
+   lists users, projects, audit; add a milestone on `testproj1`. Mentor
+   flows need a second account (the HeatRisk student, once invited).
 2. **Founder dry run on `testproj1`** — install the App on a scratch repo,
    add `prosho.yaml`, push → webhook sync + commit timeline; create a CI
    token and run the Actions step once. Deferred by the founder on
@@ -36,8 +41,21 @@ artifact upload — no core/schema changes).
 
 ## Status
 
-**Phase 3 (Work over time) — built and verified locally, 2026-10-21**
-(migration `0028`). Not deployed yet (banner).
+**Phase 3 (Work over time) — live, 2026-10-31** (`35a41b8`, migration
+`0028`). Signed-in checks and the exit check are pending (banner).
+
+**Verified in production (2026-10-31):** backup
+`/home/ubuntu/backups/prosho-pre-0028-20261031.dump` taken first;
+`deploy.sh` ran `0027 → 0028`; `alembic_version` = `0028`, all 11
+`prosho` tables present; ProSho, Applaut, Jobref health and platform
+settings 200. Without a token: `/admin/users`, `/admin/audit`, project
+`milestones`/`timeline` → 401; webhook unsigned → 401. Page events:
+unknown slug 204, private `testproj1` 204 **and not counted** (0 rows),
+bad event 422, CORS preflight from `www.lvamo.com` 200. Pages bundle
+`index-OGevNCdq.js` has the Phase 3 code; `/prosho/admin` signed out →
+login page; unknown slug → not-found page.
+**Not verified yet:** anything signed in (admin page, milestones,
+feedback, mentor view, timeline from a real repo) — see banner.
 
 ### Phase 3 — what was built
 
