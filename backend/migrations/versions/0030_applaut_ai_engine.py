@@ -14,7 +14,8 @@ On branch applaut-ai-local; not deployed.
   synced assessments: scored, and their documents come from the routine.
 - night_runs: one row per night (what each stage did).
 - ai_queue: the model's work, served first in, first out by `seq` (a retry
-  takes a new seq, so it goes to the back) by one ai-worker process.
+  takes a new seq, so it goes to the back) by the ai-worker's lanes, one per
+  model host; `host` is the one that served it.
 """
 from typing import Sequence, Union
 
@@ -77,6 +78,7 @@ def upgrade() -> None:
             enqueued_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             started_at TIMESTAMPTZ,
             finished_at TIMESTAMPTZ,
+            host VARCHAR(100),
             model VARCHAR(100),
             prompt_tokens INTEGER,
             output_tokens INTEGER,

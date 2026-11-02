@@ -168,13 +168,24 @@ async def test_applaut_ai_for_allowlisted_users(client, make_user, routine_env, 
     from app.config import settings
     user, profile, headers = await make_user()
     monkeypatch.setattr(settings, "applaut_ai_allowlist", f"someone@else.test, {user.email.upper()}")
-    monkeypatch.setattr(settings, "applaut_llm_base_url", "")
-    assert (await client.put(API, json={"engine": "applaut_ai"}, headers=headers)).status_code == 422  # no model yet
-    monkeypatch.setattr(settings, "applaut_llm_base_url", "http://llm:8080/v1")
+    monkeypatch.setattr(settings, "applaut_model_hosts", "")
+    assert (await client.put(API, json={"engine": "applaut_ai"}, headers=headers)).status_code == 422  # no model host
+    monkeypatch.setattr(settings, "applaut_model_hosts", "10.8.0.2")
+    monkeypatch.setattr(settings, "applaut_ai_users_per_host", 10_000)
     assert (await client.get(API, headers=headers)).json()["applaut_ai_available"] is True
     r = await client.put(API, json={"engine": "applaut_ai"}, headers=headers)
     assert r.status_code == 200 and r.json()["engine"] == "applaut_ai"
     assert [t for t in await _tasks(profile.id) if t.kind == "basic_discovery" and t.status == "pending"] == []
+
+
+async def test_applaut_ai_full_when_hosts_are_full(client, make_user, routine_env, monkeypatch):
+    from app.config import settings
+    user, _, headers = await make_user()
+    monkeypatch.setattr(settings, "applaut_ai_allowlist", user.email)
+    monkeypatch.setattr(settings, "applaut_model_hosts", "10.8.0.2")
+    monkeypatch.setattr(settings, "applaut_ai_users_per_host", 0)  # no room on the one host
+    assert (await client.get(API, headers=headers)).json()["applaut_ai_available"] is False
+    assert (await client.put(API, json={"engine": "applaut_ai"}, headers=headers)).status_code == 422
 
 
 async def test_remove_connection(client, make_user, fake_source, fake_r2, routine_env):

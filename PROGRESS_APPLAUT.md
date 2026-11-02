@@ -95,7 +95,13 @@ then nothing goes to `main` or prod.
 - `model-host/`: compose file and setup notes for the model VM (llama-server
   on a WireGuard address with an API key).
 - Early access: Applaut AI is selectable in Settings only for emails in
-  `APPLAUT_AI_ALLOWLIST`, and only when `APPLAUT_LLM_BASE_URL` is set.
+  `APPLAUT_AI_ALLOWLIST`, only when `APPLAUT_MODEL_HOSTS` is set, and only
+  while there is room (`APPLAUT_AI_USERS_PER_HOST` × hosts).
+- v2 (2026-11-02, plan: `docs/applaut/APPLAUT_AI_V2_PLAN.md`): any number of
+  identical model hosts, each serving a scorer (:8080) and a writer (:8081)
+  pinned by `ai/models.lock`; one worker lane per host; an unreachable host's
+  job goes back to its place without using a try. Adding a host is
+  `model-host/setup.sh` on it plus one address in `APPLAUT_MODEL_HOSTS`.
 - Backend tests: 205 pass locally (`test_documents.py`,
   `test_master_profile_api.py`, `test_ai_engine.py`).
 - Before real users' data goes to the partner's VM: a processing agreement

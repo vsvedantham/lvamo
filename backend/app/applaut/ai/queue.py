@@ -1,7 +1,9 @@
-"""The model's work queue: strictly first in, first out, one item at a time.
+"""The model's work queue: first in, first out.
 
-Only the ai-worker process claims items. `seq` is the order: a new item takes
-the next number, and so does a retry, which therefore goes to the back.
+The ai-worker's lanes (one per model host) claim items; each host does one
+at a time. `seq` is the order: a new item takes the next number, and so does
+a retry, which therefore goes to the back. An item whose host was unreachable
+is released back to its old place without using a try.
 """
 from __future__ import annotations
 
@@ -17,6 +19,9 @@ from app.applaut.models.job_assessment import JobAssessment
 
 MAX_ATTEMPTS = 3          # first try + 2 retries (design §4)
 STALE_RUNNING_AFTER = timedelta(minutes=30)
+# A lane prefers its last user's next item (that user's prompt is still cached
+# on its host), but only among the oldest PREFER_WINDOW pending items.
+PREFER_WINDOW = 20
 
 
 def _now() -> datetime:
@@ -35,16 +40,27 @@ async def enqueue(db: AsyncSession, kind: str, assessment: JobAssessment, night_
     return result.rowcount == 1
 
 
-async def claim_next(db: AsyncSession) -> AIQueueItem | None:
-    item = await db.scalar(
+async def claim_next(db: AsyncSession, host: str | None = None,
+                     prefer_user: uuid.UUID | None = None) -> AIQueueItem | None:
+    """The oldest pending item, or, among the oldest PREFER_WINDOW, the first of `prefer_user`'s."""
+    window = list(await db.scalars(
         select(AIQueueItem).where(AIQueueItem.status == "pending")
-        .order_by(AIQueueItem.seq).limit(1).with_for_update(skip_locked=True)
-    )
-    if item is None:
+        .order_by(AIQueueItem.seq).limit(PREFER_WINDOW if prefer_user else 1)
+        .with_for_update(skip_locked=True)
+    ))
+    if not window:
         return None
-    item.status, item.started_at, item.attempts = "running", _now(), item.attempts + 1
+    item = next((i for i in window if i.user_id == prefer_user), window[0])
+    item.status, item.started_at, item.attempts, item.host = "running", _now(), item.attempts + 1, host
     await db.commit()
     return item
+
+
+async def release(db: AsyncSession, item_id: int, error: str) -> None:
+    """Its host was unreachable: back to pending, same place, the try not counted."""
+    await db.execute(update(AIQueueItem).where(AIQueueItem.id == item_id).values(
+        status="pending", started_at=None, attempts=AIQueueItem.attempts - 1, host=None, last_error=error[:4000]))
+    await db.commit()
 
 
 async def finish(db: AsyncSession, item_id: int, *, model: str | None = None, prompt_tokens: int | None = None,

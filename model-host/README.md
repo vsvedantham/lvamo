@@ -1,107 +1,88 @@
-# Applaut AI model host
+# Applaut AI model hosts
 
-The in-house model runs on its own Oracle VM. The app VM (`lvamo-backend`)
-keeps everything else: the database, the API, and the `ai-worker` that sends
-the model one job at a time. Only prompts and answers cross between the two:
-a job posting plus the user's master profile goes over, scoring facts or three
-written paragraphs come back. The model VM stores nothing.
-
-```
-app VM (lvamo-backend)                     model VM
-  ai-worker ──HTTP + API key──▶ WireGuard ──▶ llm (llama-server, 10.8.0.2:8080)
-  10.8.0.1                    UDP 51820
-```
-
-Not deployed yet (2026-10-31): this waits for the model VM. Until then the
-same server runs on the app VM as the `llm-bench` test container.
-
-## 1. Model VM
-
-Ampere A1.Flex, 4 OCPU / 24 GB, Ubuntu 24.04 aarch64, 50 GB boot volume.
-
-```bash
-sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 wireguard
-sudo usermod -aG docker ubuntu   # log out and back in
-```
-
-## 2. WireGuard
-
-On each VM:
-
-```bash
-wg genkey | sudo tee /etc/wireguard/private.key | wg pubkey | sudo tee /etc/wireguard/public.key
-sudo chmod 600 /etc/wireguard/private.key
-```
-
-Model VM, `/etc/wireguard/wg0.conf`:
-
-```ini
-[Interface]
-Address = 10.8.0.2/24
-ListenPort = 51820
-PrivateKey = <model VM private.key>
-
-[Peer]
-PublicKey = <app VM public.key>
-AllowedIPs = 10.8.0.1/32
-```
-
-App VM, `/etc/wireguard/wg0.conf`:
-
-```ini
-[Interface]
-Address = 10.8.0.1/24
-PrivateKey = <app VM private.key>
-
-[Peer]
-PublicKey = <model VM public.key>
-Endpoint = <model VM public IP>:51820
-AllowedIPs = 10.8.0.2/32
-PersistentKeepalive = 25
-```
-
-Firewalls on the model VM:
-- OCI security list: ingress UDP 51820 from the app VM's public IP
-  (130.61.106.172/32) only. Nothing else beyond SSH.
-- Ubuntu's own iptables rejects inbound traffic by default. Allow WireGuard:
-  `sudo iptables -I INPUT 5 -p udp --dport 51820 -s 130.61.106.172 -j ACCEPT && sudo netfilter-persistent save`
-
-Then on both: `sudo systemctl enable --now wg-quick@wg0`, and from the app
-VM `ping 10.8.0.2`.
-
-## 3. The model
-
-```bash
-git clone https://github.com/vsvedantham/lvamo.git && cd lvamo/model-host
-mkdir -p models
-curl -L -o models/Qwen3.5-9B-Q4_0.gguf <the Q4_0 GGUF chosen in Phase 0, see the design doc §10>
-cp .env.example .env    # set LLAMA_API_KEY: openssl rand -hex 32
-docker compose up -d
-curl -s -H "Authorization: Bearer $(grep ^LLAMA_API_KEY .env | cut -d= -f2)" http://10.8.0.2:8080/v1/models
-```
-
-Use a Q4_0 file, not Q4_K_M: on these Neoverse-N1 cores llama.cpp repacks
-Q4_0 for ARM and reads prompts about twice as fast.
-
-## 4. The app VM
-
-In `.env.production`:
+The in-house models run on model hosts: Oracle VMs that do nothing else. The
+app VM (`lvamo-backend`) keeps everything else: the database, the API, and the
+`ai-worker`, which runs one lane per model host and sends each host one job at
+a time, in queue order. Only prompts and answers cross between them: a job
+posting plus the user's master profile goes over, scoring facts or written
+text comes back. A model host stores nothing.
 
 ```
-APPLAUT_LLM_BASE_URL=http://10.8.0.2:8080/v1
-APPLAUT_LLM_API_KEY=<the same LLAMA_API_KEY>
-APPLAUT_LLM_MODEL=qwen3.5-9b-q4_0
-APPLAUT_AI_ALLOWLIST=<emails allowed to choose Applaut AI>
+app VM (lvamo-backend, 10.8.0.1)                     model hosts (all identical)
+  ai-worker                                          ┌ 10.8.0.2 ───────────────┐
+    lane 10.8.0.2 ──HTTP + API key── WireGuard ────▶ │ scorer :8080  writer :8081 │
+    lane 10.8.0.3 ──────────────────────────────┐    └──────────────────────────┘
+                                                └──▶ ┌ 10.8.0.3 (later) ───────┐
+APPLAUT_MODEL_HOSTS=10.8.0.2,10.8.0.3                │ scorer :8080  writer :8081 │
+                                                     └──────────────────────────┘
 ```
 
-then `docker compose -f docker-compose.prod.yml up -d ai-worker`. The worker
-logs each item (`docker compose -f docker-compose.prod.yml logs -f ai-worker`).
-If the model VM is down, items fail, go to the back of the queue, and fail for
-good after 3 tries; the job shows the error.
+Every host runs both task models: the **scorer** (reads a posting into facts)
+on :8080 and the **writer** (CV headline and bullets, cover-letter paragraphs)
+on :8081. Which model each one runs is pinned, with checksums, in
+[`backend/app/applaut/ai/models.lock`](../backend/app/applaut/ai/models.lock).
+A lane uses its host only while both ports report exactly those models, so a
+job scored on one host means the same as one scored on another.
+
+Not deployed yet (2026-11-02): this waits for the first partner VM. The setup
+was checked on the app VM's spare cores (1–3) with `update.sh` and one lane
+over an SSH tunnel, including a host going down mid-run.
+
+## Add a model host
+
+1. **The VM.** Ampere A1.Flex, 4 OCPU / 24 GB, Ubuntu 24.04 aarch64, 50 GB
+   boot volume. OCI security list: ingress UDP 51820 from the app VM's public
+   IP (130.61.106.172/32) only, nothing else beyond SSH.
+2. **On the new VM**, with the next free WireGuard address (10.8.0.2, .3, …):
+
+   ```bash
+   git clone https://github.com/vsvedantham/lvamo.git && cd lvamo/model-host
+   LLAMA_API_KEY=<APPLAUT_LLM_API_KEY from the app VM> ./setup.sh 10.8.0.3 '<app VM WireGuard public key>' 130.61.106.172
+   ```
+
+   It installs Docker and WireGuard, makes the VM a WireGuard peer of the app
+   VM, downloads the pinned models (about 5 GB each, checksums verified),
+   starts both servers, and prints the `[Peer]` block for the app VM.
+3. **On the app VM**: add that `[Peer]` block to `/etc/wireguard/wg0.conf`,
+   `sudo systemctl restart wg-quick@wg0`, `ping 10.8.0.3`. Append the address
+   to `APPLAUT_MODEL_HOSTS` in `.env.production`, then
+   `docker compose -f docker-compose.prod.yml up -d ai-worker`.
+4. **Check**: `docker compose -f docker-compose.prod.yml logs ai-worker` shows
+   "Serving the AI queue on N model host(s)" and no "Host not usable" for the
+   new address.
+
+The app VM's own WireGuard setup (once): `wg genkey | sudo tee
+/etc/wireguard/private.key | wg pubkey`, and `/etc/wireguard/wg0.conf` with
+`[Interface] Address = 10.8.0.1/24` and its private key; each host adds a
+`[Peer]`.
+
+## Change a model
+
+Edit `models.lock` (file, checksum, URL from the model's Hugging Face page,
+pinned to a commit), merge, then on **every** host `./update.sh` (pulls,
+downloads, verifies, restarts, prints what each port serves), then restart
+`ai-worker`. Hosts that still run the old model are left out by their lane
+until they're updated. Use Q4_0 files: on these Neoverse-N1 cores llama.cpp
+repacks Q4_0 for ARM and reads prompts about twice as fast as Q4_K_M.
+
+## When a host goes down
+
+Its lane puts the job it was doing back in its place in the queue, without
+using one of the job's 3 tries, and checks the host again after 30 s, 1, 2,
+then every 5 minutes. The other hosts carry on with the queue. Only real
+model errors (an unusable answer, text that breaks the rules twice) count as
+tries.
+
+## Capacity
+
+About 15 Applaut AI users per host on a normal night (design doc §10.1). The
+Settings card stops offering Applaut AI to allow-listed users once
+`APPLAUT_AI_USERS_PER_HOST` × hosts users have it.
 
 ## Before real users' data goes over
 
-The model VM belongs to another person's Oracle account, so user profiles and
-CVs are processed on infrastructure LVAMO doesn't own. Settle this first: a
-written processing agreement with the VM's owner, and a line in the privacy
-notice naming the processor.
+Each model host belongs to another person's Oracle account, so user profiles
+and CVs are processed on infrastructure LVAMO doesn't own. Settle this first,
+per host owner: a written processing agreement, and a line in the privacy
+notice naming the processor. Also check the account is Pay As You Go (Oracle
+reclaims idle Always Free VMs, and a host busy only at night can look idle).

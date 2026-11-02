@@ -34,11 +34,13 @@ class Settings(BaseSettings):
     # AI providers
     openai_api_key: str = ""
 
-    # Applaut AI — the in-house model (docs/applaut/APPLAUT_AI_ENGINE_DESIGN.md).
-    # An OpenAI-compatible llama.cpp server; empty = the engine's AI steps don't run.
-    applaut_llm_base_url: str = ""          # e.g. http://llm:8080/v1, or the model host over a private tunnel
-    applaut_llm_api_key: str = ""           # llama-server --api-key, when the model runs on another machine
-    applaut_llm_model: str = "local"        # recorded on every assessment and document
+    # Applaut AI — the in-house models (docs/applaut/APPLAUT_AI_V2_PLAN.md §2).
+    # Model hosts, comma-separated (WireGuard addresses): every host serves the
+    # scorer on :8080 and the writer on :8081 (ai/models.lock). Empty = the
+    # engine's AI steps don't run.
+    applaut_model_hosts: str = ""           # e.g. 10.8.0.2,10.8.0.3
+    applaut_llm_api_key: str = ""           # the hosts' llama-server --api-key (one key for all)
+    applaut_ai_users_per_host: int = 15     # Applaut AI users one host serves in a night (Phase 0 §10.1)
     applaut_llm_timeout_seconds: int = 900
     applaut_ai_doc_threshold: int = 80      # match score from which documents are written
     applaut_ai_score_cap: int = 40          # most jobs the model scores per user per night

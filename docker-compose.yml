@@ -40,7 +40,7 @@ services:
 
   # Applaut AI queue worker. Off by default (it would take queue items the
   # tests create): `docker compose --profile ai up ai-worker`, with
-  # APPLAUT_LLM_BASE_URL in .env pointing at a llama-server.
+  # APPLAUT_MODEL_HOSTS in .env (e.g. host.docker.internal through a tunnel).
   ai-worker:
     build:
       context: ./backend

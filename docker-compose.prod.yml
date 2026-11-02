@@ -46,9 +46,9 @@ services:
       postgres:
         condition: service_healthy
 
-  # Applaut AI: the one process that feeds the model, one job at a time in
-  # queue order (backend/app/applaut/ai/worker.py). The model itself runs on
-  # the model host (model-host/), reached through APPLAUT_LLM_BASE_URL.
+  # Applaut AI: feeds the model hosts in queue order, one lane per host
+  # (backend/app/applaut/ai/worker.py). The models run on the model hosts
+  # (model-host/), listed in APPLAUT_MODEL_HOSTS.
   ai-worker:
     build:
       context: ./backend

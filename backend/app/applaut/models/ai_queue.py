@@ -13,9 +13,9 @@ from app.db.base import Base
 
 
 class AIQueueItem(Base):
-    """One unit of model work for Applaut AI. Served strictly first in, first
-    out (`ORDER BY seq`) by the single ai-worker process; a retry is given a new
-    `seq`, so it goes to the back of the queue."""
+    """One unit of model work for Applaut AI. Served first in, first out
+    (`ORDER BY seq`) by the ai-worker's lanes, one per model host; a retry is
+    given a new `seq`, so it goes to the back of the queue."""
 
     __tablename__ = "ai_queue"
     __table_args__ = (
@@ -45,6 +45,7 @@ class AIQueueItem(Base):
     enqueued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=sa.func.now(), nullable=False)
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    host: Mapped[Optional[str]] = mapped_column(String(100))  # the model host that served it
     model: Mapped[Optional[str]] = mapped_column(String(100))
     prompt_tokens: Mapped[Optional[int]] = mapped_column(Integer)
     output_tokens: Mapped[Optional[int]] = mapped_column(Integer)

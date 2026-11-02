@@ -9,6 +9,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.applaut.ai.hosts import host_addresses
 from app.applaut.core import credentials
 from app.applaut.models.profile import Profile
 from app.applaut.models.routine import RoutineConnection, RoutineRun, RoutineSync
@@ -59,15 +60,21 @@ async def _reschedule(profile: Profile, db: AsyncSession, reschedule: bool = Fal
 
 # ----------------------------------------------------------------------------- engine choice
 
-def applaut_ai_available(user: User) -> bool:
-    """Early access: the model serves a handful of users (APPLAUT_AI_ALLOWLIST)."""
+async def applaut_ai_available(user: User, db: AsyncSession) -> bool:
+    """Early access (APPLAUT_AI_ALLOWLIST), and only while the model hosts have
+    room: APPLAUT_AI_USERS_PER_HOST users per host. A user already on it keeps it."""
     allowed = {e.strip().lower() for e in settings.applaut_ai_allowlist.split(",") if e.strip()}
-    return bool(settings.applaut_llm_base_url) and user.email.lower() in allowed
+    hosts = host_addresses()
+    if not hosts or user.email.lower() not in allowed:
+        return False
+    others = await db.scalar(select(func.count()).select_from(Profile).where(
+        Profile.job_engine == "applaut_ai", Profile.is_active == True, Profile.user_id != user.id))
+    return others < settings.applaut_ai_users_per_host * len(hosts)
 
 
 async def set_engine(user: User, engine: str, confirm_delete_credentials: bool, db: AsyncSession) -> Profile:
     profile = await get_active_profile(user, db)
-    if engine == "applaut_ai" and not applaut_ai_available(user):
+    if engine == "applaut_ai" and not await applaut_ai_available(user, db):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                             detail="Applaut AI isn't available yet")
     before = profile.job_engine
@@ -388,5 +395,5 @@ async def get_job_engine(user: User, db: AsyncSession) -> JobEngineResponse:
         engine=profile.job_engine, engine_changed_at=profile.job_engine_changed_at,
         credentials_storage_ready=credentials.is_configured(),
         connection=RoutineConnectionInfo.model_validate(conn) if conn else None, card=card,
-        applaut_ai_available=applaut_ai_available(user),
+        applaut_ai_available=await applaut_ai_available(user, db),
     )

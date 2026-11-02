@@ -1,0 +1,8 @@
+# The model each task runs, the same on every model host (APPLAUT_AI_V2_PLAN.md §2).
+# Read by model-host/update.sh (downloads + verifies) and by ai/hosts.py (each
+# lane checks its host serves exactly these). Change a model here, run
+# update.sh on every host, then restart ai-worker.
+#
+# task    alias              sha256                                                            file                    url
+scorer    qwen3.5-9b-q4_0    17670346b4260ddcb0173965145155885024f3c9a4a24389a3370751edbcde24  Qwen3.5-9B-Q4_0.gguf    https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_0.gguf
+writer    qwen3.5-9b-q4_0    17670346b4260ddcb0173965145155885024f3c9a4a24389a3370751edbcde24  Qwen3.5-9B-Q4_0.gguf    https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_0.gguf
