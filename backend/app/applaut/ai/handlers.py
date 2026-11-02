@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.applaut.ai import prompts, scoring
 from app.applaut.ai.provider import Completion, Provider
 from app.applaut.ai.queue import enqueue
-from app.applaut.documents.letter import JobInfo
+from app.applaut.documents.letter import JobInfo, company_display
 from app.applaut.documents.profile_schema import ProfileError, validate_profile
 from app.applaut.documents.render import DocumentError, build_documents
 from app.applaut.models.ai_queue import AIQueueItem
@@ -28,7 +28,12 @@ ENGINE = "applaut_ai"
 
 
 class PermanentError(Exception):
-    """Retrying can't help (no master profile, text that keeps breaking the rules)."""
+    """Retrying can't help (no master profile, text that keeps breaking the rules).
+    `answer` is the model's last answer, kept on the job so the failure can be read."""
+
+    def __init__(self, message: str, answer: dict | None = None):
+        super().__init__(message)
+        self.answer = answer
 
 
 @dataclass
@@ -98,10 +103,11 @@ async def score_job(db: AsyncSession, item: AIQueueItem, provider: Provider) -> 
 
 async def write_docs(db: AsyncSession, item: AIQueueItem, provider: Provider) -> Usage:
     a, opp, profile, mp = await _load(db, item)
-    job = JobInfo(title=opp.title, company=opp.company_name, location=opp.location_raw or "",
+    company = company_display(opp.company_name, opp.description or "")
+    job = JobInfo(title=opp.title, company=company, location=opp.location_raw or "",
                   description=opp.description or "")
     system = prompts.write_system(mp)
-    message = prompts.job_message(opp.title, opp.company_name, opp.location_raw, opp.description or "")
+    message = prompts.job_message(opp.title, company, opp.location_raw, opp.description or "")
     hints = list(a.matched_skills or []) + list(a.missing_skills or [])
     usage = Usage()
 
@@ -118,7 +124,7 @@ async def write_docs(db: AsyncSession, item: AIQueueItem, provider: Provider) ->
         except DocumentError as exc:
             errors = exc.errors
     if docs is None:
-        raise PermanentError("the written text broke the rules twice: " + "; ".join(errors))
+        raise PermanentError("the written text broke the rules twice: " + "; ".join(errors), answer=written)
 
     for doc_type, rendered, stem in (("tailored_resume", docs.cv, "cv"), ("cover_letter", docs.cover_letter, "cover_letter")):
         key = f"applaut/documents/{a.user_id}/{opp.id}/{rendered.sha256[:8]}/{stem}.pdf"
@@ -143,8 +149,8 @@ async def write_docs(db: AsyncSession, item: AIQueueItem, provider: Provider) ->
 HANDLERS = {"score_job": score_job, "write_docs": write_docs}
 
 
-async def mark_failed(db: AsyncSession, item: AIQueueItem, error: str) -> None:
-    """The item is finally failed: show it on the job."""
+async def mark_failed(db: AsyncSession, item: AIQueueItem, error: str, answer: dict | None = None) -> None:
+    """The item is finally failed: show it on the job, with the model's last answer if there was one."""
     a = await db.get(JobAssessment, item.assessment_id)
     if a is None:
         return
@@ -153,5 +159,7 @@ async def mark_failed(db: AsyncSession, item: AIQueueItem, error: str) -> None:
     else:
         a.docs_status = "failed"
     a.raw = {**(a.raw or {}), f"{item.kind}_error": error[:1000]}
+    if answer is not None:
+        a.raw[f"{item.kind}_last_answer"] = answer
     await db.commit()
 

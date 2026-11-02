@@ -2,6 +2,8 @@
 the logistics paragraph and the thank-you. The model writes paragraphs 1-3."""
 from __future__ import annotations
 
+import re
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
@@ -16,6 +18,21 @@ class JobInfo:
     location: str = ""
     reference: str | None = None  # requisition id, when the posting has one
     description: str = ""
+
+
+def company_display(name: str, description: str = "") -> str:
+    """Job boards give the board's slug ("helsing", "isaraerospace"). Use the
+    name as the posting itself writes it ("Helsing", "Isar Aerospace"), else
+    capitalise the slug. A name that already has capitals is kept."""
+    key = re.sub(r"[^a-z0-9]", "", name.lower())
+    if not key or name != name.lower():
+        return name
+    pattern = r"[\s.&-]?".join(map(re.escape, key))
+    # Not inside a web or mail address ("helsing.ai", "jobs@helsing.ai", "/helsing").
+    found = Counter(m.group(0) for m in re.finditer(rf"(?<![\w@/.]){pattern}(?![\w@/]|\.\w)", description, re.I))
+    if found:  # most frequent spelling, ALL-CAPS headings last; on a tie, one with capitals
+        return max(found.items(), key=lambda kv: (kv[0] != kv[0].upper(), kv[1], kv[0] != kv[0].lower()))[0]
+    return " ".join(w.capitalize() for w in re.split(r"[-_\s]+", name) if w)
 
 
 def _city(location: str) -> str:

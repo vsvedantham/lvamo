@@ -287,6 +287,7 @@ async def test_write_docs_gives_up_after_two_bad_answers(ai_user, make_opportuni
     await worker.run_once(FakeModel(script=[bad, bad]))
     a = await _get(JobAssessment, a.id)
     assert a.docs_status == "failed" and "broke the rules twice" in a.raw["write_docs_error"]
+    assert a.raw["write_docs_last_answer"]["headline"] == "Data Engineer with 99 skills"  # readable afterwards
 
 
 # ---------------------------------------------------------------- nightly

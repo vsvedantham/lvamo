@@ -27,11 +27,11 @@ async def run_once(provider: Provider | None = None) -> bool:
         item = await db.get(AIQueueItem, claimed.id)
         item_id, kind = item.id, item.kind  # the rollback below expires `item`
         handler = HANDLERS[kind]
-        error, retry = None, True
+        error, retry, answer = None, True, None
         try:
             usage = await handler(db, item, provider or get_provider())
         except (PermanentError, AnswerCutOff) as exc:
-            error, retry = str(exc), False
+            error, retry, answer = str(exc), False, getattr(exc, "answer", None)
         except ModelError as exc:
             error = str(exc)
         except Exception as exc:  # noqa: BLE001  (one bad item must not stop the queue)
@@ -44,7 +44,7 @@ async def run_once(provider: Provider | None = None) -> bool:
         else:
             await db.rollback()
             if await queue.fail(db, item_id, error, retry):
-                await mark_failed(db, await db.get(AIQueueItem, item_id), error)
+                await mark_failed(db, await db.get(AIQueueItem, item_id), error, answer)
             logger.warning("AI queue item %s (%s) failed: %s", item_id, kind, error)
     return True
 

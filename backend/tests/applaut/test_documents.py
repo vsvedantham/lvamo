@@ -5,7 +5,7 @@ import copy
 import pytest
 
 from app.applaut.documents.fact_guard import check_written
-from app.applaut.documents.letter import JobInfo, build_letter
+from app.applaut.documents.letter import JobInfo, build_letter, company_display
 from app.applaut.documents.profile_schema import ProfileError, parse_yaml, to_yaml, validate_profile
 from app.applaut.documents.render import DocumentError, build_documents, sample_documents
 from app.applaut.documents.tailor import drop_one, job_skills, order_skill_rows, pick_entries
@@ -177,6 +177,16 @@ def test_letter_must_be_first_person():
 
 
 # ---------------------------------------------------------------- letter + rendering
+
+def test_company_name_as_the_posting_writes_it():
+    assert company_display("helsing", "Helsing is a defence AI company. Join Helsing in Munich. helsing.ai") == "Helsing"
+    assert company_display("isaraerospace", "At Isar Aerospace we build launch vehicles.") == "Isar Aerospace"
+    assert company_display("dymatrix", "dymatrix is a consulting firm.") == "dymatrix"  # the brand's own lower case
+    assert company_display("dymatrix", "ABOUT DYMATRIX\nDYMATRIX\nAt Dymatrix we consult.") == "Dymatrix"  # headings lose
+    assert company_display("getyourguide", "Apply at getyourguide.com or jobs@getyourguide.com") == "Getyourguide"
+    assert company_display("get-your-guide", "No mention here.") == "Get Your Guide"
+    assert company_display("Gamma SE", "gamma se") == "Gamma SE"  # already has capitals: kept
+
 
 def test_letter_code_parts():
     cl = build_letter(profile(), JobInfo(title="Data Engineer", company="Gamma SE", location="Munich, Germany",

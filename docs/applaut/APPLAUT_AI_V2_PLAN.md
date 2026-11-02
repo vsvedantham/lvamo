@@ -239,7 +239,7 @@ No layout changes to the user's template, same as the standard one.
 
 | Step | Scope | Done when |
 |---|---|---|
-| 1 | §6.1, §6.2 small fixes | Tests pass |
+| 1 | §6.1, §6.2 small fixes | Tests pass. **Done 2026-11-02**: failed `write_docs` keep the model's answer in `raw.write_docs_last_answer`; letters use `company_display()` (the posting's own spelling, else a capitalised slug) |
 | 2 | A1 + A2 + A4 (lanes, host files) | Two fake hosts tested; one real host (test container) runs a night via a lane |
 | 3 | B1–B3 (writer does more) | B5 benchmark passes; Venkat reads the reworded bullets |
 | 4 | B4 (original vs tailored) | Toggle re-renders a CV in < 1 s, tested |
