@@ -1,10 +1,11 @@
-"""One queue item each: score a job (`score_job`) or write its documents (`write_docs`)."""
+"""One queue item each: score a job (`score_job`), write its documents (`write_docs`), or draft CV bullets from the user's notes (`draft_bullets`)."""
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,12 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.applaut.ai import prompts, scoring
 from app.applaut.ai.provider import Completion, HostUnreachable, ModelError, Provider
 from app.applaut.ai.queue import enqueue
-from app.applaut.documents.fact_guard import check_fact_rewording
+from app.applaut.documents.fact_guard import check_drafts, check_fact_rewording
 from app.applaut.documents.letter import JobInfo, company_display
 from app.applaut.documents.profile_schema import ProfileError, validate_profile
 from app.applaut.documents.render import DocumentError, build_documents
 from app.applaut.documents.tailor import fact_ids
 from app.applaut.models.ai_queue import AIQueueItem
+from app.applaut.models.bullet_draft import BulletDraft
 from app.applaut.models.generated_document import GeneratedDocument
 from app.applaut.models.job_assessment import JobAssessment
 from app.applaut.models.master_profile import MasterProfile
@@ -181,11 +183,42 @@ async def write_docs(db: AsyncSession, item: AIQueueItem, provider: Provider) ->
     return usage
 
 
-HANDLERS = {"score_job": score_job, "write_docs": write_docs}
+async def draft_bullets(db: AsyncSession, item: AIQueueItem, provider: Provider) -> Usage:
+    """Bullet bank builder: CV bullets for one role from the user's notes,
+    checked (check_drafts) and kept as drafts until the user approves them."""
+    draft = await db.get(BulletDraft, item.bullet_draft_id)
+    mp = await db.scalar(select(MasterProfile).where(MasterProfile.user_id == item.user_id))
+    if draft is None or mp is None:
+        raise PermanentError("the notes or the master profile no longer exist")
+    try:
+        profile = validate_profile(mp.data)
+    except ProfileError as exc:
+        raise PermanentError(f"the master profile is incomplete: {'; '.join(exc.errors)[:300]}")
+    entry = next((e for e in profile["experience"] + profile.get("projects", []) if e["id"] == draft.entry_id), None)
+    if entry is None:
+        raise PermanentError("that role is no longer in the master profile")
+    usage = Usage()
+    c = await provider.complete_json(prompts.DRAFT_SYSTEM, prompts.draft_message(profile, entry, draft.notes),
+                                     prompts.DRAFT_SCHEMA, prompts.DRAFT_MAX_TOKENS)
+    usage.add(c)
+    texts = [t for t in c.data.get("bullets") or [] if isinstance(t, str)][:prompts.DRAFT_MAX]
+    draft.drafts, draft.left_out = check_drafts(profile, entry, draft.notes, texts)
+    draft.status, draft.error, draft.finished_at = "done", None, datetime.now(timezone.utc)
+    await db.commit()
+    return usage
+
+
+HANDLERS = {"score_job": score_job, "write_docs": write_docs, "draft_bullets": draft_bullets}
 
 
 async def mark_failed(db: AsyncSession, item: AIQueueItem, error: str, answer: dict | None = None) -> None:
-    """The item is finally failed: show it on the job, with the model's last answer if there was one."""
+    """The item is finally failed: show it on the job (or the drafts), with the model's last answer if there was one."""
+    if item.kind == "draft_bullets":
+        draft = await db.get(BulletDraft, item.bullet_draft_id)
+        if draft is not None:
+            draft.status, draft.error, draft.finished_at = "failed", error[:1000], datetime.now(timezone.utc)
+            await db.commit()
+        return
     a = await db.get(JobAssessment, item.assessment_id)
     if a is None:
         return

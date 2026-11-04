@@ -15,6 +15,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.applaut.models.ai_queue import AIQueueItem
+from app.applaut.models.bullet_draft import BulletDraft
 from app.applaut.models.job_assessment import JobAssessment
 
 MAX_ATTEMPTS = 3          # first try + 2 retries (design §4)
@@ -38,6 +39,21 @@ async def enqueue(db: AsyncSession, kind: str, assessment: JobAssessment, night_
                                 index_where=text("status IN ('pending', 'running')"))
     )
     return result.rowcount == 1
+
+
+async def enqueue_draft(db: AsyncSession, draft: BulletDraft, profile_id: uuid.UUID) -> AIQueueItem:
+    """Queue drafting bullets from the user's notes; it takes its place in the same FIFO."""
+    item = AIQueueItem(kind="draft_bullets", user_id=draft.user_id, profile_id=profile_id,
+                       bullet_draft_id=draft.id, status="pending")
+    db.add(item)
+    await db.flush()
+    return item
+
+
+async def ahead_of(db: AsyncSession, item: AIQueueItem) -> int:
+    """Items to be served before this pending one (running ones included)."""
+    return await db.scalar(select(func.count()).select_from(AIQueueItem).where(
+        AIQueueItem.status.in_(("pending", "running")), AIQueueItem.seq < item.seq))
 
 
 async def claim_next(db: AsyncSession, host: str | None = None,

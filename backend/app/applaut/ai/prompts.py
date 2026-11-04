@@ -187,6 +187,34 @@ def reword_retry(message: str, text: str, problem: str) -> str:
     return f"{message}\n\nYour previous answer: {text}\nIt can't be used: {problem}. Write it again, fixing that."
 
 
+# ---------------------------------------------------------------- bullet bank builder
+
+DRAFT_MAX = 5
+DRAFT_SCHEMA = {"type": "object", "properties": {
+    "bullets": {"type": "array", "minItems": 1, "maxItems": DRAFT_MAX, "items": {"type": "string"}}},
+    "required": ["bullets"]}
+DRAFT_MAX_TOKENS = 700
+DRAFT_SYSTEM = f"""You turn a candidate's own notes about one role into CV bullet points. Output JSON only, on one line: {{"bullets": ["...", ...]}}.
+
+Rules:
+- Up to {DRAFT_MAX} bullets, each one achievement or responsibility the notes describe that the role's existing bullets don't already cover. Fewer is fine when the notes hold less.
+- Use only what the notes and the existing bullets say. Never add a number, tool, product, team, result or employer that isn't in them. Where the notes give no number, write the bullet without one.
+- Name every tool exactly as the notes or the role's technologies spell it.
+- Each bullet: starts with a past-tense verb, 12-35 words, no "I", "my" or "we", in the same style as the existing bullets: what was done, with what, and the result when the notes give one.
+- Never repeat or reword an existing bullet."""
+
+
+def draft_message(profile: dict, entry: dict, notes: str) -> str:
+    title = (f"Role: {entry['title']} at {entry['company']}" if "company" in entry else f"Project: {entry['name']}")
+    skills = sorted({x for items in profile["skills"].values() for x in items} | set(profile.get("additional_skills", [])))
+    existing = "\n".join(f"- {f}" for f in entry["facts"]) or "(none yet)"
+    return (f"{title} ({entry.get('start', '')} – {entry.get('end', '')})\n"
+            f"Technologies: {', '.join(entry.get('technologies', [])) or 'none listed'}\n"
+            f"Candidate's skills: {', '.join(skills)}\n"
+            f"Existing bullets:\n{existing}\n\n"
+            f"Candidate's notes:\n{notes.strip()}")
+
+
 def fix_message(errors: list[str]) -> str:
     return ("Your previous answer broke these rules. Write the answer again, fixing every point:\n"
             + "\n".join(f"- {e}" for e in errors))

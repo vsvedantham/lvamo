@@ -112,8 +112,16 @@ then nothing goes to `main` or prod.
   bullets" panel lets the user switch any reworded bullet back to their own
   wording (and back). The CV is rebuilt in code from what it was made from
   (`generated_documents.details`), ~0.1 s, saved as a new current version.
-- Backend tests: 239 pass locally (`test_documents.py`,
-  `test_master_profile_api.py`, `test_ai_engine.py`).
+- v2 step 5 (2026-11-04): Settings → Master profile → "Add bullets from
+  notes" (Applaut AI only). The user writes rough notes for one role; the
+  writer drafts up to 5 bullets in the queue; code leaves out any that name
+  something not in the notes, the role or the skills, repeat a bullet, or are
+  in the first person, and flags new numbers for the user to check. Nothing
+  is added until the user keeps (and may edit) a draft; adding is audited
+  (`master_profile.add_facts`). Bullet switches on a CV are audited too
+  (`document.bullet_choice`).
+- Backend tests: 248 pass locally (`test_documents.py`,
+  `test_master_profile_api.py`, `test_ai_engine.py`, `test_bullet_bank.py`).
 - Before real users' data goes to the partner's VM: a processing agreement
   and a privacy-notice line (model-host/README.md).
 

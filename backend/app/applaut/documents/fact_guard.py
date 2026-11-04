@@ -162,3 +162,72 @@ def check_cv_skills(skill_rows: list[dict], technologies: dict[str, list[str]], 
     for eid, tech in technologies.items():
         errors += [f"cv.{eid}.technologies: '{x}' is not in the profile" for x in tech if x.lower() not in known]
     return errors
+
+
+# ---------------------------------------------------------------- bullet bank drafts
+
+DRAFT_WORDS = (6, 45)
+DUPLICATE_SIMILARITY = 0.6  # share of content words in common with an existing bullet
+TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9.#+/-]*")
+
+
+def _names(text: str) -> list[str]:
+    """What a bullet names: words after the first with a capital letter, a
+    digit or ".#+" in them ("Kafka", "AWS", "S3", "Node.js", "C#")."""
+    out = []
+    for tok in TOKEN_RE.findall(text)[1:]:
+        tok = tok.rstrip(".-/")
+        if tok and (not tok.islower() or any(c.isdigit() or c in "#+" for c in tok) or "." in tok):
+            out.append(tok)
+    return out
+
+
+def _content(text: str) -> set[str]:
+    return {_stem(w)[:5] for w in WORD_RE.findall(text.lower()) if len(w) > 2 and w not in JOINING_WORDS}
+
+
+def _similarity(a: str, b: str) -> float:
+    x, y = _content(a), _content(b)
+    return len(x & y) / max(1, min(len(x), len(y)))
+
+
+def _named_in(name: str, known: str) -> bool:
+    """`name` (or its singular) as a whole word of `known` ("SQL" isn't in "PostgreSQL")."""
+    return any(re.search(r"(?<![a-z0-9])" + re.escape(n) + r"(?![a-z0-9])", known)
+               for n in {name.lower(), name.lower().rstrip("s")} if n)
+
+
+def check_drafts(profile: dict, entry: dict, notes: str, texts: list[str]) -> tuple[list[dict], list[dict]]:
+    """The writer's drafted bullets for one role, from the user's notes: (kept,
+    left out). Kept: [{"text", "confirm": numbers that are in neither the notes
+    nor the role, for the user to check}]. Left out: [{"text", "reason"}] for a
+    bullet that names something the user didn't give (a tool, product, team),
+    repeats an existing bullet or another draft, is in the first person, or
+    is too short or long. The user approves every kept one before it is saved."""
+    names = skill_names(profile)
+    known = " ".join([notes, entry.get("title", ""), entry.get("company", ""), entry.get("name", ""),
+                      *entry["facts"], *entry.get("technologies", []), *(n for ns in names.values() for n in ns)]).lower()
+    source_numbers = set(NUM_RE.findall(f"{notes} {' '.join(entry['facts'])}"))
+    kept: list[dict] = []
+    left_out: list[dict] = []
+    for text in texts:
+        text = " ".join((text or "").split())
+        words = len(text.split())
+        unknown = [n for n in dict.fromkeys(_names(text)) if not _named_in(n, known)]
+        if not DRAFT_WORDS[0] <= words <= DRAFT_WORDS[1]:
+            reason = f"{words} words; a CV bullet needs {DRAFT_WORDS[0]}-{DRAFT_WORDS[1]}"
+        elif CV_FIRST_PERSON_RE.search(text):
+            reason = "written in the first person"
+        elif unknown:
+            reason = f"names {', '.join(unknown)}, which isn't in your notes, this role or your skills"
+        elif any(_similarity(text, f) >= DUPLICATE_SIMILARITY for f in entry["facts"]):
+            reason = "already one of this role's bullets"
+        elif any(_similarity(text, k["text"]) >= DUPLICATE_SIMILARITY for k in kept):
+            reason = "repeats another draft"
+        else:
+            confirm = [n for n in dict.fromkeys(BULLET_NUM_RE.findall(text))
+                       if NUM_RE.match(n).group(0) not in source_numbers]
+            kept.append({"text": text, "confirm": confirm})
+            continue
+        left_out.append({"text": text, "reason": reason})
+    return kept, left_out

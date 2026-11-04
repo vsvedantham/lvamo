@@ -218,17 +218,40 @@ on the branch before calling it done.
 Goal: more facts per role (target 8–12), so tailoring has material. One-time,
 daytime, every bullet approved by the user.
 
-- **API**: `POST /master-profile/entries/{entry_id}/draft-bullets`
-  `{notes: str}` → enqueues `draft_bullets` (`ai_queue`, new kind, serves
-  on the writer port); `GET …/drafts` returns status + drafts.
-- **Model**: from the user's notes + that entry's existing facts and
-  technologies, 3–5 CV bullets in the profile's style.
-- **Checks**: every number must appear in the notes or the entry (else the
-  number is marked `confirm` in the UI, not dropped); no tool outside notes
-  + entry technologies + profile skills; no duplicate of an existing fact.
-- **UI** (Settings → Master profile): per role, "Add bullets from notes" →
-  drafts with Keep / Edit / Discard; kept ones are appended to `facts`
-  (version bump, audit `master_profile.add_facts`).
+- **API** (built 2026-11-04, `/api/v1/applaut/master-profile`):
+  - `POST /entries/{entry_id}/draft-bullets` `{notes}` (20–4000 chars) →
+    202, a `bullet_drafts` row and an `ai_queue` item of kind
+    `draft_bullets` (writer port). 409 unless the engine is Applaut AI and a
+    model host is set, or while the role still has an open set; 404 for an
+    unknown role.
+  - `GET /entries/{entry_id}/drafts` → the open set or `null`: status
+    (`pending` with `ahead` / `done` / `failed` with the error), `drafts`
+    `[{text, confirm}]`, `left_out` `[{text, reason}]`.
+  - `DELETE /entries/{entry_id}/drafts` closes the set; if the writer hasn't
+    started on it, its queue item is removed too.
+  - `POST /entries/{entry_id}/facts` `{facts, draft_id?}` appends the kept
+    bullets (as the user edited them), validates the profile, bumps the
+    version, closes the set, audit `master_profile.add_facts`.
+- **Model** (`prompts.DRAFT_SYSTEM`, `draft_message`): the notes, the role and
+  its existing facts and technologies, the profile's skills → 1–5 bullets
+  (JSON schema), each starting with a past-tense verb, 12–35 words, no
+  first person, only what the notes and existing bullets say.
+- **Checks** (`fact_guard.check_drafts`), in this order, each a reason the
+  user sees: 6–45 words; not first person; names nothing (a capitalised word,
+  or a word with a digit or `.#+`, e.g. Kafka, S3, C#) outside the notes, the role and the profile's skills;
+  not an existing fact of the role; not a near-copy of another draft
+  (word overlap ≥ 0.6). A number in neither the notes nor the role is not a
+  reason to leave it out: it is listed in `confirm` and the UI says "Check:
+  15 isn't in your notes".
+- **UI** (Settings → Master profile, only with Applaut AI): "Add bullets from
+  notes": pick the role (shows its bullet count), write notes, "Draft
+  bullets"; while queued it shows the place in the queue and checks every
+  10 s; drafts come back as editable boxes with Keep / Discard, the left-out
+  ones with their reasons, and "Add N kept bullets" (disabled while the YAML
+  has unsaved edits).
+- **Tests**: `tests/applaut/test_bullet_bank.py` (checks, the queue → keep
+  flow, audit, refusals, a failed set, discard before the writer starts,
+  FIFO order with other users).
 - **Queue timing**: daytime queue is normally empty → minutes. If a night
   backlog runs past 07:00, drafts wait their turn (FIFO). A priority lane
   for interactive items is a later decision (§7).
@@ -282,7 +305,7 @@ No layout changes to the user's template, same as the standard one.
 | 2 | A1 + A2 + A4 (lanes, host files) | Two fake hosts tested; one real host (test container) runs a night via a lane. **Done 2026-11-02**: `ai/hosts.py`, `ai/models.lock`, lanes in `ai/worker.py`, `queue.release`, `HostUnreachable`, capacity-aware allowlist, `model-host/setup.sh` + `update.sh` + two-server compose; `test_ai_lanes.py`. Live on `lvamo-backend` cores 1–3: `update.sh` brought both servers up from the lock, one lane scored 2 jobs and wrote 1 set; with the writer stopped its item went back untouched (tries 0) and finished on the first try once the writer was back. A3 (lane on the app VM) not done |
 | 3 | B1–B3 (writer does more) | B5 benchmark passes; Venkat reads the reworded bullets. **Built 2026-11-04**: two-stage writer (B1), per-bullet checks incl. `new_words` (B2); B5 result above; waits on Venkat's read |
 | 4 | B4 (original vs tailored) | Toggle re-renders a CV in < 1 s, tested. **Done 2026-11-04**: `details` column, two endpoints, Documents-page panel; re-render ~0.1 s; `test_cv_bullet_choice.py`. Checked in the browser locally up to the file upload (no R2 bucket locally); the full switch is covered by the API tests |
-| 5 | C (bullet bank builder) | Venkat's bank reaches 8+ facts per role through it |
+| 5 | C (bullet bank builder) | Venkat's bank reaches 8+ facts per role through it. **Built 2026-11-04**: §4 as built; checked in the browser locally with the fake model (keep, edit, discard, add, queued, cancel, no-host refusal). Not yet run against the real writer; waits on Venkat drafting for his own roles |
 | 6 | Partner VM goes live | `setup.sh` on the VM, `APPLAUT_MODEL_HOSTS` set, deploy, verify in prod, `PROGRESS_APPLAUT.md` |
 | 7 | D (own template) | As design doc §8 Phase 4 |
 

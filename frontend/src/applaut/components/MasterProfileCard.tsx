@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { errorMessage } from '../api/jobEngine'
 import { getMasterProfile, openPreview, saveMasterProfileYaml, validationErrors, type MasterProfile } from '../api/masterProfile'
+import BulletBankBuilder from './BulletBankBuilder'
 import { buttonStyle, formatWhen } from './RoutineEngineCard'
 
 // Settings → Master profile, for Applaut AI: what every generated CV and cover
@@ -14,7 +15,8 @@ const card: React.CSSProperties = {
 const h2: React.CSSProperties = { fontSize: '1rem', fontWeight: 600, margin: 0, color: 'var(--text-1)' }
 const muted: React.CSSProperties = { fontSize: '0.8rem', color: 'var(--text-2)', margin: 0 }
 
-export default function MasterProfileCard() {
+/** `canDraft`: Applaut AI is the engine, so it can draft bullets from your notes. */
+export default function MasterProfileCard({ canDraft = false }: { canDraft?: boolean }) {
   const [saved, setSaved] = useState<MasterProfile | null | undefined>(undefined)
   const [text, setText] = useState('')
   const [busy, setBusy] = useState<'save' | 'cv' | 'cover_letter' | null>(null)
@@ -55,8 +57,8 @@ export default function MasterProfileCard() {
         <p style={{ ...muted, marginTop: '0.3rem' }}>
           Everything Applaut AI may put in your CV and cover letters, and nothing else: your roles, their bullet
           points (<code>facts</code>), skills, education and languages. For each job, Applaut picks your most relevant
-          bullets and orders your skills; AI writes only the headline and three letter paragraphs, using these facts.
-          Same format as the Claude routine's <code>master_profile.yaml</code>, so you can paste that file here.
+          bullets and orders your skills; AI writes the headline and letter paragraphs, and may reword a few bullets
+          to fit the job, using only these facts (you can switch any back on the CV). Same format as the Claude routine's <code>master_profile.yaml</code>, so you can paste that file here.
         </p>
       </div>
       {saved === undefined ? <p style={muted}>Loading…</p> : (
@@ -87,6 +89,9 @@ export default function MasterProfileCard() {
               {dirty ? 'Unsaved changes — save to preview' : `Version ${saved.version} · saved ${formatWhen(saved.updated_at)}`}
             </span>}
           </div>
+          {canDraft && saved && (
+            <BulletBankBuilder saved={saved} dirty={dirty} onSaved={mp => { setSaved(mp); setText(mp.yaml) }} />
+          )}
         </>
       )}
     </div>

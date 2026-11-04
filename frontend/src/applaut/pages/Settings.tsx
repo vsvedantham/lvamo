@@ -501,7 +501,7 @@ export default function Settings() {
             </>
           )}
 
-          {state.engine !== 'own_routine' && <MasterProfileCard />}
+          {state.engine !== 'own_routine' && <MasterProfileCard canDraft={state.engine === 'applaut_ai'} />}
         </>
       )}
     </div>

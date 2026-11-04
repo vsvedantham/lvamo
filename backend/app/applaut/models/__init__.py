@@ -11,6 +11,7 @@ from app.applaut.models.job_assessment import JobAssessment
 from app.applaut.models.engine_task import EngineTask
 from app.applaut.models.master_profile import MasterProfile
 from app.applaut.models.ai_queue import AIQueueItem, NightRun
+from app.applaut.models.bullet_draft import BulletDraft
 from app.applaut.models.routine import RoutineConnection, RoutineJob, RoutineRun, RoutineSync
 
 __all__ = [
@@ -27,6 +28,7 @@ __all__ = [
     "EngineTask",
     "MasterProfile",
     "AIQueueItem",
+    "BulletDraft",
     "NightRun",
     "RoutineConnection",
     "RoutineRun",

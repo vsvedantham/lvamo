@@ -39,3 +39,45 @@ export async function openPreview(kind: 'cv' | 'cover_letter'): Promise<void> {
   else window.location.href = url
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
+
+// Bullet bank builder (docs/applaut/APPLAUT_AI_V2_PLAN.md §4): Applaut AI drafts
+// CV bullets for one role from your notes; nothing is saved until you keep it.
+
+export interface DraftedBullet {
+  text: string
+  /** Numbers in neither your notes nor the role: check them before keeping. */
+  confirm: string[]
+}
+
+export interface BulletDraft {
+  id: string
+  entry_id: string
+  notes: string
+  status: 'pending' | 'done' | 'failed'
+  /** Queue items before this one, while pending. */
+  ahead: number | null
+  drafts: DraftedBullet[]
+  left_out: { text: string; reason: string }[]
+  error: string | null
+  created_at: string
+  finished_at: string | null
+}
+
+export async function draftBullets(entryId: string, notes: string): Promise<BulletDraft> {
+  return (await client.post<BulletDraft>(`/master-profile/entries/${encodeURIComponent(entryId)}/draft-bullets`, { notes })).data
+}
+
+/** The role's open drafts, or null. */
+export async function getBulletDrafts(entryId: string): Promise<BulletDraft | null> {
+  return (await client.get<BulletDraft | null>(`/master-profile/entries/${encodeURIComponent(entryId)}/drafts`)).data
+}
+
+export async function discardBulletDrafts(entryId: string): Promise<void> {
+  await client.delete(`/master-profile/entries/${encodeURIComponent(entryId)}/drafts`)
+}
+
+/** Appends the bullets you kept (as edited) to the role's facts. */
+export async function addFacts(entryId: string, facts: string[], draftId?: string): Promise<MasterProfile> {
+  return (await client.post<MasterProfile>(`/master-profile/entries/${encodeURIComponent(entryId)}/facts`,
+    { facts, draft_id: draftId ?? null })).data
+}

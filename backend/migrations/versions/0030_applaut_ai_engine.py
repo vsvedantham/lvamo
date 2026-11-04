@@ -18,6 +18,8 @@ On branch applaut-ai-local; not deployed.
   model host; `host` is the one that served it.
 - generated_documents.details: what an Applaut AI CV is built from, so a
   bullet can be switched between its tailored and original wording.
+- bullet_drafts: the bullet bank builder's notes and drafts; an ai_queue
+  item is for a job (assessment_id) or for a draft (bullet_draft_id).
 """
 from typing import Sequence, Union
 
@@ -64,16 +66,34 @@ def upgrade() -> None:
             stats JSONB NOT NULL DEFAULT '{}'
         )
     """)
+    op.execute("""
+        CREATE TABLE applaut.bullet_drafts (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID NOT NULL REFERENCES applaut.users(id) ON DELETE CASCADE,
+            entry_id VARCHAR(100) NOT NULL,
+            notes TEXT NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'done', 'failed')),
+            drafts JSONB NOT NULL DEFAULT '[]',
+            left_out JSONB NOT NULL DEFAULT '[]',
+            error TEXT,
+            profile_version INTEGER NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            finished_at TIMESTAMPTZ,
+            closed_at TIMESTAMPTZ
+        )
+    """)
+    op.execute("CREATE INDEX ix_applaut_bullet_drafts_user_entry ON applaut.bullet_drafts (user_id, entry_id, created_at)")
     op.execute("CREATE SEQUENCE applaut.ai_queue_seq")
     op.execute("""
         CREATE TABLE applaut.ai_queue (
             id BIGSERIAL PRIMARY KEY,
             seq BIGINT NOT NULL DEFAULT nextval('applaut.ai_queue_seq'),
-            kind VARCHAR(30) NOT NULL CHECK (kind IN ('score_job', 'write_docs')),
+            kind VARCHAR(30) NOT NULL CHECK (kind IN ('score_job', 'write_docs', 'draft_bullets')),
             night_run_id UUID REFERENCES applaut.night_runs(id) ON DELETE SET NULL,
             user_id UUID NOT NULL REFERENCES applaut.users(id) ON DELETE CASCADE,
             profile_id UUID NOT NULL REFERENCES applaut.profiles(id) ON DELETE CASCADE,
-            assessment_id UUID NOT NULL REFERENCES applaut.job_assessments(id) ON DELETE CASCADE,
+            assessment_id UUID REFERENCES applaut.job_assessments(id) ON DELETE CASCADE,
+            bullet_draft_id UUID REFERENCES applaut.bullet_drafts(id) ON DELETE CASCADE,
             status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'done', 'failed')),
             attempts INTEGER NOT NULL DEFAULT 0,
             last_error TEXT,
@@ -84,7 +104,9 @@ def upgrade() -> None:
             model VARCHAR(100),
             prompt_tokens INTEGER,
             output_tokens INTEGER,
-            duration_ms INTEGER
+            duration_ms INTEGER,
+            CHECK ((kind = 'draft_bullets') = (bullet_draft_id IS NOT NULL)
+                   AND (kind = 'draft_bullets') = (assessment_id IS NULL))
         )
     """)
     op.execute("CREATE INDEX ix_applaut_ai_queue_pending ON applaut.ai_queue (seq) WHERE status = 'pending'")
@@ -100,6 +122,7 @@ def downgrade() -> None:
     op.execute("ALTER TABLE applaut.generated_documents DROP COLUMN details")
     op.execute("DROP TABLE applaut.ai_queue")
     op.execute("DROP SEQUENCE applaut.ai_queue_seq")
+    op.execute("DROP TABLE applaut.bullet_drafts")
     op.execute("DROP TABLE applaut.night_runs")
     op.execute("DROP INDEX applaut.ix_applaut_job_assessments_docs_pending")
     op.execute("ALTER TABLE applaut.job_assessments DROP COLUMN docs_status, DROP COLUMN status")
