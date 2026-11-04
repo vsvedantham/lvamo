@@ -4,11 +4,13 @@ import copy
 
 import pytest
 
-from app.applaut.documents.fact_guard import check_written
+from app.applaut.documents.fact_guard import check_bullet, check_written
 from app.applaut.documents.letter import JobInfo, build_letter, company_display
 from app.applaut.documents.profile_schema import ProfileError, parse_yaml, to_yaml, validate_profile
 from app.applaut.documents.render import DocumentError, build_documents, sample_documents
-from app.applaut.documents.tailor import drop_one, job_skills, order_skill_rows, pick_entries
+from app.applaut.documents.tailor import (
+    apply_picks, drop_one, job_skills, mentioned, order_skill_rows, pick_entries, skill_names,
+)
 
 PROFILE = {
     "personal": {"name": "Alex Example", "location": "Berlin, Germany", "email": "alex@example.invalid",
@@ -173,7 +175,122 @@ def test_letter_must_be_first_person():
     errors = check_written(w, profile(), JOB.description)
     assert errors == ["paragraph 2 must be in the first person, as the candidate (I, my); "
                       "'you'/'your' may only mean the company"]
+    w = copy.deepcopy(WRITTEN)  # "My" opening a sentence is first person too
+    w["paragraphs"][0] = w["paragraphs"][0].replace("That is the work I have done", "My work has been exactly this")
+    assert check_written(w, profile(), JOB.description) == []
     assert check_written(WRITTEN, profile(), JOB.description) == []  # "your team of 8" is the company
+
+
+# ---------------------------------------------------------------- the writer's bullets and skills
+
+TAILORED = [  # what the writer returns for JOB, most relevant first
+    {"id": "acme.2", "text": "Cut the Spark billing job's runtime from 6 hours to 40 minutes by rewriting it."},
+    {"id": "acme.1", "text": "Loaded sales data into the warehouse by building 12 Airflow pipelines."},
+    {"id": "acme.3", "text": "Introduced dbt models and AWS tests for the finance marts."},  # AWS: not this role's
+    {"id": "acme.2", "text": "A repeat of a fact already picked."},
+    {"id": "beta.1", "text": "Migrated 30 SQL Server reports onto Microsoft Azure."},
+]
+
+
+def as_answer(tailored):
+    """TAILORED as build_documents takes it: ranked ids, plus the reworded ones.
+    "focus" is what the writing call returns instead; the engine tests' fake
+    model answers each focus bullet's rewording call from "reworded"."""
+    ids = [t["id"] for t in tailored]
+    return {"bullets": ids, "reworded": tailored, "focus": [{"id": i, "need": "x"} for i in dict.fromkeys(ids)]}
+
+
+def _check(source, text, entry="acme"):
+    p = profile()
+    names = skill_names(p)
+    e = next(x for x in p["experience"] + p["projects"] if x["id"] == entry)
+    return check_bullet(source, text, mentioned(names, "\n".join(e["facts"] + e["technologies"])), names)
+
+
+def test_reworded_bullet_checks():
+    src = PROFILE["experience"][0]["facts"][1]  # 6 hours to 40 minutes
+    assert _check(src, TAILORED[0]["text"]) is None
+    assert "numbers changed" in _check(src, "Cut the Spark billing job's runtime from 6 hours to 30 minutes by rewriting it.")
+    assert "numbers changed" in _check(src, "Cut the Spark billing job's runtime sharply by rewriting it end to end.")
+    assert "AWS" in _check(PROFILE["experience"][0]["facts"][2], TAILORED[2]["text"])
+    assert _check(PROFILE["experience"][0]["facts"][2], "Introduced dbt models and Airflow tests for the finance marts.") is None  # same role's tool
+    assert "length" in _check(src, "Sped up Spark billing: 6 hours to 40 minutes.")
+    assert "drops skills" in _check(src, "Cut the billing job's runtime from 6 hours to 40 minutes by rewriting it.")
+    assert _check(src, "Cut the billing job's runtime from 6 hours to 40 minutes by rewriting it in PySpark.") is None  # alias: same skill
+    assert "copied" in _check(src, " rewrote the Spark billing job, cutting runtime from 6 hours to 40  minutes.")
+    assert "first person" in _check(src, "I cut the Spark billing job's runtime from 6 hours to 40 minutes by rewriting it.")
+    side = PROFILE["projects"][0]["facts"][0]  # "...3 years of weather data on AWS S3": two 3s
+    assert _check(side, "Collected weather data on AWS S3 for 3 years.", "side") is None
+    assert "numbers changed" in _check(side, "Collected 3 years of weather data on AWS S3 in 3 regions.", "side")
+
+
+def test_reworded_bullet_adds_no_words_of_its_own():
+    """Seen on the real model: the posting's need turned into a claim."""
+    pipelines = PROFILE["experience"][0]["facts"][0]  # Built 12 Airflow pipelines loading sales data into the warehouse.
+    assert _check(pipelines, "Loaded sales data into the warehouse through 12 Airflow pipelines built for it.") is None
+    assert "designed" in _check(pipelines, "Designed distributed services: 12 Airflow pipelines loading sales data into the warehouse.")
+    oncall = PROFILE["experience"][0]["facts"][4]  # Ran the weekly on-call rotation for the data platform.
+    assert _check(oncall, "Ran the data platform's weekly on-call rotation.") is None
+    assert "past-tense" in _check(PROFILE["experience"][0]["facts"][1], "Cutting the Spark billing job's runtime from 6 hours to 40 minutes by rewriting it.")
+    assert "owned" in _check(oncall, "Owned the weekly on-call rotation for the data platform.")
+    assert _check(PROFILE["experience"][1]["facts"][0], "Migrated 30 SQL Server reports onto Microsoft Azure.", "beta") is None  # alias
+    assert "repeats" in _check(PROFILE["experience"][1]["facts"][0], "Migrated 30 SQL Server reports onto Azure, Microsoft Azure.", "beta")
+    assert "numbers changed" in _check("Owned 20+ Airflow pipelines for the data platform.",
+                                       "Owned 20 Airflow pipelines for the data platform.")
+
+
+def test_writer_picks_with_fallbacks():
+    p = profile()
+    picks = apply_picks(p, TAILORED, job_skills(p, JOB.description), JOB.description)
+    acme = picks["acme"].items
+    assert [b.fact_id for b in acme] == ["acme.2", "acme.1", "acme.3"]  # the model's order, the repeat ignored
+    assert acme[0].tailored and acme[0].text == TAILORED[0]["text"]
+    assert not acme[2].tailored and acme[2].text == PROFILE["experience"][0]["facts"][2] and "AWS" in acme[2].note
+    assert picks["beta"].bullets == ["Migrated 30 SQL Server reports onto Microsoft Azure."]
+    side = picks["side"].items  # not picked: code fills the minimum with the original fact
+    assert [b.text for b in side] == PROFILE["projects"][0]["facts"] and "added by code" in side[0].note
+
+
+def test_bullets_the_writer_did_not_reword_keep_the_original():
+    p = profile()
+    picks = apply_picks(p, [{"id": "acme.4", "text": ""}, *TAILORED[:2]], set())
+    first = picks["acme"].items[0]
+    assert (first.fact_id, first.text, first.tailored, first.note) == ("acme.4", PROFILE["experience"][0]["facts"][3], False, None)
+
+
+def test_writer_picks_respect_each_roles_maximum():
+    p = copy.deepcopy(PROFILE)
+    p["experience"][1]["cv_bullets"] = "1-1"
+    p = validate_profile(p)
+    two = [{"id": "beta.1", "text": PROFILE["experience"][1]["facts"][0]},
+           {"id": "beta.2", "text": PROFILE["experience"][1]["facts"][1]}]
+    assert [b.fact_id for b in apply_picks(p, two, set())["beta"].items] == ["beta.1"]
+
+
+def test_fit_drops_code_fills_then_the_models_lowest_ranked():
+    p = profile()
+    picks = apply_picks(p, TAILORED + [{"id": "acme.5", "text": PROFILE["experience"][0]["facts"][4]}], set())
+    assert [b.fact_id for b in picks["acme"].items] == ["acme.2", "acme.1", "acme.3", "acme.5"]
+    assert drop_one(picks)
+    assert [b.fact_id for b in picks["acme"].items] == ["acme.2", "acme.1", "acme.3"]  # its lowest pick (rank 5)
+
+
+def test_build_documents_uses_the_writers_bullets_and_skills():
+    w = {**copy.deepcopy(WRITTEN), **as_answer(TAILORED), "skills_first": ["dbt", "Apache PySpark", "dbt", "Not A Skill"]}
+    docs = build_documents(profile(), JOB, w)
+    assert TAILORED[0]["text"] in docs.cv.text and PROFILE["experience"][0]["facts"][2] in docs.cv.text
+    assert "Data: dbt, Apache PySpark" in docs.cv.text  # the writer's order leads its row
+    by_id = {b["id"]: b for b in docs.bullets}
+    assert by_id["acme.2"]["tailored"] and not by_id["acme.3"]["tailored"] and "AWS" in by_id["acme.3"]["note"]
+
+
+def test_write_schema_only_allows_the_users_facts_and_skills():
+    from app.applaut.ai.prompts import write_schema
+    schema = write_schema(profile())["properties"]
+    ids = ["acme.1", "acme.2", "acme.3", "acme.4", "acme.5", "beta.1", "beta.2", "side.1"]
+    assert schema["bullets"]["items"]["enum"] == ids and schema["focus"]["items"]["properties"]["id"]["enum"] == ids
+    assert schema["bullets"]["maxItems"] == 5 + 3 + 3 and schema["focus"]["maxItems"] == 5
+    assert "dbt" in schema["skills_first"]["items"]["enum"] and "Kafka" not in schema["skills_first"]["items"]["enum"]
 
 
 # ---------------------------------------------------------------- letter + rendering

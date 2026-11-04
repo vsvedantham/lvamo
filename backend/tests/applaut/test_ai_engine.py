@@ -1,13 +1,15 @@
 """Applaut AI engine with a fake model: the FIFO queue, retries, scoring,
 document writing, and the 22:00 nightly run."""
 import copy
+import re
 from datetime import date, datetime, timezone
 
 import pytest
 from sqlalchemy import delete, func, select, update
 
-from app.applaut.ai import handlers, nightly, queue, scoring, worker
-from app.applaut.ai.provider import AnswerCutOff, Completion, ModelError
+from app.applaut.ai import handlers, nightly, prompts, queue, scoring, worker
+from app.applaut.ai.provider import AnswerCutOff, Completion, HostUnreachable, ModelError
+from app.applaut.documents.tailor import fact_ids
 from app.applaut.discovery.base import JobListing
 from app.applaut.models.ai_queue import AIQueueItem, NightRun
 from app.applaut.models.engine_task import EngineTask
@@ -18,7 +20,7 @@ from app.applaut.models.profile import Profile
 from app.config import settings
 from app.db.session import AsyncSessionLocal
 from tests.applaut.conftest import TEST_SOURCE
-from tests.applaut.test_documents import JOB, PROFILE, WRITTEN
+from tests.applaut.test_documents import JOB, PROFILE, TAILORED, WRITTEN, as_answer
 
 GOOD_FACTS = {
     "role_fit": "same", "german_required": "none", "years_required": 3, "seniority": "senior",
@@ -45,6 +47,11 @@ class FakeModel:
             if isinstance(nxt, Exception):
                 raise nxt
             return Completion(nxt, self.name, 100, 50, 10)
+        if schema is prompts.REWORD_SCHEMA:  # one bullet: its wording from written["reworded"], else a copy
+            fact = re.search(r"^Fact: (.*)$", user, re.M).group(1)
+            fid = next(i for i, (_, f) in fact_ids(PROFILE).items() if f == fact)
+            text = next((r["text"] for r in self.written.get("reworded", []) if r["id"] == fid), fact)
+            return Completion({"text": text}, self.name, 300, 40, 300)
         data = self.written if "paragraphs" in schema["properties"] else self.facts
         return Completion(copy.deepcopy(data), self.name, 1000, 200, 1500)
 
@@ -264,6 +271,54 @@ async def test_write_docs_stores_pdfs(ai_user, make_opportunity, _isolated_queue
         assert d.r2_key.startswith(f"applaut/documents/{u.id}/{opp.id}/")
         assert _isolated_queue[d.r2_key].startswith(b"%PDF")
     assert {d.file_name for d in docs} == {"Alex_Example_CV.pdf", "Alex_Example_CoverLetter.pdf"}
+
+
+async def test_write_docs_records_which_bullets_were_reworded(ai_user, make_opportunity):
+    u, p = await ai_user()
+    a = await _raw(u, p, await _job(make_opportunity))
+    await _enqueue("write_docs", a)
+    await worker.run_once(FakeModel(written={**WRITTEN, **as_answer(TAILORED), "skills_first": ["dbt"]}))
+    a = await _get(JobAssessment, a.id)
+    report = a.raw["write_docs"]
+    assert a.docs_status == "done" and report["tailored"] == "3/5" and report["skills_first"] == ["dbt"]
+    assert {b["id"] for b in report["bullets"] if not b["tailored"]} == {"acme.3", "side.1"}
+
+
+ONE_FOCUS = {**WRITTEN, "bullets": ["acme.2", "acme.1", "beta.1"], "focus": [{"id": "acme.2", "need": "Spark tuning"}],
+             "skills_first": []}
+
+
+async def test_rewording_gets_one_retry_with_the_reason(ai_user, make_opportunity):
+    u, p = await ai_user()
+    a = await _raw(u, p, await _job(make_opportunity))
+    await _enqueue("write_docs", a)
+    model = FakeModel(script=[copy.deepcopy(ONE_FOCUS),
+                              {"text": "Tuned Spark: cut the billing job's runtime from 6 hours to 40 minutes."},
+                              {"text": TAILORED[0]["text"]}])
+    await worker.run_once(model)
+    assert "Fact: Rewrote the Spark billing job" in model.calls[1] and "Spark tuning" in model.calls[1]
+    assert "It can't be used: words the fact doesn't have: ['tuned']" in model.calls[2]
+    bullets = {b["id"]: b for b in (await _get(JobAssessment, a.id)).raw["write_docs"]["bullets"]}
+    assert bullets["acme.2"]["tailored"] and bullets["acme.2"]["text"] == TAILORED[0]["text"]
+
+
+async def test_a_failed_rewording_keeps_the_fact_and_the_job(ai_user, make_opportunity):
+    u, p = await ai_user()
+    a = await _raw(u, p, await _job(make_opportunity))
+    await _enqueue("write_docs", a)
+    await worker.run_once(FakeModel(script=[copy.deepcopy(ONE_FOCUS), ModelError("model returned invalid JSON")]))
+    a = await _get(JobAssessment, a.id)
+    bullets = {b["id"]: b for b in a.raw["write_docs"]["bullets"]}
+    assert a.docs_status == "done" and not bullets["acme.2"]["tailored"]
+    assert bullets["acme.2"]["text"] == PROFILE["experience"][0]["facts"][1]
+
+
+async def test_host_lost_during_a_rewording_puts_the_item_back(ai_user, make_opportunity):
+    u, p = await ai_user()
+    a = await _raw(u, p, await _job(make_opportunity))
+    await _enqueue("write_docs", a)
+    served = await worker.run_once(FakeModel(script=[copy.deepcopy(ONE_FOCUS), HostUnreachable("host unreachable")]))
+    assert served.outcome == "released" and (await _get(JobAssessment, a.id)).docs_status != "done"
 
 
 async def test_write_docs_sends_fact_guard_errors_back_once(ai_user, make_opportunity):

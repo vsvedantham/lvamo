@@ -11,6 +11,9 @@ from __future__ import annotations
 
 import re
 
+from app.applaut.documents.fact_guard import BULLET_NUM_RE
+from app.applaut.documents.tailor import all_skill_items, entry_limits, fact_ids, names_as_written, skill_names
+
 JD_MAX_CHARS = 6000  # ~1,500 tokens; postings put requirements early
 
 
@@ -88,31 +91,50 @@ Candidate:
 
 # ---------------------------------------------------------------- writing
 
-WRITE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "headline": {"type": "string"},
-        "paragraphs": {"type": "array", "items": {"type": "string"}, "minItems": 3, "maxItems": 3},
-    },
-    "required": ["headline", "paragraphs"],
-}
-WRITE_MAX_TOKENS = 1000  # Phase 0 answers: 260–510 tokens
+REWORD_MAX = 5  # rewording every bullet doubled the answer (~1,000 tokens, ~5 min a set)
+
+
+def write_schema(profile: dict) -> dict:
+    """The writer's answer. Bullet ids and skill names are enums built from the
+    profile, so the model can only pick facts and skills the user has."""
+    ids = list(fact_ids(profile))
+    limits = entry_limits(profile).values()
+    least, most = sum(lo for lo, _ in limits), sum(hi for _, hi in limits)
+    return {
+        "type": "object",
+        "properties": {
+            "headline": {"type": "string"},
+            # The bullets to reword, each with what the posting needs from it; the
+            # rewording itself is a call of its own per bullet (reword_message).
+            "focus": {"type": "array", "minItems": min(REWORD_MAX, len(ids)), "maxItems": REWORD_MAX, "items": {
+                "type": "object",
+                "properties": {"id": {"enum": ids}, "need": {"type": "string", "maxLength": 60}},
+                "required": ["id", "need"]}},
+            "bullets": {"type": "array", "minItems": least, "maxItems": most, "items": {"enum": ids}},
+            "skills_first": {"type": "array", "maxItems": 8, "items": {"enum": all_skill_items(profile)}},
+            "paragraphs": {"type": "array", "items": {"type": "string"}, "minItems": 3, "maxItems": 3},
+        },
+        "required": ["headline", "focus", "bullets", "skills_first", "paragraphs"],
+    }
+
+
+WRITE_MAX_TOKENS = 1600  # ~350 letter, ~100 ids, needs and skills, headroom
 
 
 def _facts(p: dict) -> str:
+    limits = entry_limits(p)
     out = []
-    for e in p["experience"]:
-        out.append(f"## Role: {e['title']} at {e['company']} ({e.get('start', '')} – {e.get('end', '')})")
-        out += [f"- {f}" for f in e["facts"]]
-    for pr in p.get("projects", []):
-        out.append(f"## Project: {pr['name']} ({pr.get('start', '')} – {pr.get('end', '')})")
-        out += [f"- {f}" for f in pr["facts"]]
+    for e in p["experience"] + p.get("projects", []):
+        lo, hi = limits[e["id"]]
+        name = f"Role: {e['title']} at {e['company']}" if "company" in e else f"Project: {e['name']}"
+        out.append(f"## {name} ({e.get('start', '')} – {e.get('end', '')}) — CV shows {lo}-{hi} of these")
+        out += [f"- [{e['id']}.{n}] {f}" for n, f in enumerate(e["facts"], 1)]
     return "\n".join(out)
 
 
 def write_system(profile: dict) -> str:
     style = profile.get("cover_letter_style")
-    return f"""You write part of a job application for one candidate: a one-line CV headline and the first three paragraphs of a cover letter. Output JSON only.
+    return f"""You tailor one candidate's job application to one posting: the CV headline, which CV bullets to show and which of them to reword, which skills to put first, and the first three paragraphs of the cover letter. Output JSON only, on one line.
 
 Hard rules:
 - Use only the facts below. Never add a skill, tool, employer, title, date, number or achievement that is not there. Every number you write must appear in the facts (or, about the company, in the posting).
@@ -120,18 +142,49 @@ Hard rules:
 - Say nothing about the company that is not in the posting.
 - No filler, no generic enthusiasm ("I am eager", "I am excited"), no claims about how the candidate works that the facts do not state. Specific and true beats long.
 - headline: rewrite this default for THIS job, same style and length, naming the job's role family and 2-4 of the job's skills the candidate really has: "{profile['default_headline']}". Do not copy the default unchanged.
+- focus: the {REWORD_MAX} facts that matter most for this posting, each as id and need: what this posting asks for that the fact proves, in the posting's own words (2-6 words).
+- bullets: the ids of the facts the CV should show for this posting, most relevant first, for every role and project within its "CV shows" range (at least the lower number for each).
+- skills_first: up to 8 different skills of the candidate (exact names from the list) that this posting needs most, most important first; each skill once.
 - paragraph 1 (hook, 60-90 words): what the company does and the specific problem this role solves (from the posting), and why my background fits.
 - paragraph 2 (evidence, 80-120 words): the most relevant role's facts matched to the posting's must-haves, with their real numbers.
 - paragraph 3 (second angle, 50-90 words): another role or the project that fits a different part of the job.
-- Write AS the candidate, in the first person ("I built", "my work at"). "You"/"your" may only mean the company or the team, never the candidate.
+- Write the letter AS the candidate, in the first person ("I built", "my work at"). "You"/"your" may only mean the company or the team, never the candidate.
 - English, plain professional tone. No greeting, sign-off, availability, location or visa details (other code adds those).{f'''
 - Style: {style}''' if style else ''}
 
 Candidate:
 {candidate_summary(profile)}
 
-Facts (the only achievements you may use):
-{_facts(profile)}"""
+Facts (the only achievements you may use), with their ids:
+{_facts(profile)}
+
+{REWORD_RULES}"""
+
+
+REWORD_SCHEMA = {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}
+REWORD_MAX_TOKENS = 200
+
+
+# In write_system, so it is part of the prefix the server keeps cached: this CPU
+# reads prompts at ~16 tokens/s, and each rewording call then sends ~80 tokens.
+REWORD_RULES = """Rewording one bullet. Later messages may ask you to reword ONE fact as a CV bullet. Then answer {"text": "..."} only, with these rules:
+- The same achievement, said with the fact's own words: reorder it so it opens with the part that matters for the given need (usually its result), then how. You may change word forms ("reducing" -> "Reduced") and add joining words (by, with, through, across, for).
+- Add no other word: not the posting's words, not the need's words, nothing the fact doesn't say. Never change what the candidate did ("owned and maintained" stays that, not "built"). Use each word and tool as often as the fact does.
+- Every number exactly as written ("20+" stays "20+"), every tool exactly as written. Start with a past-tense verb. No "I", "my", "we". Within 20% of the fact's length. Never copy the fact as it is.
+Example. Fact: "Rewrote the Spark billing job, cutting runtime from 6 hours to 40 minutes." Answer: {"text": "Cut the Spark billing job's runtime from 6 hours to 40 minutes by rewriting it."}"""
+
+
+def reword_message(profile: dict, fact_id: str, need: str) -> str:
+    """One bullet's rewording, sent after write_system (the rules are there)."""
+    fact = fact_ids(profile)[fact_id][1]
+    tools = names_as_written(skill_names(profile), fact)
+    return (f"Reword ONE bullet now (rules above).\nNeed: {need}\nFact: {fact}\n"
+            f"Keep these numbers: {', '.join(BULLET_NUM_RE.findall(fact)) or 'none'}\n"
+            f"Keep these tools: {', '.join(tools) or 'none'}")
+
+
+def reword_retry(message: str, text: str, problem: str) -> str:
+    return f"{message}\n\nYour previous answer: {text}\nIt can't be used: {problem}. Write it again, fixing that."
 
 
 def fix_message(errors: list[str]) -> str:

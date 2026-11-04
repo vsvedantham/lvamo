@@ -75,7 +75,8 @@ tries.
 
 ## Capacity
 
-About 15 Applaut AI users per host on a normal night (design doc §10.1). The
+About 10 Applaut AI users per host on a normal night (v2 plan §3, B5: writing
+with reworded bullets takes ~6.5 min a set). The
 Settings card stops offering Applaut AI to allow-listed users once
 `APPLAUT_AI_USERS_PER_HOST` × hosts users have it.
 

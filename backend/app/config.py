@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     # engine's AI steps don't run.
     applaut_model_hosts: str = ""           # e.g. 10.8.0.2,10.8.0.3
     applaut_llm_api_key: str = ""           # the hosts' llama-server --api-key (one key for all)
-    applaut_ai_users_per_host: int = 15     # Applaut AI users one host serves in a night (Phase 0 §10.1)
+    applaut_ai_users_per_host: int = 10     # Applaut AI users one host serves in a night (v2 plan §3, B5)
     applaut_llm_timeout_seconds: int = 900
     applaut_ai_doc_threshold: int = 80      # match score from which documents are written
     applaut_ai_score_cap: int = 40          # most jobs the model scores per user per night

@@ -8,19 +8,35 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 
-from app.applaut.documents.tailor import skill_names
+from app.applaut.documents.tailor import _entries, fact_ids, mentioned, skill_names
 
 NUM_RE = re.compile(r"\d+(?:[.,]\d+)?")
+BULLET_NUM_RE = re.compile(r"\d+(?:[.,]\d+)?\+?%?")  # in a bullet "20+" -> "20" changes the claim
+
+# A reworded bullet may reorder its fact, change word forms ("reducing" ->
+# "Reduced") and add these joining words; any other word it adds is the model
+# saying something the fact doesn't (the posting's "designed distributed
+# services", "built" for "owned and maintained").
+WORD_RE = re.compile(r"[a-z][a-z0-9+#]*")
+JOINING_WORDS = frozenset(
+    "the and with through for from into onto across using via while which that its their per over within "
+    "including after before than thereby".split())
+IRREGULAR = {"built": "build", "led": "lead", "ran": "run", "wrote": "write", "made": "make", "grew": "grow",
+             "drove": "drive", "took": "take", "began": "begin", "brought": "bring", "kept": "keep",
+             "sped": "speed", "spent": "spend", "taught": "teach", "rewrote": "rewrite", "rebuilt": "rebuild",
+             "cut": "cut", "set": "set", "put": "put", "won": "win", "shipped": "ship"}
 
 HEADLINE_MAX_WORDS = 22
+BULLET_LENGTH = (0.7, 1.3)  # a reworded bullet's words, as a share of its source fact's
 PARAGRAPH_WORDS = (35, 160)
 LETTER_BODY_MAX_WORDS = 430  # the routine's one-page limit, whole body
 
 
 # The letter is the candidate speaking. A model told about "the candidate"
 # sometimes writes "In your recent role you built…"; "you" may only be the company.
-FIRST_PERSON_RE = re.compile(r"\b(I|I'm|I've|my|me)\b")
+FIRST_PERSON_RE = re.compile(r"\bI\b|\bI'm\b|\bI've\b|\b[Mm]y\b|\b[Mm]e\b")
 ABOUT_CANDIDATE_AS_YOU_RE = re.compile(
     r"\b(you|your)\s+(recent\s+|previous\s+|current\s+)?(established|engineered|owned|built|led|implemented|"
     r"migrated|designed|developed|automated|maintained|managed|created|delivered|role at|experience|background|"
@@ -29,6 +45,35 @@ ABOUT_CANDIDATE_AS_YOU_RE = re.compile(
 
 def _numbers(text: str) -> set[str]:
     return set(NUM_RE.findall(text))
+
+
+def _stem(word: str) -> str:
+    word = IRREGULAR.get(word, word)
+    for suffix in ("ing", "ied", "ies", "ed", "es", "s", "y"):
+        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+            return word[:-len(suffix)]
+    return word
+
+
+def new_words(source: str, text: str, vocabulary: str = "") -> list[str]:
+    """Words of `text` that are not in `source` or `vocabulary` in any form,
+    other than joining words and words of one or two letters."""
+    known = {_stem(w) for w in WORD_RE.findall(f"{source} {vocabulary}".lower())}
+
+    def is_known(stem: str) -> bool:
+        return any(stem[:k] == k_stem[:k] for k_stem in known
+                   for k in [min(5, len(stem), len(k_stem))] if k >= 3 or stem == k_stem)
+    return sorted({w for w in WORD_RE.findall(text.lower())
+                   if len(w) > 2 and w not in JOINING_WORDS and not is_known(_stem(w))})
+
+
+def repeated_words(source: str, text: str) -> list[str]:
+    """Words `text` uses more often than `source` does ("Tableau APIs, and Azure,
+    Azure Key Vault"); a word the fact doesn't have may appear once."""
+    def counts(s: str) -> Counter:
+        return Counter(_stem(w)[:5] for w in WORD_RE.findall(s.lower()) if len(w) > 2 and w not in JOINING_WORDS)
+    before = counts(source)
+    return sorted(stem for stem, n in counts(text).items() if n > max(before[stem], 1))
 
 
 def check_written(written: dict, profile: dict, job_text: str) -> list[str]:
@@ -59,6 +104,53 @@ def check_written(written: dict, profile: dict, job_text: str) -> list[str]:
             errors.append(f"paragraph {i} must be in the first person, as the candidate (I, my); "
                           "'you'/'your' may only mean the company")
     return errors
+
+
+CV_FIRST_PERSON_RE = re.compile(r"\b(I|I'm|I've|my|me|we|our)\b", re.I)
+
+
+def check_bullet(source: str, text: str, allowed: set[str], names: dict[str, set[str]]) -> str | None:
+    """A reworded CV bullet against the fact it rewords. None if it may be shown;
+    otherwise why the original is shown instead. `allowed` is the canonical
+    skills its own role or project mentions (its facts and technologies), so a
+    rewording can't move a tool from another role onto this one. Every skill the
+    fact names must stay: a rewording may reorder the fact, not thin it out,
+    and may add no word of its own beyond joining words (`new_words`)."""
+    if not text:
+        return "empty"
+    if " ".join(text.lower().split()) == " ".join(source.lower().split()):
+        return "copied unchanged"
+    before, after = Counter(BULLET_NUM_RE.findall(source)), Counter(BULLET_NUM_RE.findall(text))
+    if before != after:  # counted: "R2" in the fact must not cover a new "2 hours"
+        return f"numbers changed: {sorted(before.elements())} -> {sorted(after.elements())}"
+    added = mentioned(names, text) - mentioned(names, source) - allowed
+    if added:
+        return f"names skills this role doesn't have: {sorted(added)}"
+    dropped = mentioned(names, source) - mentioned(names, text)
+    if dropped:
+        return f"drops skills the fact names: {sorted(dropped)}"
+    ratio = len(text.split()) / max(1, len(source.split()))
+    if not BULLET_LENGTH[0] <= ratio <= BULLET_LENGTH[1]:
+        return f"length {ratio:.0%} of the original"
+    if CV_FIRST_PERSON_RE.search(text):
+        return "first person in a CV bullet"
+    first = (WORD_RE.findall(text.lower()) or [""])[0]
+    if not (first.endswith("ed") or first in IRREGULAR or first == (WORD_RE.findall(source.lower()) or [""])[0]):
+        return f"doesn't start with a past-tense verb: '{first}'"
+    vocabulary = " ".join(n for skill in allowed | mentioned(names, source) for n in names.get(skill, ()))
+    if added_words := new_words(source, text, vocabulary):
+        return f"words the fact doesn't have: {added_words}"
+    if repeats := repeated_words(source, text):
+        return f"repeats words more often than the fact: {repeats}"
+    return None
+
+
+def check_fact_rewording(profile: dict, fact_id: str, text: str) -> str | None:
+    """check_bullet for one of the profile's facts by id."""
+    names = skill_names(profile)
+    eid, source = fact_ids(profile)[fact_id]
+    entry = next(e for e in _entries(profile) if e["id"] == eid)
+    return check_bullet(source, text, mentioned(names, "\n".join(entry["facts"] + entry.get("technologies", []))), names)
 
 
 def check_cv_skills(skill_rows: list[dict], technologies: dict[str, list[str]], profile: dict) -> list[str]:

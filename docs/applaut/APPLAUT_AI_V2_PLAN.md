@@ -94,7 +94,7 @@ min/set → ~16 users/VM on a normal night.
 - **DB** (changed migration `0030`, not deployed anywhere, so it is edited
   in place rather than adding `0031`): `ai_queue.host` text.
 - **Capacity**: `nightly` logs healthy hosts; admission cap (§3.1 of the
-  design) = 15 users × healthy hosts.
+  design) = `APPLAUT_AI_USERS_PER_HOST` (10, see B5) × healthy hosts.
 
 ### A3. Optional lane on the app VM
 
@@ -112,35 +112,40 @@ the window; lane refuses a host with the wrong model alias.
 
 ## 3. Workstream B — the writer does more (same templates)
 
-### B1. One writing call, more output (changed)
+### B1. The writing call picks, short calls reword (changed)
 
-The `write_docs` model call returns:
+As built (step 3). The first plan, one call returning every bullet reworded,
+failed on the real model: Qwen3.5-9B copied the facts word for word in three
+prompt rounds (0–10% reworded). The work is now split:
 
-```json
-{
-  "headline": "…",
-  "bullets": [{"id": "exl_pa.3", "text": "…reworded…"}, …],   // ranked, most relevant first
-  "skills_first": ["Apache Kafka", "Spark Structured Streaming", …],
-  "paragraphs": ["…", "…", "…"]
-}
-```
+1. **Writing call** (`write_system` + the posting), returns:
 
-- Fact IDs are made by code at prompt time: `<entry id>.<index>` (e.g.
-  `exl_pa.3`). No master-profile schema change.
-- The prompt lists each role's facts with IDs and that role's bullet limit
-  (`bullet_limits`). Rules: pick up to the limit per role, most relevant
-  first; reword each picked fact for this job; same facts, same numbers,
-  same tools; lead with what this job cares about; CV style (verb first, no
-  "I"), ±30% length.
-- `WRITE_SCHEMA` / `WRITE_MAX_TOKENS` (→ 1,600) updated. Expected output
-  ~750 tokens → ~4 min per set (was ~2.75). Capacity ~14 users/VM.
+   ```json
+   {
+     "headline": "…",
+     "focus": [{"id": "exl_pa.3", "need": "reduce processing times"}, …],  // 5
+     "bullets": ["exl_pa.3", "exl_jpa.2", …],                               // ranked ids
+     "skills_first": ["Azure Databricks", "Apache PySpark", …],             // ≤ 8
+     "paragraphs": ["…", "…", "…"]
+   }
+   ```
+
+   Fact ids, bullet ids and skill names are JSON-schema enums built from the
+   profile, so the model can only name the user's own facts and skills.
+2. **One rewording call per focus bullet** (`reword_message`), sent after the
+   same `write_system` prefix so llama-server keeps that prompt cached
+   between jobs. It gets the fact, the need, the numbers and the tools (as
+   the fact spells them) and returns `{"text"}`. If the checks reject it,
+   one retry names the reason; a second rejection or a model error leaves
+   the fact as written. Only a host going down fails the whole item (put
+   back in the queue, as in A2).
 
 ### B2. Checks, piece by piece (changed `fact_guard.py`, `tailor.py`)
 
 | Piece | Check | If it fails |
 |---|---|---|
 | Bullet IDs | Exist; belong to an entry; per-entry min/max respected | Code picker fills / trims that entry (today's `_rank_facts`) |
-| Each reworded bullet | Same set of numbers as its source fact; every skill/tool name it mentions is in that fact or that entry's `technologies` (no cross-role moves); 70–130% of source length; no first person | That bullet uses the original fact text; others keep theirs |
+| Each reworded bullet | Not a copy; the same numbers as its fact, counted (the "2" in "R2" can't cover a new "2 hours"); every skill it names is in that fact or that entry's `technologies` (no cross-role moves) and every skill the fact names stays; 70–130% of the fact's length; no first person; **no word the fact doesn't have** in some form, other than joining words (`new_words`) | That bullet uses the original fact text; others keep theirs |
 | `skills_first` | Every name is a profile skill | Code order (today's `order_skill_rows`) |
 | Headline, paragraphs | As today (numbers, first person, lengths) | Feedback to the model once, then the job's docs fail (as today) |
 
@@ -171,6 +176,30 @@ Re-run the 5 Phase 0 writing jobs with the new call on the test container:
 per-bullet pass rate (target ≥ 85% kept as tailored), time per set, and a
 human read of every reworded bullet for truthfulness. Then a few real nights
 on the branch before calling it done.
+
+**Result (2026-11-04, the two-stage writer of B1, Qwen3.5-9B on 3 cores of
+`lvamo-backend`):** all 5 sets written on the first try.
+
+| | Runs 1–3: one call rewords | Final: picks, then a call per bullet |
+|---|---|---|
+| Bullets reworded (of the 5 per job the writer picked) | 0–5 of 25 | 14 of 25 (56%) |
+| Reworded bullets that say something the fact doesn't | 6 of 16 in a trial before the new-words check | 0 of 14 (read one by one) |
+| Time per set | 4–6.5 min | 5.8–7.9 min (writing ~3.5, rewording ~2.7) |
+
+- The 85% target is not met: 9 of 25 came back as copies, 2 were rejected by
+  the checks. A copy or a rejection shows the fact as written, so the CV is
+  never worse than the code-only one. What the accepted ones do is move the
+  result to the front: "Reduced monthly Azure compute costs by 20% for
+  Databricks clusters by implementing cost-optimization strategies, …".
+- Before the new-words check, the model turned the posting's need into a
+  claim ("Designed and built high-scale distributed services by …",
+  "Automated resource type onboarding …", "Built" for "Owned and
+  maintained"). No number or skill check catches that; `new_words` does.
+- Capacity: ~6.5 min per set instead of ~2.5 makes a normal night ~50 min of
+  model time per user, so about **10 users per host** (was 14).
+  `APPLAUT_AI_USERS_PER_HOST` now defaults to 10.
+- The writer's ranking of bullets and `skills_first` (deduped by code; the
+  model repeats "Data Quality" to fill 8 slots) are in use either way.
 
 ---
 
@@ -241,7 +270,7 @@ No layout changes to the user's template, same as the standard one.
 |---|---|---|
 | 1 | §6.1, §6.2 small fixes | Tests pass. **Done 2026-11-02**: failed `write_docs` keep the model's answer in `raw.write_docs_last_answer`; letters use `company_display()` (the posting's own spelling, else a capitalised slug) |
 | 2 | A1 + A2 + A4 (lanes, host files) | Two fake hosts tested; one real host (test container) runs a night via a lane. **Done 2026-11-02**: `ai/hosts.py`, `ai/models.lock`, lanes in `ai/worker.py`, `queue.release`, `HostUnreachable`, capacity-aware allowlist, `model-host/setup.sh` + `update.sh` + two-server compose; `test_ai_lanes.py`. Live on `lvamo-backend` cores 1–3: `update.sh` brought both servers up from the lock, one lane scored 2 jobs and wrote 1 set; with the writer stopped its item went back untouched (tries 0) and finished on the first try once the writer was back. A3 (lane on the app VM) not done |
-| 3 | B1–B3 (writer does more) | B5 benchmark passes; Venkat reads the reworded bullets |
+| 3 | B1–B3 (writer does more) | B5 benchmark passes; Venkat reads the reworded bullets. **Built 2026-11-04**: two-stage writer (B1), per-bullet checks incl. `new_words` (B2); B5 result above; waits on Venkat's read |
 | 4 | B4 (original vs tailored) | Toggle re-renders a CV in < 1 s, tested |
 | 5 | C (bullet bank builder) | Venkat's bank reaches 8+ facts per role through it |
 | 6 | Partner VM goes live | `setup.sh` on the VM, `APPLAUT_MODEL_HOSTS` set, deploy, verify in prod, `PROGRESS_APPLAUT.md` |

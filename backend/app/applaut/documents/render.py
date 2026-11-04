@@ -10,7 +10,9 @@ from pathlib import Path
 
 from app.applaut.documents.fact_guard import LETTER_BODY_MAX_WORDS, PARAGRAPH_WORDS, check_cv_skills, check_written
 from app.applaut.documents.letter import JobInfo, build_letter
-from app.applaut.documents.tailor import drop_one, job_skills, order_skill_rows, pick_entries
+from app.applaut.documents.tailor import (
+    apply_picks, drop_one, job_skills, mentioned, order_skill_rows, pick_entries, skill_names,
+)
 
 STANDARD_TEMPLATES = Path(__file__).resolve().parent.parent / "routine" / "setup_kit" / "templates"
 CV_MAX_PAGES = 2
@@ -42,6 +44,9 @@ class DocumentSet:
     bullets_dropped: int = 0
     sentences_dropped: int = 0
     job_skills: list[str] = field(default_factory=list)
+    # Per CV bullet shown: fact id, original, text, whether reworded, why not.
+    bullets: list[dict] = field(default_factory=list)
+    skills_first: list[str] = field(default_factory=list)
 
 
 SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z])")
@@ -95,9 +100,11 @@ def _letter_text(profile: dict, cl: dict) -> str:
 
 def build_documents(profile: dict, job: JobInfo, written: dict, skill_hints: list[str] | None = None,
                     check: bool = True) -> DocumentSet:
-    """CV + cover letter for one job from the model's {"headline", "paragraphs"}.
-    Raises DocumentError with messages the model can act on. `check=False` skips
-    the fact guard (only for the layout preview, whose text Applaut wrote)."""
+    """CV + cover letter for one job from the writer's answer: "headline" and
+    "paragraphs" (checked; a failure raises DocumentError with messages the model
+    can act on), and optionally "bullets" and "skills_first" (checked piece by
+    piece, falling back to code's choice; they never fail the job). `check=False`
+    skips the fact guard (only for the layout preview, whose text Applaut wrote)."""
     errors = check_written(written, profile, job.description) if check else []
     paras = [p.strip() for p in written.get("paragraphs") or []]
     cl = build_letter(profile, job, paras)
@@ -108,9 +115,19 @@ def build_documents(profile: dict, job: JobInfo, written: dict, skill_hints: lis
     if errors:
         raise DocumentError(errors)
 
-    wanted = job_skills(profile, f"{job.title}\n{job.description}", skill_hints)
-    skill_rows = order_skill_rows(profile, wanted)
-    picks = pick_entries(profile, wanted, f"{job.title}\n{job.description}")
+    job_text = f"{job.title}\n{job.description}"
+    first = list(dict.fromkeys(x for x in written.get("skills_first") or [] if isinstance(x, str)))  # each once
+    wanted = job_skills(profile, job_text, skill_hints) | mentioned(skill_names(profile), "\n".join(first))
+    skill_rows = order_skill_rows(profile, wanted, first)
+    if written.get("bullets"):
+        reworded: dict = {}
+        for r in written.get("reworded") or []:  # a repeated id keeps its first wording
+            if isinstance(r, dict):
+                reworded.setdefault(r.get("id"), r.get("text") or "")
+        chosen = [{"id": i, "text": reworded.get(i, "")} for i in written["bullets"]]
+        picks = apply_picks(profile, chosen, wanted, job_text)
+    else:
+        picks = pick_entries(profile, wanted, job_text)
     bug = check_cv_skills(skill_rows, {k: v.technologies for k, v in picks.items()}, profile)
     if bug:
         raise DocumentError(bug)
@@ -143,6 +160,9 @@ def build_documents(profile: dict, job: JobInfo, written: dict, skill_hints: lis
         bullets_dropped=dropped,
         sentences_dropped=trimmed,
         job_skills=sorted(wanted),
+        bullets=[{"id": b.fact_id, "original": b.original, "text": b.text, "tailored": b.tailored, "note": b.note}
+                 for p in picks.values() for b in p.items],
+        skills_first=first,
     )
 
 

@@ -102,7 +102,13 @@ then nothing goes to `main` or prod.
   pinned by `ai/models.lock`; one worker lane per host; an unreachable host's
   job goes back to its place without using a try. Adding a host is
   `model-host/setup.sh` on it plus one address in `APPLAUT_MODEL_HOSTS`.
-- Backend tests: 205 pass locally (`test_documents.py`,
+- v2 step 3 (2026-11-04): the writer picks and ranks the CV bullets and the
+  skills to lead with, names the posting's need for its top 5, and each of
+  those is reworded in a short call of its own. A rewording is shown only if
+  it keeps the fact's numbers and tools and adds no word of its own;
+  otherwise the fact as written. Benchmark: 14 of 25 reworded, none untrue,
+  ~6.5 min per set, so ~10 users per host (plan §3, B5).
+- Backend tests: 233 pass locally (`test_documents.py`,
   `test_master_profile_api.py`, `test_ai_engine.py`).
 - Before real users' data goes to the partner's VM: a processing agreement
   and a privacy-notice line (model-host/README.md).

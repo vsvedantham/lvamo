@@ -10,11 +10,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.applaut.ai import prompts, scoring
-from app.applaut.ai.provider import Completion, Provider
+from app.applaut.ai.provider import Completion, HostUnreachable, ModelError, Provider
 from app.applaut.ai.queue import enqueue
+from app.applaut.documents.fact_guard import check_fact_rewording
 from app.applaut.documents.letter import JobInfo, company_display
 from app.applaut.documents.profile_schema import ProfileError, validate_profile
 from app.applaut.documents.render import DocumentError, build_documents
+from app.applaut.documents.tailor import fact_ids
 from app.applaut.models.ai_queue import AIQueueItem
 from app.applaut.models.generated_document import GeneratedDocument
 from app.applaut.models.job_assessment import JobAssessment
@@ -101,6 +103,28 @@ async def score_job(db: AsyncSession, item: AIQueueItem, provider: Provider) -> 
     return usage
 
 
+async def _reword(provider: Provider, system: str, mp: dict, focus: dict, usage: Usage) -> str:
+    """One focus bullet reworded in its own short call, with one retry that
+    names the problem. Returns the last wording; the CV shows the fact as
+    written when that wording fails its checks (apply_picks notes why)."""
+    message = prompts.reword_message(mp, focus["id"], focus.get("need") or "")
+    user, text = message, ""
+    for _ in range(2):
+        try:
+            c = await provider.complete_json(system, user, prompts.REWORD_SCHEMA, prompts.REWORD_MAX_TOKENS)
+        except HostUnreachable:
+            raise
+        except ModelError:  # one bullet's bad answer: the fact stays as written
+            return text
+        usage.add(c)
+        text = (c.data.get("text") or "").strip()
+        problem = check_fact_rewording(mp, focus["id"], text)
+        if problem is None:
+            break
+        user = prompts.reword_retry(message, text, problem)
+    return text
+
+
 async def write_docs(db: AsyncSession, item: AIQueueItem, provider: Provider) -> Usage:
     a, opp, profile, mp = await _load(db, item)
     company = company_display(opp.company_name, opp.description or "")
@@ -112,14 +136,20 @@ async def write_docs(db: AsyncSession, item: AIQueueItem, provider: Provider) ->
     usage = Usage()
 
     docs, errors = None, []
+    reworded: dict[str, str] = {}  # fact id -> wording, kept if the letter needs a second try
     for attempt in range(2):  # the second try gets the fact guard's messages
         user = message if not errors else (
             f"{message}\n\nYour previous answer:\n{json.dumps(written, ensure_ascii=False)}\n\n{prompts.fix_message(errors)}")
-        c = await provider.complete_json(system, user, prompts.WRITE_SCHEMA, prompts.WRITE_MAX_TOKENS)
+        c = await provider.complete_json(system, user, prompts.write_schema(mp), prompts.WRITE_MAX_TOKENS)
         usage.add(c)
         written = c.data
+        known, chosen = fact_ids(mp), written.get("bullets") or []
+        for focus in (written.get("focus") or [])[:prompts.REWORD_MAX]:
+            if focus.get("id") in known and focus["id"] in chosen and focus["id"] not in reworded:
+                reworded[focus["id"]] = await _reword(provider, system, mp, focus, usage)
+        answer = {**written, "reworded": [{"id": i, "text": t} for i, t in reworded.items()]}
         try:
-            docs = await asyncio.to_thread(build_documents, mp, job, written, hints)
+            docs = await asyncio.to_thread(build_documents, mp, job, answer, hints)
             break
         except DocumentError as exc:
             errors = exc.errors
@@ -142,6 +172,10 @@ async def write_docs(db: AsyncSession, item: AIQueueItem, provider: Provider) ->
             file_name=f"{name}_{'CV' if stem == 'cv' else 'CoverLetter'}.pdf",
         ))
     a.docs_status = "done"
+    tailored = sum(b["tailored"] for b in docs.bullets)
+    a.raw = {**(a.raw or {}), "write_docs": {
+        "bullets": docs.bullets, "skills_first": docs.skills_first, "bullets_dropped": docs.bullets_dropped,
+        "sentences_dropped": docs.sentences_dropped, "tailored": f"{tailored}/{len(docs.bullets)}"}}
     await db.commit()
     return usage
 
