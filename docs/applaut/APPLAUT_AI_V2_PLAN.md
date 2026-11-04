@@ -172,8 +172,8 @@ As built (step 4, 2026-11-04):
   `POST /documents/{id}/bullets/{fact_id}/use` `{version: original|tailored}`
   builds the CV again in code (`render.rerender_cv`: no model, ~0.1 s on
   Venkat's profile), stores the PDF, and saves a new `is_current` row; the
-  previous row stays. Applaut has no audit log table (only ProSho does), so
-  that row history plus `details.choices` is the trail. 409 on an old
+  previous row stays, and the audit log gets `document.bullet_choice`
+  (plus `details.choices` on the CV itself). 409 on an old
   version, 422 for a bullet with no tailored wording, 404 for someone
   else's CV.
 - **UI**: a "Tailored bullets" panel on the job's Documents page (CV tab):

@@ -9,6 +9,7 @@ from sqlalchemy import select, update
 
 from app.applaut.ai import worker
 from app.applaut.documents.render import build_documents, rerender_cv
+from app.applaut.models.audit_log import AuditLog
 from app.applaut.models.generated_document import GeneratedDocument
 from app.applaut.models.master_profile import MasterProfile
 from app.applaut.models.profile import Profile
@@ -70,6 +71,9 @@ async def test_switching_a_bullet_makes_a_new_current_cv(client, make_user, make
         [("acme.2", "original", str(cv.id))]
     async with AsyncSessionLocal() as db:
         assert (await db.get(GeneratedDocument, cv.id)).is_current is False  # the old version stays, not current
+        audit = await db.scalar(select(AuditLog).where(AuditLog.action == "document.bullet_choice",
+                                                       AuditLog.entity_id == str(new.id)))
+    assert audit.after_state == {"document_id": str(new.id), "fact_id": "acme.2", "use": "original"}
 
     back = await client.post(f"{API}/{new.id}/bullets/acme.2/use", json={"version": "tailored"}, headers=headers)
     assert back.status_code == 200 and TAILORED[0]["text"] in (await _current_cv(cv.opportunity_id)).content

@@ -15,6 +15,7 @@ from app.applaut.models.generated_document import GeneratedDocument
 from app.applaut.models.opportunity import Opportunity
 from app.applaut.models.resume import Resume
 from app.applaut.models.user import User
+from app.applaut.services.audit import log_action
 from app.applaut.services.profile import get_active_profile
 from app.applaut.services.visibility import require_visible_opportunity
 
@@ -246,9 +247,12 @@ async def choose_bullet_version(document_id: str, fact_id: str, version: str, us
         engine=doc.engine, content_type=doc.content_type, content_sha256=rendered.sha256, details=details,
     )
     db.add(new)
+    await db.flush()
+    await log_action(action="document.bullet_choice", db=db, user_id=str(user.id), entity_type="generated_document",
+                     entity_id=str(new.id), before_state={"document_id": str(doc.id), "fact_id": fact_id},
+                     after_state={"document_id": str(new.id), "fact_id": fact_id, "use": version})
     await db.commit()
     await db.refresh(new)
-    logger.info("CV %s: bullet %s now %s (new version %s)", doc.id, fact_id, version, new.id)
     return new, _details_response(new, details)
 
 
