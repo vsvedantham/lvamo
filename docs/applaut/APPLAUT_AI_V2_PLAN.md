@@ -160,15 +160,25 @@ untouched; the reworded text goes into the same `bullets` slots.
 
 ### B4. Original vs tailored (new)
 
-- **DB**: `generated_documents.details` JSONB (in migration `0030`):
-  per bullet `{id, original, tailored, used: tailored|original, reason}`,
-  plus skills order and headline.
+As built (step 4, 2026-11-04):
+
+- **DB**: `generated_documents.details` JSONB (in migration `0030`), on
+  Applaut AI CVs only: a snapshot of the master profile, the headline, the
+  skill rows, and per role its bullets `{id, original, tailored (or null),
+  use: tailored|original, rank, note}`, plus `choices` (each switch: fact,
+  version, the version it came from, time). ~12 KB per CV. The snapshot
+  means a later edit to the master profile doesn't change an existing CV.
 - **API**: `GET /documents/{id}/details`;
   `POST /documents/{id}/bullets/{fact_id}/use` `{version: original|tailored}`
-  → re-renders the CV in code (no model, < 1 s), new `is_current` row,
-  audit `document.bullet_choice`.
-- **UI**: on the job's documents panel, "Tailored bullets" list with a
-  per-bullet "use original" toggle.
+  builds the CV again in code (`render.rerender_cv`: no model, ~0.1 s on
+  Venkat's profile), stores the PDF, and saves a new `is_current` row; the
+  previous row stays. Applaut has no audit log table (only ProSho does), so
+  that row history plus `details.choices` is the trail. 409 on an old
+  version, 422 for a bullet with no tailored wording, 404 for someone
+  else's CV.
+- **UI**: a "Tailored bullets" panel on the job's Documents page (CV tab):
+  each reworded bullet with the other wording under it and a "Use my
+  wording" / "Use tailored" button.
 
 ### B5. Before switching on (benchmark)
 
@@ -271,7 +281,7 @@ No layout changes to the user's template, same as the standard one.
 | 1 | §6.1, §6.2 small fixes | Tests pass. **Done 2026-11-02**: failed `write_docs` keep the model's answer in `raw.write_docs_last_answer`; letters use `company_display()` (the posting's own spelling, else a capitalised slug) |
 | 2 | A1 + A2 + A4 (lanes, host files) | Two fake hosts tested; one real host (test container) runs a night via a lane. **Done 2026-11-02**: `ai/hosts.py`, `ai/models.lock`, lanes in `ai/worker.py`, `queue.release`, `HostUnreachable`, capacity-aware allowlist, `model-host/setup.sh` + `update.sh` + two-server compose; `test_ai_lanes.py`. Live on `lvamo-backend` cores 1–3: `update.sh` brought both servers up from the lock, one lane scored 2 jobs and wrote 1 set; with the writer stopped its item went back untouched (tries 0) and finished on the first try once the writer was back. A3 (lane on the app VM) not done |
 | 3 | B1–B3 (writer does more) | B5 benchmark passes; Venkat reads the reworded bullets. **Built 2026-11-04**: two-stage writer (B1), per-bullet checks incl. `new_words` (B2); B5 result above; waits on Venkat's read |
-| 4 | B4 (original vs tailored) | Toggle re-renders a CV in < 1 s, tested |
+| 4 | B4 (original vs tailored) | Toggle re-renders a CV in < 1 s, tested. **Done 2026-11-04**: `details` column, two endpoints, Documents-page panel; re-render ~0.1 s; `test_cv_bullet_choice.py`. Checked in the browser locally up to the file upload (no R2 bucket locally); the full switch is covered by the API tests |
 | 5 | C (bullet bank builder) | Venkat's bank reaches 8+ facts per role through it |
 | 6 | Partner VM goes live | `setup.sh` on the VM, `APPLAUT_MODEL_HOSTS` set, deploy, verify in prod, `PROGRESS_APPLAUT.md` |
 | 7 | D (own template) | As design doc §8 Phase 4 |

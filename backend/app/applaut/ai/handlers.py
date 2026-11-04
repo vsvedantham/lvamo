@@ -170,6 +170,7 @@ async def write_docs(db: AsyncSession, item: AIQueueItem, provider: Provider) ->
             generation_mode="ai", content=rendered.text, r2_key=key, ai_model=usage.model, is_current=True,
             engine=ENGINE, content_type="application/pdf", content_sha256=rendered.sha256,
             file_name=f"{name}_{'CV' if stem == 'cv' else 'CoverLetter'}.pdf",
+            details=docs.cv_details if stem == "cv" else None,
         ))
     a.docs_status = "done"
     tailored = sum(b["tailored"] for b in docs.bullets)

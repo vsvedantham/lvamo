@@ -3,6 +3,7 @@ routine's own `cv.html.j2` / `cover_letter.html.j2`, read from the setup kit
 so both always look the same)."""
 from __future__ import annotations
 
+import copy
 import hashlib
 import re
 from dataclasses import dataclass, field
@@ -11,7 +12,7 @@ from pathlib import Path
 from app.applaut.documents.fact_guard import LETTER_BODY_MAX_WORDS, PARAGRAPH_WORDS, check_cv_skills, check_written
 from app.applaut.documents.letter import JobInfo, build_letter
 from app.applaut.documents.tailor import (
-    apply_picks, drop_one, job_skills, mentioned, order_skill_rows, pick_entries, skill_names,
+    Bullet, EntryPick, apply_picks, drop_one, job_skills, mentioned, order_skill_rows, pick_entries, skill_names,
 )
 
 STANDARD_TEMPLATES = Path(__file__).resolve().parent.parent / "routine" / "setup_kit" / "templates"
@@ -47,6 +48,8 @@ class DocumentSet:
     # Per CV bullet shown: fact id, original, text, whether reworded, why not.
     bullets: list[dict] = field(default_factory=list)
     skills_first: list[str] = field(default_factory=list)
+    # What rerender_cv needs to build this CV again (stored on its row).
+    cv_details: dict = field(default_factory=dict)
 
 
 SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z])")
@@ -93,6 +96,55 @@ def _cv_text(ctx: dict) -> str:
     return "\n".join(lines)
 
 
+def _fit_cv(profile: dict, headline: str, skill_rows: list[dict], picks: dict,
+            wanted: set[str] | None = None) -> tuple[dict, bytes, int, int]:
+    """Render the CV, dropping the lowest-ranked bullet until it fits two pages.
+    Returns the context, PDF, pages and how many bullets were dropped."""
+    dropped = 0
+    while True:
+        ctx = _cv_context(profile, headline, skill_rows, picks)
+        pdf, pages = render_pdf("cv.html.j2", ctx)
+        if pages <= CV_MAX_PAGES or not drop_one(picks, profile, wanted):
+            break
+        dropped += 1
+    if pages > CV_MAX_PAGES:
+        raise DocumentError([f"the CV is {pages} pages even with every role at its minimum bullets; "
+                             "shorten the profile's bullets or lower cv_bullets"])
+    return ctx, pdf, pages, dropped
+
+
+def _cv_details(profile: dict, headline: str, skill_rows: list[dict], picks: dict) -> dict:
+    """Everything a CV is built from, so one bullet can be switched between its
+    tailored and original wording later without the model. The profile is a
+    snapshot: editing the master profile afterwards doesn't change this CV."""
+    return {
+        "v": 1, "profile": copy.deepcopy(profile), "headline": headline, "skill_rows": skill_rows,
+        "entries": [{"id": eid, "technologies": p.technologies, "min_bullets": p.min_bullets, "bullets": [
+            {"id": b.fact_id, "original": b.original, "tailored": b.text if b.tailored else None,
+             "use": "tailored" if b.tailored else "original", "rank": list(b.rank), "note": b.note}
+            for b in p.items]} for eid, p in picks.items()],
+        "choices": [],
+    }
+
+
+def rerender_cv(details: dict) -> tuple[Rendered, dict]:
+    """The CV built again from its details, each bullet in the wording its
+    "use" says. Code only (no model). A bullet the two-page fit has to drop
+    leaves the returned details too."""
+    def bullet(b: dict) -> Bullet:
+        tailored = b["use"] == "tailored" and bool(b["tailored"])
+        return Bullet(b["id"], b["original"], b["tailored"] if tailored else b["original"], tuple(b["rank"]),
+                      tailored=tailored, note=b["note"])
+    picks = {e["id"]: EntryPick(e["id"], [bullet(b) for b in e["bullets"]], e["technologies"],
+                                min_bullets=e["min_bullets"]) for e in details["entries"]}
+    ctx, pdf, pages, _ = _fit_cv(details["profile"], details["headline"], details["skill_rows"], picks)
+    shown = {b.fact_id for p in picks.values() for b in p.items}
+    details = copy.deepcopy(details)
+    for e in details["entries"]:
+        e["bullets"] = [b for b in e["bullets"] if b["id"] in shown]
+    return Rendered(pdf, pages, _cv_text(ctx)), details
+
+
 def _letter_text(profile: dict, cl: dict) -> str:
     return "\n\n".join([cl["date"], "\n".join(cl["recipient_lines"]), cl["subject"], cl["salutation"],
                         *cl["paragraphs"], cl["closing"], profile["personal"]["name"]])
@@ -133,16 +185,7 @@ def build_documents(profile: dict, job: JobInfo, written: dict, skill_hints: lis
         raise DocumentError(bug)
 
     headline = written["headline"].strip()
-    dropped = 0
-    while True:
-        ctx = _cv_context(profile, headline, skill_rows, picks)
-        cv_pdf, cv_pages = render_pdf("cv.html.j2", ctx)
-        if cv_pages <= CV_MAX_PAGES or not drop_one(picks, profile, wanted):
-            break
-        dropped += 1
-    if cv_pages > CV_MAX_PAGES:
-        raise DocumentError([f"the CV is {cv_pages} pages even with every role at its minimum bullets; "
-                             "shorten the profile's bullets or lower cv_bullets"])
+    ctx, cv_pdf, cv_pages, dropped = _fit_cv(profile, headline, skill_rows, picks, wanted)
 
     trimmed = 0
     while True:
@@ -163,6 +206,7 @@ def build_documents(profile: dict, job: JobInfo, written: dict, skill_hints: lis
         bullets=[{"id": b.fact_id, "original": b.original, "text": b.text, "tailored": b.tailored, "note": b.note}
                  for p in picks.values() for b in p.items],
         skills_first=first,
+        cv_details=_cv_details(profile, headline, skill_rows, picks),
     )
 
 

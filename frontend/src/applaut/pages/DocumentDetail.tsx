@@ -5,6 +5,7 @@ import { generateDocuments, getDocumentFileLink, getOpportunityDocuments, type D
 import { getOpportunity, type OpportunityDetail } from '../api/opportunity'
 import { getMyProfile, JOB_ENGINE_LABELS, type JobEngine } from '../api/profile'
 import { apiErrorMessage } from '../api/errors'
+import TailoredBullets from '../components/TailoredBullets'
 
 function MarkdownBlock({ content }: { content: string }) {
   return (
@@ -251,6 +252,12 @@ export default function DocumentDetail() {
                   {' · '}{new Date(activeDoc.created_at).toLocaleString()}
                 </span>
               </div>
+              {activeTab === 'resume' && activeDoc.has_details && (
+                <TailoredBullets
+                  documentId={activeDoc.id}
+                  onNewVersion={doc => setDocs(d => d && { ...d, tailored_resume: doc })}
+                />
+              )}
               <MarkdownBlock content={activeDoc.content} />
             </>
           ) : (

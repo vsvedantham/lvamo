@@ -1,5 +1,8 @@
+import asyncio
+import copy
 import logging
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -174,6 +177,79 @@ async def get_document(
 
 
 FILE_LINK_SECONDS = 300
+
+
+def _details_response(doc: GeneratedDocument, details: dict) -> dict:
+    entries = {e["id"]: e for e in details["profile"]["experience"] + details["profile"].get("projects", [])}
+
+    def label(eid: str) -> str:
+        e = entries.get(eid, {})
+        return " at ".join(x for x in (e.get("title"), e.get("company")) if x) or e.get("name") or eid
+    return {"document_id": doc.id, "is_current": doc.is_current, "bullets": [
+        {"fact_id": b["id"], "entry": label(e["id"]), "original": b["original"], "tailored": b["tailored"],
+         "use": b["use"], "note": b["note"]}
+        for e in details["entries"] for b in e["bullets"]]}
+
+
+async def _cv_with_details(document_id: str, user: User, db: AsyncSession) -> GeneratedDocument:
+    doc = await get_document(document_id, user, db)
+    if doc.document_type != "tailored_resume" or not doc.details:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="This document has no tailored bullets")
+    return doc
+
+
+async def get_cv_details(document_id: str, user: User, db: AsyncSession) -> dict:
+    doc = await _cv_with_details(document_id, user, db)
+    return _details_response(doc, doc.details)
+
+
+async def choose_bullet_version(document_id: str, fact_id: str, version: str, user: User,
+                                db: AsyncSession) -> tuple[GeneratedDocument, dict]:
+    """Show one CV bullet in its tailored or original wording. The CV is built
+    again in code from its stored details (no model) and saved as a new current
+    version; the previous one stays, so the choice can be traced."""
+    from app.applaut.ai import handlers
+    from app.applaut.documents.render import DocumentError, rerender_cv
+
+    doc = await _cv_with_details(document_id, user, db)
+    doc = await db.get(GeneratedDocument, doc.id, with_for_update=True, populate_existing=True)  # one switch at a time
+    if not doc.is_current:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A newer version of this CV exists; reload it")
+    details = copy.deepcopy(doc.details)
+    bullet = next((b for e in details["entries"] for b in e["bullets"] if b["id"] == fact_id), None)
+    if bullet is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="That bullet isn't on this CV")
+    if version == "tailored" and not bullet["tailored"]:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="This bullet has no tailored wording")
+    if bullet["use"] == version:
+        return doc, _details_response(doc, details)
+
+    bullet["use"] = version
+    details["choices"].append({"fact_id": fact_id, "use": version, "from_document": str(doc.id),
+                               "at": datetime.now(timezone.utc).isoformat()})
+    try:
+        rendered, details = await asyncio.to_thread(rerender_cv, details)
+    except DocumentError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    key = f"applaut/documents/{user.id}/{doc.opportunity_id}/{rendered.sha256[:8]}/cv.pdf"
+    try:
+        await handlers.store_file(key, rendered.pdf, "application/pdf")
+    except handlers.PermanentError:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="File storage isn't configured")
+
+    doc.is_current = False
+    new = GeneratedDocument(
+        user_id=doc.user_id, profile_id=doc.profile_id, application_id=doc.application_id,
+        opportunity_id=doc.opportunity_id, document_type=doc.document_type, generation_mode=doc.generation_mode,
+        content=rendered.text, file_name=doc.file_name, r2_key=key, ai_model=doc.ai_model, is_current=True,
+        engine=doc.engine, content_type=doc.content_type, content_sha256=rendered.sha256, details=details,
+    )
+    db.add(new)
+    await db.commit()
+    await db.refresh(new)
+    logger.info("CV %s: bullet %s now %s (new version %s)", doc.id, fact_id, version, new.id)
+    return new, _details_response(new, details)
 
 
 async def get_document_file_link(document_id: str, user: User, db: AsyncSession) -> tuple[str, str]:

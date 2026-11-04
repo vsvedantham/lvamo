@@ -6,7 +6,7 @@ from typing import Optional
 
 import sqlalchemy as sa
 from sqlalchemy import Boolean, DateTime, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, UUIDPrimaryKey
@@ -59,6 +59,9 @@ class GeneratedDocument(Base, UUIDPrimaryKey):
     # R2 at r2_key) for AI engines', whose `content` holds a text version.
     content_type: Mapped[str] = mapped_column(String(100), nullable=False, default="text/markdown")
     content_sha256: Mapped[Optional[str]] = mapped_column(sa.CHAR(64))
+    # Applaut AI's CVs: what the CV is built from (documents/render.py
+    # `_cv_details`), so a bullet can be switched to its original wording.
+    details: Mapped[Optional[dict]] = mapped_column(JSONB)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=sa.func.now(), nullable=False

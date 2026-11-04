@@ -6,6 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.applaut.models.user import User
 from app.applaut.schemas.document import (
+    BulletChoiceRequest,
+    BulletChoiceResponse,
+    CvDetailsResponse,
     DocumentFileResponse,
     DocumentResponse,
     GenerateDocumentsResponse,
@@ -14,7 +17,9 @@ from app.applaut.schemas.document import (
 from app.applaut.services.auth import get_current_user
 from app.applaut.services.document import (
     FILE_LINK_SECONDS,
+    choose_bullet_version,
     generate_documents,
+    get_cv_details,
     get_document,
     get_document_file_link,
     get_opportunity_documents,
@@ -64,6 +69,29 @@ async def get_single(
     db: AsyncSession = Depends(get_db),
 ):
     return await get_document(document_id, current_user, db)
+
+
+@router.get("/documents/{document_id}/details", response_model=CvDetailsResponse)
+async def get_details(
+    document_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """An Applaut AI CV's bullets: each fact's original and tailored wording, and which one is shown."""
+    return await get_cv_details(document_id, current_user, db)
+
+
+@router.post("/documents/{document_id}/bullets/{fact_id}/use", response_model=BulletChoiceResponse)
+async def use_bullet_version(
+    document_id: str,
+    fact_id: str,
+    body: BulletChoiceRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Show one bullet in its tailored or original wording; returns the CV's new current version."""
+    doc, details = await choose_bullet_version(document_id, fact_id, body.version, current_user, db)
+    return BulletChoiceResponse(document=doc, details=details)
 
 
 @router.get("/documents/{document_id}/file", response_model=DocumentFileResponse)

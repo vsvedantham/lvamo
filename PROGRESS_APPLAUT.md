@@ -108,7 +108,11 @@ then nothing goes to `main` or prod.
   it keeps the fact's numbers and tools and adds no word of its own;
   otherwise the fact as written. Benchmark: 14 of 25 reworded, none untrue,
   ~6.5 min per set, so ~10 users per host (plan §3, B5).
-- Backend tests: 233 pass locally (`test_documents.py`,
+- v2 step 4 (2026-11-04): on an Applaut AI CV's Documents page, a "Tailored
+  bullets" panel lets the user switch any reworded bullet back to their own
+  wording (and back). The CV is rebuilt in code from what it was made from
+  (`generated_documents.details`), ~0.1 s, saved as a new current version.
+- Backend tests: 239 pass locally (`test_documents.py`,
   `test_master_profile_api.py`, `test_ai_engine.py`).
 - Before real users' data goes to the partner's VM: a processing agreement
   and a privacy-notice line (model-host/README.md).

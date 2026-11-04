@@ -16,6 +16,8 @@ On branch applaut-ai-local; not deployed.
 - ai_queue: the model's work, served first in, first out by `seq` (a retry
   takes a new seq, so it goes to the back) by the ai-worker's lanes, one per
   model host; `host` is the one that served it.
+- generated_documents.details: what an Applaut AI CV is built from, so a
+  bullet can be switched between its tailored and original wording.
 """
 from typing import Sequence, Union
 
@@ -86,6 +88,7 @@ def upgrade() -> None:
         )
     """)
     op.execute("CREATE INDEX ix_applaut_ai_queue_pending ON applaut.ai_queue (seq) WHERE status = 'pending'")
+    op.execute("ALTER TABLE applaut.generated_documents ADD COLUMN details JSONB")
     # one open item per job and kind, so a job is never queued twice
     op.execute("""
         CREATE UNIQUE INDEX uq_applaut_ai_queue_open ON applaut.ai_queue (assessment_id, kind)
@@ -94,6 +97,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute("ALTER TABLE applaut.generated_documents DROP COLUMN details")
     op.execute("DROP TABLE applaut.ai_queue")
     op.execute("DROP SEQUENCE applaut.ai_queue_seq")
     op.execute("DROP TABLE applaut.night_runs")

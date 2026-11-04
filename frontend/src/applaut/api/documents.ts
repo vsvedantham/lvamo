@@ -15,6 +15,34 @@ export interface DocumentItem {
   content_type: string
   /** A PDF exists; get a short-lived link with getDocumentFileLink. */
   has_file: boolean
+  /** An Applaut AI CV whose bullets can be switched (getCvDetails). */
+  has_details: boolean
+}
+
+export type BulletVersion = 'tailored' | 'original'
+
+export interface CvBullet {
+  fact_id: string
+  /** The role or project the bullet is listed under. */
+  entry: string
+  original: string
+  /** The wording written for this job, when one passed the checks. */
+  tailored: string | null
+  use: BulletVersion
+  /** Why the fact is shown as written, when the model's wording wasn't used. */
+  note: string | null
+}
+
+export interface CvDetails {
+  document_id: string
+  is_current: boolean
+  bullets: CvBullet[]
+}
+
+export interface BulletChoiceResult {
+  /** The CV's new current version. */
+  document: DocumentItem
+  details: CvDetails
 }
 
 export interface DocumentFileLink {
@@ -61,5 +89,22 @@ export async function getDocument(documentId: string): Promise<DocumentItem> {
 
 export async function getDocumentFileLink(documentId: string): Promise<DocumentFileLink> {
   const { data } = await client.get<DocumentFileLink>(`/documents/${documentId}/file`)
+  return data
+}
+
+export async function getCvDetails(documentId: string): Promise<CvDetails> {
+  const { data } = await client.get<CvDetails>(`/documents/${documentId}/details`)
+  return data
+}
+
+export async function chooseBulletVersion(
+  documentId: string,
+  factId: string,
+  version: BulletVersion,
+): Promise<BulletChoiceResult> {
+  const { data } = await client.post<BulletChoiceResult>(
+    `/documents/${documentId}/bullets/${encodeURIComponent(factId)}/use`,
+    { version },
+  )
   return data
 }
