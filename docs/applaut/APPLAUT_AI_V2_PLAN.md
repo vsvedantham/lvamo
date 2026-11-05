@@ -334,8 +334,9 @@ No layout changes to the user's template, same as the standard one.
   "Reading…" with the queue position, then both PDFs, what each job changes
   (role → profile entry, skills rows), font notes, "Use this template" /
   "Discard"; "Use the standard template" switches it off.
-- **Image**: LibreOffice Writer (no GUI) and the metric-compatible fonts are
-  in both Dockerfiles; the backend image grew from ~0.6 GB to ~1.2 GB.
+- **Image**: LibreOffice Writer (no GUI), the metric-compatible fonts, and
+  Roboto, Open Sans and Lato (Google Docs' common fonts) are in both
+  Dockerfiles; the backend image grew from ~0.6 GB to ~1.2 GB.
 - **Real-model run (2026-11-05)**, writer on `lvamo-backend` cores 1–3, three
   test CVs (one column; a two-column table with German headings; a German
   CV with typed "•" bullets and tab-separated dates): 0, 2 and 0 lines
@@ -343,6 +344,15 @@ No layout changes to the user's template, same as the standard one.
   skills row matched. The 2 misses (an education heading and its dates
   labelled as a role) change nothing: a block without bullets has nothing
   to fill and isn't shown. 49–77 s per CV, once.
+- **Venkat's own CV (2026-11-05)**: his v3.3 .docx (Google Docs export:
+  Roboto, a photo, a table with a date column, two EXL roles whose titles
+  overlap). Real writer: 1 of 49 lines mislabelled (the certifications
+  heading as "other"; harmless), 163 s (1,459 prompt tokens). Round trip
+  exact; the rebuilt PDF's text is identical to the upload's; all 4 roles
+  and 6 skills rows matched to his master profile; a sample job's CV keeps
+  the photo, colours, date column and 2 pages, with only the headline,
+  skills order, bullet order and technologies order changed. Roboto was
+  missing on the server before this run (now installed).
 - **Not built (still §7.3)**: the user's own cover letter template, and
   building the master profile from the uploaded CV.
 
@@ -387,7 +397,7 @@ No layout changes to the user's template, same as the standard one.
 | 4 | B4 (original vs tailored) | Toggle re-renders a CV in < 1 s, tested. **Done 2026-11-04**: `details` column, two endpoints, Documents-page panel; re-render ~0.1 s; `test_cv_bullet_choice.py`. Checked in the browser locally up to the file upload (no R2 bucket locally); the full switch is covered by the API tests |
 | 5 | C (bullet bank builder) | Venkat's bank reaches 8+ facts per role through it. **Built 2026-11-04**: §4 as built; checked in the browser locally with the fake model (keep, edit, discard, add, queued, cancel, no-host refusal). Real writer run 2026-11-05: 7 kinds of notes, 0 untrue drafts after a lead-claim check and prompt fixes (§4). Waits on Venkat drafting for his own roles |
 | 6 | Partner VM goes live | `setup.sh` on the VM, `APPLAUT_MODEL_HOSTS` set, deploy, verify in prod, `PROGRESS_APPLAUT.md` |
-| 7 | D (own template) | As design doc §8 Phase 4. **CV built 2026-11-05** (§5): upload, model labelling in the queue, round trip, both PDFs, switch on/off, generation and bullet switches with the template; `test_own_template.py`; real-model labelling on three test CVs. Not built: own cover letter template, master profile from the upload. Waits on a real CV of Venkat's through it |
+| 7 | D (own template) | As design doc §8 Phase 4. **CV built 2026-11-05** (§5): upload, model labelling in the queue, round trip, both PDFs, switch on/off, generation and bullet switches with the template; `test_own_template.py`; real-model labelling on three test CVs. Venkat's own CV through it: round trip exact, layout kept (§5). Not built: own cover letter template, master profile from the upload |
 
 Steps 1–5 run on `applaut-ai-local` with the test container on
 `lvamo-backend`; step 6 needs Venkat's go-ahead.
