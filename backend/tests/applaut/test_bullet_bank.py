@@ -171,3 +171,23 @@ async def test_discarding_before_the_writer_starts_leaves_the_queue(client, draf
         left = await db.scalar(select(AIQueueItem).join(BulletDraft, AIQueueItem.bullet_draft_id == BulletDraft.id)
                                .where(BulletDraft.user_id == drafter.user_id))
     assert left is None  # the writer won't spend time on drafts nobody wants
+
+
+def test_a_short_form_in_the_notes_covers_the_tool():
+    kept, left_out = _check(["Moved the Airflow scheduler to the Kubernetes executor together with the platform team."],
+                            notes="moved airflow to the k8s executor with the platform team, took about 2 months")
+    assert left_out == [] and len(kept) == 1
+
+
+def test_a_lead_the_notes_dont_claim_is_left_out():
+    notes = "did the switch to the k8s executor together with the platform team. I led the dbt upgrade."
+    kept, left_out = _check(["Led the migration to the Kubernetes executor with the platform team over 2 months.",
+                             "Moved the Airflow scheduler to the Kubernetes executor together with the platform team.",
+                             "Upgraded dbt for the finance marts, leading the work across the data team."],
+                            notes=notes)
+    assert [x["reason"] for x in left_out] == []  # "led" is in these notes (the dbt upgrade)
+    kept, left_out = _check(["Led the migration to the Kubernetes executor with the platform team over 2 months.",
+                             "Managed the weekly on-call rotation for the data platform team at Acme."],
+                            notes="did the switch to the k8s executor together with the platform team, about 2 months")
+    assert [x["reason"] for x in left_out] == ["says you led it, which your notes don't say",
+                                               "says you managed it, which your notes don't say"]

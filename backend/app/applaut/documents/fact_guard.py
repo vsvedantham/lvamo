@@ -191,10 +191,49 @@ def _similarity(a: str, b: str) -> float:
     return len(x & y) / max(1, min(len(x), len(y)))
 
 
+# A tool's usual short form in notes: "k8s" in the notes covers "Kubernetes" in a draft.
+SHORT_FORMS = {"kubernetes": "k8s", "postgresql": "postgres", "javascript": "js", "typescript": "ts"}
+
+
 def _named_in(name: str, known: str) -> bool:
-    """`name` (or its singular) as a whole word of `known` ("SQL" isn't in "PostgreSQL")."""
-    return any(re.search(r"(?<![a-z0-9])" + re.escape(n) + r"(?![a-z0-9])", known)
-               for n in {name.lower(), name.lower().rstrip("s")} if n)
+    """`name` (its singular, or its short form) as a whole word of `known`
+    ("SQL" isn't in "PostgreSQL")."""
+    forms = {name.lower(), name.lower().rstrip("s"), SHORT_FORMS.get(name.lower(), "")}
+    return any(re.search(r"(?<![a-z0-9])" + re.escape(n) + r"(?![a-z0-9])", known) for n in forms if n)
+
+
+# Verbs that claim the lead on something, and the words in the notes that back
+# each one: "together with the platform team" never becomes "Led".
+LEAD_CLAIMS = {
+    "led": "lead", "leading": "lead", "managed": "manage", "owned": "own", "headed": "head",
+    "spearheaded": "spearhead", "directed": "direct", "oversaw": "oversee", "supervised": "supervise",
+    "architected": "architect", "championed": "champion", "drove": "drive",
+}
+LEAD_BACKING = {
+    "lead": {"lead", "led", "leading", "leader", "leads"},
+    "manage": {"manage", "managed", "managing", "manager", "management"},
+    "own": {"own", "owned", "owning", "owner", "ownership"},
+    "head": {"head", "headed", "heading"},
+    "spearhead": {"spearhead", "spearheaded"},
+    "direct": {"direct", "directed", "directing", "director"},
+    "oversee": {"oversee", "oversaw", "overseeing", "oversight"},
+    "supervise": {"supervise", "supervised", "supervising", "supervisor"},
+    "architect": {"architect", "architected", "architecture"},
+    "champion": {"champion", "championed"},
+    "drive": {"drive", "drove", "driving"},
+}
+
+
+def _lead_claim(text: str, source_words: set[str]) -> str | None:
+    """The bullet's lead claim ("Led", "Managed", ...) when the notes and the
+    role's bullets don't back it: its opening verb, or "led"/"leading" anywhere."""
+    words = re.findall(r"[a-z']+", text.lower())
+    claims = words[:1] + [w for w in words[1:] if w in ("led", "leading")]
+    for w in claims:
+        root = LEAD_CLAIMS.get(w)
+        if root and not (LEAD_BACKING[root] & source_words):
+            return w
+    return None
 
 
 def check_drafts(profile: dict, entry: dict, notes: str, texts: list[str]) -> tuple[list[dict], list[dict]]:
@@ -202,12 +241,13 @@ def check_drafts(profile: dict, entry: dict, notes: str, texts: list[str]) -> tu
     left out). Kept: [{"text", "confirm": numbers that are in neither the notes
     nor the role, for the user to check}]. Left out: [{"text", "reason"}] for a
     bullet that names something the user didn't give (a tool, product, team),
-    repeats an existing bullet or another draft, is in the first person, or
+    claims the lead ("Led", "Managed") where the notes don't, repeats an existing bullet or another draft, is in the first person, or
     is too short or long. The user approves every kept one before it is saved."""
     names = skill_names(profile)
     known = " ".join([notes, entry.get("title", ""), entry.get("company", ""), entry.get("name", ""),
                       *entry["facts"], *entry.get("technologies", []), *(n for ns in names.values() for n in ns)]).lower()
     source_numbers = set(NUM_RE.findall(f"{notes} {' '.join(entry['facts'])}"))
+    source_words = set(re.findall(r"[a-z']+", f"{notes} {' '.join(entry['facts'])}".lower()))
     kept: list[dict] = []
     left_out: list[dict] = []
     for text in texts:
@@ -220,6 +260,8 @@ def check_drafts(profile: dict, entry: dict, notes: str, texts: list[str]) -> tu
             reason = "written in the first person"
         elif unknown:
             reason = f"names {', '.join(unknown)}, which isn't in your notes, this role or your skills"
+        elif claim := _lead_claim(text, source_words):
+            reason = f"says you {claim} it, which your notes don't say"
         elif any(_similarity(text, f) >= DUPLICATE_SIMILARITY for f in entry["facts"]):
             reason = "already one of this role's bullets"
         elif any(_similarity(text, k["text"]) >= DUPLICATE_SIMILARITY for k in kept):

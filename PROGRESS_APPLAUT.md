@@ -119,8 +119,11 @@ then nothing goes to `main` or prod.
   in the first person, and flags new numbers for the user to check. Nothing
   is added until the user keeps (and may edit) a draft; adding is audited
   (`master_profile.add_facts`). Bullet switches on a CV are audited too
-  (`document.bullet_choice`).
-- Backend tests: 248 pass locally (`test_documents.py`,
+  (`document.bullet_choice`). Real-model run (2026-11-05, test container):
+  16–55 s per request; after a lead-claim check ("together with" never
+  becomes "Led") and prompt fixes against padding, 0 untrue drafts across 7
+  kinds of notes (plan §4).
+- Backend tests: 250 pass locally (`test_documents.py`,
   `test_master_profile_api.py`, `test_ai_engine.py`, `test_bullet_bank.py`).
 - Before real users' data goes to the partner's VM: a processing agreement
   and a privacy-notice line (model-host/README.md).

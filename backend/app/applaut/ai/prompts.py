@@ -200,7 +200,10 @@ Rules:
 - Up to {DRAFT_MAX} bullets, each one achievement or responsibility the notes describe that the role's existing bullets don't already cover. Fewer is fine when the notes hold less.
 - Use only what the notes and the existing bullets say. Never add a number, tool, product, team, result or employer that isn't in them. Where the notes give no number, write the bullet without one.
 - Name every tool exactly as the notes or the role's technologies spell it.
-- Each bullet: starts with a past-tense verb, 12-35 words, no "I", "my" or "we", in the same style as the existing bullets: what was done, with what, and the result when the notes give one.
+- Add no detail the notes don't give: not what a document covered, what a tool or dashboard was like, what a training was about, or why something was done. A short, plain bullet is better than a padded one.
+- Keep the notes' hedges: "about 10" stays "about 10", never "10".
+- Never make the candidate's part bigger: "helped", "was part of" or "together with" never becomes "led", "managed", "owned" or "drove".
+- Each bullet: in English (even when the notes aren't), starts with a past-tense verb, 6-35 words, no "I", "my" or "we", in the same style as the existing bullets: what was done, with what, and the result when the notes give one.
 - Never repeat or reword an existing bullet."""
 
 

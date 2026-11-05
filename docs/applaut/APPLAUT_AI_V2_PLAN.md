@@ -234,12 +234,17 @@ daytime, every bullet approved by the user.
     version, closes the set, audit `master_profile.add_facts`.
 - **Model** (`prompts.DRAFT_SYSTEM`, `draft_message`): the notes, the role and
   its existing facts and technologies, the profile's skills → 1–5 bullets
-  (JSON schema), each starting with a past-tense verb, 12–35 words, no
-  first person, only what the notes and existing bullets say.
+  (JSON schema) in English, each starting with a past-tense verb, 6–35
+  words, no first person, only what the notes and existing bullets say; no
+  added detail, the notes' hedges kept ("about 10"), the candidate's part
+  never made bigger ("together with" never becomes "led").
 - **Checks** (`fact_guard.check_drafts`), in this order, each a reason the
-  user sees: 6–45 words; not first person; names nothing (a capitalised word,
-  or a word with a digit or `.#+`, e.g. Kafka, S3, C#) outside the notes, the role and the profile's skills;
-  not an existing fact of the role; not a near-copy of another draft
+  user sees: 6–45 words; not first person; names nothing (a capitalised
+  word, or a word with a digit or `.#+`, e.g. Kafka, S3, C#) outside the
+  notes, the role and the profile's skills (a usual short form in the notes
+  counts: k8s → Kubernetes, postgres → PostgreSQL); claims no lead the
+  notes and the role's bullets don't back (opening "Led", "Managed",
+  "Owned", "Drove", … or "led"/"leading" anywhere); not an existing fact of the role; not a near-copy of another draft
   (word overlap ≥ 0.6). A number in neither the notes nor the role is not a
   reason to leave it out: it is listed in `confirm` and the UI says "Check:
   15 isn't in your notes".
@@ -249,6 +254,19 @@ daytime, every bullet approved by the user.
   10 s; drafts come back as editable boxes with Keep / Discard, the left-out
   ones with their reasons, and "Add N kept bullets" (disabled while the YAML
   has unsaved edits).
+- **Real-model run (2026-11-05)**: Qwen3.5-9B writer on `lvamo-backend`
+  cores 1–3 (test container), the handler's exact call + checks, 7 kinds of
+  notes on the fictional test profile (detailed with numbers; informal with
+  "k8s"; short naming new tools; German; a side project; vague and easy to
+  inflate; only repeating existing bullets). 16–55 s per request (~460–570
+  prompt tokens). First run: padding ("interactive", "data validation
+  procedures and operational workflows"), "about 10" became "10", and
+  "together with the platform team" became "Led the migration". Fixed with
+  the prompt rules above and the lead-claim check; k8s was left out until
+  short forms counted. Final run: 17 drafts kept, 0 untrue on a human
+  read (two small inferences, e.g. "for the data engineering team"), notes
+  in German came back in English, and the repeat-only notes gave nothing
+  new (4 left out: 3 as existing bullets, 1 as too short).
 - **Tests**: `tests/applaut/test_bullet_bank.py` (checks, the queue → keep
   flow, audit, refusals, a failed set, discard before the writer starts,
   FIFO order with other users).
@@ -305,7 +323,7 @@ No layout changes to the user's template, same as the standard one.
 | 2 | A1 + A2 + A4 (lanes, host files) | Two fake hosts tested; one real host (test container) runs a night via a lane. **Done 2026-11-02**: `ai/hosts.py`, `ai/models.lock`, lanes in `ai/worker.py`, `queue.release`, `HostUnreachable`, capacity-aware allowlist, `model-host/setup.sh` + `update.sh` + two-server compose; `test_ai_lanes.py`. Live on `lvamo-backend` cores 1–3: `update.sh` brought both servers up from the lock, one lane scored 2 jobs and wrote 1 set; with the writer stopped its item went back untouched (tries 0) and finished on the first try once the writer was back. A3 (lane on the app VM) not done |
 | 3 | B1–B3 (writer does more) | B5 benchmark passes; Venkat reads the reworded bullets. **Built 2026-11-04**: two-stage writer (B1), per-bullet checks incl. `new_words` (B2); B5 result above; waits on Venkat's read |
 | 4 | B4 (original vs tailored) | Toggle re-renders a CV in < 1 s, tested. **Done 2026-11-04**: `details` column, two endpoints, Documents-page panel; re-render ~0.1 s; `test_cv_bullet_choice.py`. Checked in the browser locally up to the file upload (no R2 bucket locally); the full switch is covered by the API tests |
-| 5 | C (bullet bank builder) | Venkat's bank reaches 8+ facts per role through it. **Built 2026-11-04**: §4 as built; checked in the browser locally with the fake model (keep, edit, discard, add, queued, cancel, no-host refusal). Not yet run against the real writer; waits on Venkat drafting for his own roles |
+| 5 | C (bullet bank builder) | Venkat's bank reaches 8+ facts per role through it. **Built 2026-11-04**: §4 as built; checked in the browser locally with the fake model (keep, edit, discard, add, queued, cancel, no-host refusal). Real writer run 2026-11-05: 7 kinds of notes, 0 untrue drafts after a lead-claim check and prompt fixes (§4). Waits on Venkat drafting for his own roles |
 | 6 | Partner VM goes live | `setup.sh` on the VM, `APPLAUT_MODEL_HOSTS` set, deploy, verify in prod, `PROGRESS_APPLAUT.md` |
 | 7 | D (own template) | As design doc §8 Phase 4 |
 
