@@ -1,4 +1,6 @@
-"""One queue item each: score a job (`score_job`), write its documents (`write_docs`), or draft CV bullets from the user's notes (`draft_bullets`)."""
+"""One queue item each: score a job (`score_job`), write its documents
+(`write_docs`), draft CV bullets from the user's notes (`draft_bullets`), or
+make the user's own .docx CV into a template (`build_template`)."""
 from __future__ import annotations
 
 import asyncio
@@ -14,12 +16,14 @@ from app.applaut.ai import prompts, scoring
 from app.applaut.ai.provider import Completion, HostUnreachable, ModelError, Provider
 from app.applaut.ai.queue import enqueue
 from app.applaut.documents.fact_guard import check_drafts, check_fact_rewording
+from app.applaut.documents import own_template
 from app.applaut.documents.letter import JobInfo, company_display
 from app.applaut.documents.profile_schema import ProfileError, validate_profile
-from app.applaut.documents.render import DocumentError, build_documents
+from app.applaut.documents.render import DocumentError, OwnCv, build_documents
 from app.applaut.documents.tailor import fact_ids
 from app.applaut.models.ai_queue import AIQueueItem
 from app.applaut.models.bullet_draft import BulletDraft
+from app.applaut.models.cv_template import CvTemplate
 from app.applaut.models.generated_document import GeneratedDocument
 from app.applaut.models.job_assessment import JobAssessment
 from app.applaut.models.master_profile import MasterProfile
@@ -60,6 +64,28 @@ async def store_file(key: str, data: bytes, content_type: str) -> None:
         raise PermanentError("Applaut's file storage isn't configured")
     from app.core.storage import upload_file
     await asyncio.to_thread(upload_file, key, data, content_type)
+
+
+async def fetch_file(key: str) -> bytes:
+    """A file from Applaut's R2 bucket. Tests replace this."""
+    if not settings.r2_bucket_name:
+        raise PermanentError("Applaut's file storage isn't configured")
+    from app.core.storage import get_r2_client
+
+    def get() -> bytes:
+        return get_r2_client().get_object(Bucket=settings.r2_bucket_name, Key=key)["Body"].read()
+    return await asyncio.to_thread(get)
+
+
+async def own_cv(db: AsyncSession, user_id, template_id=None) -> OwnCv | None:
+    """The user's own CV template for rendering: the active one, or (to build an
+    existing CV again) the one with `template_id`, whatever its status now."""
+    q = select(CvTemplate).where(CvTemplate.user_id == user_id, CvTemplate.kind == "cv")
+    q = q.where(CvTemplate.id == template_id) if template_id else q.where(CvTemplate.status == "active")
+    t = await db.scalar(q)
+    if t is None or not t.template_key or not t.slots:
+        return None
+    return OwnCv(str(t.id), await fetch_file(t.template_key), own_template.Slots.from_json(t.slots), t.pages or 2)
 
 
 async def _load(db: AsyncSession, item: AIQueueItem):
@@ -135,6 +161,7 @@ async def write_docs(db: AsyncSession, item: AIQueueItem, provider: Provider) ->
     system = prompts.write_system(mp)
     message = prompts.job_message(opp.title, company, opp.location_raw, opp.description or "")
     hints = list(a.matched_skills or []) + list(a.missing_skills or [])
+    own = await own_cv(db, item.user_id)
     usage = Usage()
 
     docs, errors = None, []
@@ -151,7 +178,7 @@ async def write_docs(db: AsyncSession, item: AIQueueItem, provider: Provider) ->
                 reworded[focus["id"]] = await _reword(provider, system, mp, focus, usage)
         answer = {**written, "reworded": [{"id": i, "text": t} for i, t in reworded.items()]}
         try:
-            docs = await asyncio.to_thread(build_documents, mp, job, answer, hints)
+            docs = await asyncio.to_thread(build_documents, mp, job, answer, hints, True, own)
             break
         except DocumentError as exc:
             errors = exc.errors
@@ -208,7 +235,92 @@ async def draft_bullets(db: AsyncSession, item: AIQueueItem, provider: Provider)
     return usage
 
 
-HANDLERS = {"score_job": score_job, "write_docs": write_docs, "draft_bullets": draft_bullets}
+def template_report(slots: own_template.Slots, profile: dict | None) -> dict:
+    """What the template fills per job, and from which part of the master
+    profile (None: no profile yet, so nothing is matched)."""
+    entries = own_template.match_entries(slots, profile) if profile else {}
+    rows = own_template.match_rows(slots, profile) if profile else {}
+    labels = {e["id"]: (f"{e['title']} at {e['company']}" if "company" in e else f"Project: {e['name']}")
+              for e in (profile or {}).get("experience", []) + (profile or {}).get("projects", [])}
+    return {
+        "headline": slots.headline,
+        "roles": [{"heading": b.heading, "bullets": len(b.original_bullets), "technologies": bool(b.tech_key),
+                   "entry": labels.get(entries.get(n))}
+                  for n, b in enumerate(slots.blocks) if b.bullets_key or b.tech_key],  # a block with nothing to fill: not shown
+        "rows": [{"label": r.label, "row": rows.get(r.key)} for r in slots.rows],
+    }
+
+
+def _template_files(t: CvTemplate) -> str:
+    return f"applaut/templates/{t.user_id}/{t.id}"
+
+
+async def build_template(db: AsyncSession, item: AIQueueItem, provider: Provider) -> Usage:
+    """The user's own .docx CV made into a template: the model labels its lines,
+    code builds the template and checks the round trip; the user then compares
+    the two PDFs and switches it on (or not)."""
+    t = await db.get(CvTemplate, item.cv_template_id)
+    if t is None or t.status != "reading":
+        raise PermanentError("the upload was removed")
+    source = await fetch_file(t.source_key)
+    try:
+        lines = await asyncio.to_thread(own_template.read_lines, source)
+    except own_template.TemplateError as exc:
+        raise PermanentError("; ".join(exc.problems))
+    shown = [(ln.index, ln.style, ln.text) for ln in lines if ln.text.strip()]
+    if not shown:
+        raise PermanentError("the file has no text Applaut can read")
+    if len(shown) > prompts.TEMPLATE_MAX_LINES:
+        raise PermanentError(f"the file has {len(shown)} lines; Applaut reads CVs of up to {prompts.TEMPLATE_MAX_LINES}")
+    usage = Usage()
+    numbers = [n for n, _, _ in shown]
+    c = await provider.complete_json(prompts.TEMPLATE_SYSTEM, prompts.template_message(shown),
+                                     prompts.template_schema(numbers), prompts.template_max_tokens(len(shown)))
+    usage.add(c)
+    given = c.data.get("labels") if isinstance(c.data.get("labels"), dict) else {}
+    missing = [n for n in numbers if str(n) not in given]
+    if missing:
+        raise ModelError(f"the model labelled {len(numbers) - len(missing)} of {len(numbers)} lines")
+    labels = ["other"] * len(lines)
+    for n in numbers:
+        labels[n] = given[str(n)]
+
+    mp = await db.scalar(select(MasterProfile).where(MasterProfile.user_id == t.user_id))
+    try:
+        profile = validate_profile(mp.data) if mp else None
+    except ProfileError:
+        profile = None
+
+    def make():
+        built = own_template.build(source, labels)
+        differences = own_template.round_trip(source, built)
+        original_pdf, pages = own_template.to_pdf(source)
+        rebuilt_pdf, _ = own_template.to_pdf(own_template.render(built.template,
+                                                                 own_template.round_trip_context(built.slots)))
+        return built, differences, original_pdf, pages, rebuilt_pdf, own_template.font_report(source)
+    try:
+        built, differences, original_pdf, pages, rebuilt_pdf, fonts = await asyncio.to_thread(make)
+    except own_template.TemplateError as exc:
+        raise PermanentError("; ".join(exc.problems))
+    except RuntimeError as exc:  # LibreOffice
+        raise PermanentError(str(exc))
+
+    base = _template_files(t)
+    await store_file(f"{base}/template.docx", built.template, DOCX)
+    await store_file(f"{base}/original.pdf", original_pdf, "application/pdf")
+    await store_file(f"{base}/rebuilt.pdf", rebuilt_pdf, "application/pdf")
+    t.template_key, t.original_pdf_key, t.rebuilt_pdf_key = f"{base}/template.docx", f"{base}/original.pdf", f"{base}/rebuilt.pdf"
+    t.labels, t.slots, t.pages = built.labels, built.slots.to_json(), pages
+    t.report = {**template_report(built.slots, profile), "differences": differences[:20], "fonts": fonts,
+                "notes": built.notes}
+    t.status, t.error, t.finished_at = "ready", None, datetime.now(timezone.utc)
+    await db.commit()
+    return usage
+
+
+DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+HANDLERS = {"score_job": score_job, "write_docs": write_docs, "draft_bullets": draft_bullets,
+            "build_template": build_template}
 
 
 async def mark_failed(db: AsyncSession, item: AIQueueItem, error: str, answer: dict | None = None) -> None:
@@ -217,6 +329,12 @@ async def mark_failed(db: AsyncSession, item: AIQueueItem, error: str, answer: d
         draft = await db.get(BulletDraft, item.bullet_draft_id)
         if draft is not None:
             draft.status, draft.error, draft.finished_at = "failed", error[:1000], datetime.now(timezone.utc)
+            await db.commit()
+        return
+    if item.kind == "build_template":
+        t = await db.get(CvTemplate, item.cv_template_id)
+        if t is not None and t.status == "reading":
+            t.status, t.error, t.finished_at = "failed", error[:1000], datetime.now(timezone.utc)
             await db.commit()
         return
     a = await db.get(JobAssessment, item.assessment_id)

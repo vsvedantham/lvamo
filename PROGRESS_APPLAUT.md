@@ -123,8 +123,17 @@ then nothing goes to `main` or prod.
   16–55 s per request; after a lead-claim check ("together with" never
   becomes "Led") and prompt fixes against padding, 0 untrue drafts across 7
   kinds of notes (plan §4).
-- Backend tests: 250 pass locally (`test_documents.py`,
-  `test_master_profile_api.py`, `test_ai_engine.py`, `test_bullet_bank.py`).
+- v2 step 7 (2026-11-05): Settings → CV template (Applaut AI only). The user
+  uploads their own CV as .docx; Applaut AI labels its lines once (queue
+  kind `build_template`), code turns it into a docxtpl template and proves
+  it by a round trip; the user compares both PDFs and switches it on. Each
+  job's CV then keeps the user's layout and lines, changing only the
+  headline, skills order, each role's bullets and technologies line (from
+  the matching master-profile entry). LibreOffice renders it; the backend
+  image grew to ~1.2 GB. Cover letters stay standard (plan §5).
+- Backend tests: 265 pass locally (`test_documents.py`,
+  `test_master_profile_api.py`, `test_ai_engine.py`, `test_bullet_bank.py`,
+  `test_own_template.py`).
 - Before real users' data goes to the partner's VM: a processing agreement
   and a privacy-notice line (model-host/README.md).
 

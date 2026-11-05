@@ -18,8 +18,11 @@ On branch applaut-ai-local; not deployed.
   model host; `host` is the one that served it.
 - generated_documents.details: what an Applaut AI CV is built from, so a
   bullet can be switched between its tailored and original wording.
-- bullet_drafts: the bullet bank builder's notes and drafts; an ai_queue
-  item is for a job (assessment_id) or for a draft (bullet_draft_id).
+- bullet_drafts: the bullet bank builder's notes and drafts.
+- cv_templates: a user's own .docx CV made into a template (upload, the
+  model's line labels, the built template, the round-trip report); at most
+  one active per user. An ai_queue item is for a job (assessment_id), a
+  draft (bullet_draft_id) or a template (cv_template_id).
 """
 from typing import Sequence, Union
 
@@ -83,17 +86,43 @@ def upgrade() -> None:
         )
     """)
     op.execute("CREATE INDEX ix_applaut_bullet_drafts_user_entry ON applaut.bullet_drafts (user_id, entry_id, created_at)")
+    op.execute("""
+        CREATE TABLE applaut.cv_templates (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID NOT NULL REFERENCES applaut.users(id) ON DELETE CASCADE,
+            kind VARCHAR(20) NOT NULL DEFAULT 'cv' CHECK (kind IN ('cv')),
+            status VARCHAR(20) NOT NULL DEFAULT 'reading'
+                CHECK (status IN ('reading', 'ready', 'failed', 'active', 'retired', 'discarded')),
+            file_name VARCHAR(255) NOT NULL,
+            source_key VARCHAR(500) NOT NULL,
+            template_key VARCHAR(500),
+            original_pdf_key VARCHAR(500),
+            rebuilt_pdf_key VARCHAR(500),
+            pages INTEGER,
+            labels JSONB,
+            slots JSONB,
+            report JSONB NOT NULL DEFAULT '{}',
+            error TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            finished_at TIMESTAMPTZ,
+            decided_at TIMESTAMPTZ
+        )
+    """)
+    op.execute("CREATE INDEX ix_applaut_cv_templates_user ON applaut.cv_templates (user_id, created_at)")
+    op.execute("CREATE UNIQUE INDEX uq_applaut_cv_templates_active ON applaut.cv_templates (user_id, kind) "
+               "WHERE status = 'active'")
     op.execute("CREATE SEQUENCE applaut.ai_queue_seq")
     op.execute("""
         CREATE TABLE applaut.ai_queue (
             id BIGSERIAL PRIMARY KEY,
             seq BIGINT NOT NULL DEFAULT nextval('applaut.ai_queue_seq'),
-            kind VARCHAR(30) NOT NULL CHECK (kind IN ('score_job', 'write_docs', 'draft_bullets')),
+            kind VARCHAR(30) NOT NULL CHECK (kind IN ('score_job', 'write_docs', 'draft_bullets', 'build_template')),
             night_run_id UUID REFERENCES applaut.night_runs(id) ON DELETE SET NULL,
             user_id UUID NOT NULL REFERENCES applaut.users(id) ON DELETE CASCADE,
             profile_id UUID NOT NULL REFERENCES applaut.profiles(id) ON DELETE CASCADE,
             assessment_id UUID REFERENCES applaut.job_assessments(id) ON DELETE CASCADE,
             bullet_draft_id UUID REFERENCES applaut.bullet_drafts(id) ON DELETE CASCADE,
+            cv_template_id UUID REFERENCES applaut.cv_templates(id) ON DELETE CASCADE,
             status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'done', 'failed')),
             attempts INTEGER NOT NULL DEFAULT 0,
             last_error TEXT,
@@ -105,8 +134,9 @@ def upgrade() -> None:
             prompt_tokens INTEGER,
             output_tokens INTEGER,
             duration_ms INTEGER,
-            CHECK ((kind = 'draft_bullets') = (bullet_draft_id IS NOT NULL)
-                   AND (kind = 'draft_bullets') = (assessment_id IS NULL))
+            CHECK ((kind IN ('score_job', 'write_docs')) = (assessment_id IS NOT NULL)
+                   AND (kind = 'draft_bullets') = (bullet_draft_id IS NOT NULL)
+                   AND (kind = 'build_template') = (cv_template_id IS NOT NULL))
         )
     """)
     op.execute("CREATE INDEX ix_applaut_ai_queue_pending ON applaut.ai_queue (seq) WHERE status = 'pending'")
@@ -122,6 +152,7 @@ def downgrade() -> None:
     op.execute("ALTER TABLE applaut.generated_documents DROP COLUMN details")
     op.execute("DROP TABLE applaut.ai_queue")
     op.execute("DROP SEQUENCE applaut.ai_queue_seq")
+    op.execute("DROP TABLE applaut.cv_templates")
     op.execute("DROP TABLE applaut.bullet_drafts")
     op.execute("DROP TABLE applaut.night_runs")
     op.execute("DROP INDEX applaut.ix_applaut_job_assessments_docs_pending")

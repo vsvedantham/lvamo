@@ -221,3 +221,45 @@ def draft_message(profile: dict, entry: dict, notes: str) -> str:
 def fix_message(errors: list[str]) -> str:
     return ("Your previous answer broke these rules. Write the answer again, fixing every point:\n"
             + "\n".join(f"- {e}" for e in errors))
+
+
+# ---------------------------------------------------------------- own template
+
+TEMPLATE_MAX_LINES = 200       # a longer file is refused before it reaches the model
+TEMPLATE_LINE_CHARS = 160      # each line as the model sees it
+TEMPLATE_LABELS = ("name", "headline", "contact", "section", "skills", "role", "bullet", "technologies", "other")
+TEMPLATE_SYSTEM = """You label the lines of a CV so code can turn the file into a template. Output JSON only, on one line: {"labels": {"<line number>": "<label>", ...}}, one label for every numbered line.
+
+Labels:
+- name: the candidate's name.
+- headline: one short line near the name saying who the candidate is, e.g. "Senior Data Engineer | Python, Spark | 6 years". A longer profile or summary paragraph is "other".
+- contact: address, email, phone, links, nationality, work permit or availability lines.
+- section: a section heading, e.g. "Experience", "Skills", "Berufserfahrung".
+- skills: one row of the skills list, e.g. "Languages: Python, SQL" or "Cloud: AWS | Azure".
+- role: a line naming a job or a project: its title, employer, place or dates.
+- bullet: one achievement or duty listed under a job or project.
+- technologies: a line listing the tools used in one job or project, e.g. "Technologies: Python, Airflow".
+- other: anything else: a summary, education, certifications, spoken languages, hobbies, references.
+
+Each line is shown as: number [paragraph style] text. The style often helps (e.g. "List Bullet" for bullets). Label education and certificates "other", even when they look like a role."""
+
+
+def template_message(lines: list[tuple[int, str, str]]) -> str:
+    """lines: (number, style, text) for each non-empty line."""
+    return "CV lines:\n" + "\n".join(
+        f"{n} [{style or 'Normal'}] {' '.join(text.split())[:TEMPLATE_LINE_CHARS]}" for n, style, text in lines)
+
+
+def template_schema(numbers: list[int]) -> dict:
+    """Labels keyed by line number, every line required in order: the model
+    can't lose its place in a long list."""
+    label = {"type": "string", "enum": list(TEMPLATE_LABELS)}
+    keys = [str(n) for n in numbers]
+    return {"type": "object", "properties": {
+        "labels": {"type": "object", "properties": {k: label for k in keys}, "required": keys,
+                   "additionalProperties": False}},
+        "required": ["labels"]}
+
+
+def template_max_tokens(n: int) -> int:
+    return 40 + 9 * n

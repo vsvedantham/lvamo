@@ -18,7 +18,7 @@ from app.config import settings
 
 LOCK = Path(__file__).with_name("models.lock")
 ROLE_PORT = {"scorer": 8080, "writer": 8081}
-KIND_ROLE = {"score_job": "scorer", "write_docs": "writer", "draft_bullets": "writer"}
+KIND_ROLE = {"score_job": "scorer", "write_docs": "writer", "draft_bullets": "writer", "build_template": "writer"}
 
 
 @dataclass(frozen=True)

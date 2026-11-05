@@ -10,6 +10,7 @@ import { JOB_ENGINE_LABELS, type JobEngine } from '../api/profile'
 import RoutineEngineCard, { buttonStyle, formatWhen } from '../components/RoutineEngineCard'
 import RoutineSetupKit from '../components/RoutineSetupKit'
 import MasterProfileCard from '../components/MasterProfileCard'
+import CvTemplateCard from '../components/CvTemplateCard'
 
 // Settings → Job engine (docs/applaut/JOB_ENGINES_DESIGN.md §3.4, §6.6–6.8).
 // Secrets are write-only: the form never receives them back, only hints.
@@ -502,6 +503,7 @@ export default function Settings() {
           )}
 
           {state.engine !== 'own_routine' && <MasterProfileCard canDraft={state.engine === 'applaut_ai'} />}
+          {state.engine === 'applaut_ai' && <CvTemplateCard />}
         </>
       )}
     </div>

@@ -1,6 +1,7 @@
-"""Render the CV and cover letter PDFs with the standard template (the Claude
+"""Render the CV and cover letter PDFs: with the standard template (the Claude
 routine's own `cv.html.j2` / `cover_letter.html.j2`, read from the setup kit
-so both always look the same)."""
+so both always look the same), or the CV with the user's own .docx template
+(own_template.py; the cover letter stays standard)."""
 from __future__ import annotations
 
 import copy
@@ -9,6 +10,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.applaut.documents import own_template
 from app.applaut.documents.fact_guard import LETTER_BODY_MAX_WORDS, PARAGRAPH_WORDS, check_cv_skills, check_written
 from app.applaut.documents.letter import JobInfo, build_letter
 from app.applaut.documents.tailor import (
@@ -50,6 +52,38 @@ class DocumentSet:
     skills_first: list[str] = field(default_factory=list)
     # What rerender_cv needs to build this CV again (stored on its row).
     cv_details: dict = field(default_factory=dict)
+
+
+@dataclass
+class OwnCv:
+    """The user's active own template, as the renderer needs it."""
+    template_id: str
+    template: bytes
+    slots: own_template.Slots
+    pages: int  # the upload's page count: the CV keeps to it
+
+
+def _fit_own(own: OwnCv, profile: dict, headline: str, skill_rows: list[dict], picks: dict,
+             wanted: set[str] | None = None) -> tuple[bytes, int, int, str]:
+    """The user's template filled for the job, dropping the lowest-ranked bullet
+    until it has no more pages than their upload. With every role at its
+    minimum it's kept as it is (their own layout, their own bullet counts).
+    Returns the PDF, pages, bullets dropped and the CV's text."""
+    dropped = 0
+    while True:
+        filled = own_template.render(own.template, own_template.job_context(own.slots, profile, headline,
+                                                                            skill_rows, picks))
+        pdf, pages = own_template.to_pdf(filled)
+        if pages <= own.pages or not drop_one(picks, profile, wanted):
+            break
+        dropped += 1
+    text = "\n".join(line for line in own_template.lines_text(filled) if line)
+    return pdf, pages, dropped, text
+
+
+def _shown(own: OwnCv, profile: dict, picks: dict) -> dict:
+    """The picks of the entries the user's template shows, in template order."""
+    return {eid: picks[eid] for eid in own_template.match_entries(own.slots, profile).values() if eid in picks}
 
 
 SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z])")
@@ -113,12 +147,14 @@ def _fit_cv(profile: dict, headline: str, skill_rows: list[dict], picks: dict,
     return ctx, pdf, pages, dropped
 
 
-def _cv_details(profile: dict, headline: str, skill_rows: list[dict], picks: dict) -> dict:
+def _cv_details(profile: dict, headline: str, skill_rows: list[dict], picks: dict, own: OwnCv | None = None) -> dict:
     """Everything a CV is built from, so one bullet can be switched between its
     tailored and original wording later without the model. The profile is a
-    snapshot: editing the master profile afterwards doesn't change this CV."""
+    snapshot: editing the master profile afterwards doesn't change this CV.
+    `template`: the user's own template it was built with (None: standard)."""
     return {
         "v": 1, "profile": copy.deepcopy(profile), "headline": headline, "skill_rows": skill_rows,
+        "template": {"id": own.template_id} if own else None,
         "entries": [{"id": eid, "technologies": p.technologies, "min_bullets": p.min_bullets, "bullets": [
             {"id": b.fact_id, "original": b.original, "tailored": b.text if b.tailored else None,
              "use": "tailored" if b.tailored else "original", "rank": list(b.rank), "note": b.note}
@@ -127,22 +163,29 @@ def _cv_details(profile: dict, headline: str, skill_rows: list[dict], picks: dic
     }
 
 
-def rerender_cv(details: dict) -> tuple[Rendered, dict]:
+def rerender_cv(details: dict, own: OwnCv | None = None) -> tuple[Rendered, dict]:
     """The CV built again from its details, each bullet in the wording its
-    "use" says. Code only (no model). A bullet the two-page fit has to drop
-    leaves the returned details too."""
+    "use" says. Code only (no model). A bullet the page fit has to drop leaves
+    the returned details too. A CV built with the user's own template needs
+    that template (`own`) again."""
+    if (details.get("template") or None) and own is None:
+        raise DocumentError(["this CV was built with your own template, which is needed to build it again"])
     def bullet(b: dict) -> Bullet:
         tailored = b["use"] == "tailored" and bool(b["tailored"])
         return Bullet(b["id"], b["original"], b["tailored"] if tailored else b["original"], tuple(b["rank"]),
                       tailored=tailored, note=b["note"])
     picks = {e["id"]: EntryPick(e["id"], [bullet(b) for b in e["bullets"]], e["technologies"],
                                 min_bullets=e["min_bullets"]) for e in details["entries"]}
-    ctx, pdf, pages, _ = _fit_cv(details["profile"], details["headline"], details["skill_rows"], picks)
+    if details.get("template"):
+        pdf, pages, _, text = _fit_own(own, details["profile"], details["headline"], details["skill_rows"], picks)
+    else:
+        ctx, pdf, pages, _ = _fit_cv(details["profile"], details["headline"], details["skill_rows"], picks)
+        text = _cv_text(ctx)
     shown = {b.fact_id for p in picks.values() for b in p.items}
     details = copy.deepcopy(details)
     for e in details["entries"]:
         e["bullets"] = [b for b in e["bullets"] if b["id"] in shown]
-    return Rendered(pdf, pages, _cv_text(ctx)), details
+    return Rendered(pdf, pages, text), details
 
 
 def _letter_text(profile: dict, cl: dict) -> str:
@@ -151,12 +194,13 @@ def _letter_text(profile: dict, cl: dict) -> str:
 
 
 def build_documents(profile: dict, job: JobInfo, written: dict, skill_hints: list[str] | None = None,
-                    check: bool = True) -> DocumentSet:
+                    check: bool = True, own: OwnCv | None = None) -> DocumentSet:
     """CV + cover letter for one job from the writer's answer: "headline" and
     "paragraphs" (checked; a failure raises DocumentError with messages the model
     can act on), and optionally "bullets" and "skills_first" (checked piece by
     piece, falling back to code's choice; they never fail the job). `check=False`
-    skips the fact guard (only for the layout preview, whose text Applaut wrote)."""
+    skips the fact guard (only for the layout preview, whose text Applaut wrote).
+    `own`: the user's own CV template (only the entries it shows are picked from)."""
     errors = check_written(written, profile, job.description) if check else []
     paras = [p.strip() for p in written.get("paragraphs") or []]
     cl = build_letter(profile, job, paras)
@@ -185,7 +229,12 @@ def build_documents(profile: dict, job: JobInfo, written: dict, skill_hints: lis
         raise DocumentError(bug)
 
     headline = written["headline"].strip()
-    ctx, cv_pdf, cv_pages, dropped = _fit_cv(profile, headline, skill_rows, picks, wanted)
+    if own:
+        picks = _shown(own, profile, picks)
+        cv_pdf, cv_pages, dropped, cv_text = _fit_own(own, profile, headline, skill_rows, picks, wanted)
+    else:
+        ctx, cv_pdf, cv_pages, dropped = _fit_cv(profile, headline, skill_rows, picks, wanted)
+        cv_text = _cv_text(ctx)
 
     trimmed = 0
     while True:
@@ -198,7 +247,7 @@ def build_documents(profile: dict, job: JobInfo, written: dict, skill_hints: lis
         raise DocumentError([f"the cover letter is {cl_pages} pages; shorten paragraphs 1-3"])
 
     return DocumentSet(
-        cv=Rendered(cv_pdf, cv_pages, _cv_text(ctx)),
+        cv=Rendered(cv_pdf, cv_pages, cv_text),
         cover_letter=Rendered(cl_pdf, cl_pages, _letter_text(profile, cl)),
         bullets_dropped=dropped,
         sentences_dropped=trimmed,
@@ -206,7 +255,7 @@ def build_documents(profile: dict, job: JobInfo, written: dict, skill_hints: lis
         bullets=[{"id": b.fact_id, "original": b.original, "text": b.text, "tailored": b.tailored, "note": b.note}
                  for p in picks.values() for b in p.items],
         skills_first=first,
-        cv_details=_cv_details(profile, headline, skill_rows, picks),
+        cv_details=_cv_details(profile, headline, skill_rows, picks, own),
     )
 
 

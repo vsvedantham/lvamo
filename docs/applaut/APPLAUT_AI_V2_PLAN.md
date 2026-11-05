@@ -284,6 +284,68 @@ render. It consumes exactly what B produces (headline, ordered bullets per
 role, ordered skills, paragraphs), so B is built first and D plugs into it.
 No layout changes to the user's template, same as the standard one.
 
+**Built 2026-11-05 (CV only):**
+
+- **What changes per job, and nothing else**: the headline line under the
+  name (if the CV has one), the items of each skills row (`Label: a, b`; the
+  label stays), each role's or project's bullets (one docxtpl loop in the
+  first bullet's paragraph formatting; a hand-typed "•"/"-" mark stays), and
+  a role's `Technologies: ...` line (the label stays). Names, contact lines,
+  headings, role titles, dates, education and any summary paragraph are left
+  exactly as uploaded. Text is replaced at run level, so bold labels,
+  colours and fonts of the kept parts stay.
+- **Roles stay the user's own** (a change from §7.3, which looped over
+  roles): the CV shows the roles its file has, in its order. Each role is
+  matched to a master-profile entry by the company and title (or project
+  name) its own lines name; its bullets and technologies then come from that
+  entry, picked and reworded for the job as in B. A role or skills row with
+  no match keeps the upload's own text. Matching runs again at each render,
+  so renaming an entry id doesn't break a template.
+- **Reading** (queue kind `build_template`, writer, one-time): code reads
+  every paragraph in document order (body, table cells, content controls,
+  text boxes; not a drawing's fallback copy), the model labels each non-empty
+  line (name, headline, contact, section, skills, role, bullet,
+  technologies, other) with the paragraph style as a hint, and code makes
+  the labels consistent (one short headline at most; bullets and technologies
+  only inside a role's block). Labels are keyed by line number in the JSON
+  schema: as a bare list the model lost its place in a table CV.
+- **Refused with a reason**: a PDF ("upload the .docx"), not a .docx, over
+  5 MB, more than 200 lines, text containing `{{`/`{%`, a role's bullets
+  split by another line.
+- **Round trip**: the template filled with the upload's own text must give
+  back the upload's text line for line; otherwise the differences are shown
+  and it can't be switched on. Both PDFs (the upload and the rebuilt
+  template, via LibreOffice) are stored for the user to compare. Fonts the
+  server doesn't have (other than Calibri/Cambria/Arial/Times New Roman/
+  Courier New, which have metric-compatible twins installed) are listed.
+- **Pages**: each CV keeps to the upload's page count, dropping the
+  lowest-ranked bullet as for the standard template. If it still runs over
+  with every role at its minimum, it's kept as it is.
+- **Storage**: upload, template and both PDFs in R2 under
+  `applaut/templates/{user}/{template}/`; `applaut.cv_templates` holds the
+  labels, slots and report. Statuses: reading → ready / failed → active
+  (one per user) → retired; discarded before use. Switching on and off is
+  audited (`cv_template.use`, `cv_template.stop`).
+- **Generation**: `write_docs` uses the active template (the cover letter
+  stays standard); the CV's details record the template, so switching a
+  bullet (B4) rebuilds it with the same template, even after the user
+  switched it off.
+- **UI**: Settings → CV template (Applaut AI only): what's in use, upload,
+  "Reading…" with the queue position, then both PDFs, what each job changes
+  (role → profile entry, skills rows), font notes, "Use this template" /
+  "Discard"; "Use the standard template" switches it off.
+- **Image**: LibreOffice Writer (no GUI) and the metric-compatible fonts are
+  in both Dockerfiles; the backend image grew from ~0.6 GB to ~1.2 GB.
+- **Real-model run (2026-11-05)**, writer on `lvamo-backend` cores 1–3, three
+  test CVs (one column; a two-column table with German headings; a German
+  CV with typed "•" bullets and tab-separated dates): 0, 2 and 0 lines
+  mislabelled of 24, 21 and 19, all round trips exact, every role and
+  skills row matched. The 2 misses (an education heading and its dates
+  labelled as a role) change nothing: a block without bullets has nothing
+  to fill and isn't shown. 49–77 s per CV, once.
+- **Not built (still §7.3)**: the user's own cover letter template, and
+  building the master profile from the uploaded CV.
+
 ---
 
 ## 6. Small fixes carried from the live run (2026-10-31)
@@ -325,7 +387,7 @@ No layout changes to the user's template, same as the standard one.
 | 4 | B4 (original vs tailored) | Toggle re-renders a CV in < 1 s, tested. **Done 2026-11-04**: `details` column, two endpoints, Documents-page panel; re-render ~0.1 s; `test_cv_bullet_choice.py`. Checked in the browser locally up to the file upload (no R2 bucket locally); the full switch is covered by the API tests |
 | 5 | C (bullet bank builder) | Venkat's bank reaches 8+ facts per role through it. **Built 2026-11-04**: §4 as built; checked in the browser locally with the fake model (keep, edit, discard, add, queued, cancel, no-host refusal). Real writer run 2026-11-05: 7 kinds of notes, 0 untrue drafts after a lead-claim check and prompt fixes (§4). Waits on Venkat drafting for his own roles |
 | 6 | Partner VM goes live | `setup.sh` on the VM, `APPLAUT_MODEL_HOSTS` set, deploy, verify in prod, `PROGRESS_APPLAUT.md` |
-| 7 | D (own template) | As design doc §8 Phase 4 |
+| 7 | D (own template) | As design doc §8 Phase 4. **CV built 2026-11-05** (§5): upload, model labelling in the queue, round trip, both PDFs, switch on/off, generation and bullet switches with the template; `test_own_template.py`; real-model labelling on three test CVs. Not built: own cover letter template, master profile from the upload. Waits on a real CV of Venkat's through it |
 
 Steps 1–5 run on `applaut-ai-local` with the test container on
 `lvamo-backend`; step 6 needs Venkat's go-ahead.

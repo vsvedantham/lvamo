@@ -230,7 +230,12 @@ async def choose_bullet_version(document_id: str, fact_id: str, version: str, us
     details["choices"].append({"fact_id": fact_id, "use": version, "from_document": str(doc.id),
                                "at": datetime.now(timezone.utc).isoformat()})
     try:
-        rendered, details = await asyncio.to_thread(rerender_cv, details)
+        own = None
+        if (details.get("template") or {}).get("id"):
+            own = await handlers.own_cv(db, user.id, details["template"]["id"])
+        rendered, details = await asyncio.to_thread(rerender_cv, details, own)
+    except handlers.PermanentError:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="File storage isn't configured")
     except DocumentError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     key = f"applaut/documents/{user.id}/{doc.opportunity_id}/{rendered.sha256[:8]}/cv.pdf"
