@@ -64,6 +64,55 @@ Quick start for next session:
 
 ---
 
+## 2026-11-07: Applaut AI released to production (model on the app VM)
+
+Venkat decided to release now instead of waiting for the partner's VM: he is
+Applaut's only user, and he keeps his Claude routine as his working engine
+until Applaut AI proves stable. `applaut-ai-local` fast-forwarded into
+`main` (`9a8fb05`), `deploy.sh` run.
+
+**What runs where (lvamo-backend):**
+- `ai-worker` (new service in `docker-compose.prod.yml`), migration `0030`
+  (head now `0030`). Backend image ~1.2 GB (LibreOffice + fonts); disk 12 GB
+  free after the deploy.
+- Model host on the same VM, cores 1–3:
+  `model-host/docker-compose.app-vm.yml` (project `lvamo-model`: `net` holds
+  the network namespace, `scorer` :8080, `writer` :8081; joins
+  `lvamo_default` as `model-host`, published only on 127.0.0.1). Model file
+  hard-linked from `~/llm-bench/models/`. Both servers loaded: ~10 GB RAM
+  used, ~12 GB available.
+- `.env.production`: `APPLAUT_MODEL_HOSTS=model-host`, `APPLAUT_LLM_API_KEY`
+  (same as `LLAMA_API_KEY` in `model-host/.env`, generated on the VM, never
+  printed), `APPLAUT_AI_ALLOWLIST=venkatsaivedantham@gmail.com` (Venkat's
+  second account; `vsvedantham@gmail.com` stays on his routine). Backup of
+  the old file: `~/backups/.env.production.bak-20261107`.
+- DB backup before `0030`: `~/backups/lvamo-pre-0030-20261107.dump`.
+
+**Verified in production (2026-11-07):** alembic `0030`; every existing
+table's row count unchanged (the 5 new tables empty; one new `engine_tasks`
+row, the first `applaut_ai_nightly` at 21:00 UTC); Applaut, Jobref, ProSho
+health and platform settings 200; bad logins 401 (Applaut, Jobref); new
+routes 403 without a token; Pages bundle has the CV template and bullet
+drafting UI; ai-worker logs "Serving the AI queue on 1 model host(s):
+model-host" and both ports report the pinned models; the routine's checks and
+syncs carry on (sync done 08:51 UTC, next check 18:37 UTC).
+
+**Incident, ~1 min (12:00–12:01 UTC):** `up -d --force-recreate backend
+ai-worker` gave the backend a new container IP; nginx had resolved `backend`
+once at start and kept proxying to the old IP → 502 on every API until
+`docker compose restart nginx`. **Until nginx re-resolves (a `resolver
+127.0.0.11` + variable `proxy_pass`), restart nginx after anything that
+recreates the backend container.** (`deploy.sh` got lucky: the backend kept
+its IP.)
+
+**Still to do:** Venkat logs in as the second account → Settings → job
+engine Applaut AI → Master profile (YAML prepared from his profile) → first
+night run (22:00 Berlin, or started by hand) → check scores, documents,
+timing. GDPR paperwork still needed before any *other* user's data goes to a
+partner's VM; not needed while the model runs on LVAMO's own VM.
+
+---
+
 ## 2026-10-31: Applaut AI redesigned around an in-house model (design only)
 
 Engine 2 is now planned to run on a 7–8B model on `lvamo-backend`, capped
