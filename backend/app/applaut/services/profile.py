@@ -33,6 +33,11 @@ async def create_profile(
             status_code=status.HTTP_409_CONFLICT,
             detail="Active profile already exists",
         )
+    if payload.job_engine == "applaut_ai":
+        from app.applaut.services.job_engine import applaut_ai_available
+        if not await applaut_ai_available(user, db):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                detail="Applaut AI has no room for new users right now; choose Applaut job search")
     profile = Profile(
         user_id=user.id,
         display_name=payload.display_name,

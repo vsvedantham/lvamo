@@ -63,6 +63,12 @@ export default function MasterProfileCard({ canDraft = false }: { canDraft?: boo
       </div>
       {saved === undefined ? <p style={muted}>Loading…</p> : (
         <>
+          {saved === null && canDraft && (
+            <p role="alert" style={{ ...muted, color: 'var(--warn)' }}>
+              Applaut AI scores jobs and writes documents only from your master profile, so it does nothing for you
+              until you save one here.
+            </p>
+          )}
           <textarea value={text} onChange={e => setText(e.target.value)} spellCheck={false}
             placeholder={'personal:\n  name: Your Name\n  ...\ndefault_headline: ...\nexperience:\n  - id: company_role\n    facts:\n      - ...'}
             aria-label="Master profile (YAML)"

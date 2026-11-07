@@ -19,9 +19,9 @@ class CreateProfileRequest(BaseModel):
     discovery_frequency_hours: Literal[6, 12, 24] = 24
     good_threshold: int = Field(default=85, ge=70, le=100)
     # Chosen during onboarding: Applaut's own search (with or without
-    # automatic runs) or the user's own Claude routine. Applaut AI isn't
-    # available yet.
-    job_engine: Literal["basic", "own_routine"] = "basic"
+    # automatic runs), the user's own Claude routine, or Applaut AI while it
+    # has room for them (services.job_engine.applaut_ai_available).
+    job_engine: Literal["basic", "own_routine", "applaut_ai"] = "basic"
     discovery_enabled: bool = False
 
 

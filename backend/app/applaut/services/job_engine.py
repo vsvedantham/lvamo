@@ -61,11 +61,12 @@ async def _reschedule(profile: Profile, db: AsyncSession, reschedule: bool = Fal
 # ----------------------------------------------------------------------------- engine choice
 
 async def applaut_ai_available(user: User, db: AsyncSession) -> bool:
-    """Early access (APPLAUT_AI_ALLOWLIST), and only while the model hosts have
-    room: APPLAUT_AI_USERS_PER_HOST users per host. A user already on it keeps it."""
+    """Early access (APPLAUT_AI_ALLOWLIST: emails, or `*` for everyone), and only
+    while the model hosts have room: APPLAUT_AI_USERS_PER_HOST users per host. A
+    user already on it keeps it."""
     allowed = {e.strip().lower() for e in settings.applaut_ai_allowlist.split(",") if e.strip()}
     hosts = host_addresses()
-    if not hosts or user.email.lower() not in allowed:
+    if not hosts or not ("*" in allowed or user.email.lower() in allowed):
         return False
     others = await db.scalar(select(func.count()).select_from(Profile).where(
         Profile.job_engine == "applaut_ai", Profile.is_active == True, Profile.user_id != user.id))

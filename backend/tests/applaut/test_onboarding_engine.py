@@ -70,10 +70,37 @@ async def test_own_routine_never_auto_discovers(client):
     assert await _tasks(p.id) == []
 
 
-async def test_applaut_ai_not_selectable(client):
+async def test_applaut_ai_not_selectable_without_access(client, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "applaut_model_hosts", "10.8.0.2")
+    monkeypatch.setattr(settings, "applaut_ai_allowlist", "someone-else@example.com")
     _, headers = await _new_user()
     r = await client.post(f"{API}/profiles", json={**PROFILE, "job_engine": "applaut_ai"}, headers=headers)
     assert r.status_code == 422
+
+
+async def test_applaut_ai_for_everyone_until_full(client, monkeypatch):
+    """`*` lets anyone choose Applaut AI at onboarding, up to users-per-host x hosts."""
+    from app.config import settings
+    monkeypatch.setattr(settings, "applaut_model_hosts", "10.8.0.2")
+    monkeypatch.setattr(settings, "applaut_ai_allowlist", "*")
+    async with AsyncSessionLocal() as db:
+        from sqlalchemy import func
+        others = await db.scalar(select(func.count()).select_from(Profile).where(
+            Profile.job_engine == "applaut_ai", Profile.is_active == True))  # noqa: E712
+    monkeypatch.setattr(settings, "applaut_ai_users_per_host", others + 1)  # room for one more
+    user, headers = await _new_user("Asha Rao")
+    r = await client.post(f"{API}/profiles", json={**PROFILE, "job_engine": "applaut_ai", "discovery_enabled": True},
+                          headers=headers)
+    assert r.status_code == 201, r.text
+    p = await _profile(user.id)
+    assert (p.job_engine, p.discovery_enabled) == ("applaut_ai", False)
+    r = await client.get(f"{API}/job-engine", headers=headers)
+    assert r.json()["applaut_ai_available"] is True  # someone already on it keeps it
+    _, full = await _new_user("Ben Okafor")
+    r = await client.post(f"{API}/profiles", json={**PROFILE, "job_engine": "applaut_ai"}, headers=full)
+    assert r.status_code == 422
+    assert "no room" in r.json()["detail"]
 
 
 async def test_setup_kit(client, tmp_path):

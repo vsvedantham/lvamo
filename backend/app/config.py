@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     applaut_ai_doc_threshold: int = 80      # match score from which documents are written
     applaut_ai_score_cap: int = 40          # most jobs the model scores per user per night
     applaut_nightly_hour: int = 22          # Europe/Berlin
-    # Comma-separated emails allowed to choose Applaut AI (capacity, §3.1). Empty = nobody.
+    # Comma-separated emails allowed to choose Applaut AI (capacity, §3.1); `*` = everyone. Empty = nobody.
     applaut_ai_allowlist: str = ""
 
     # Google OAuth

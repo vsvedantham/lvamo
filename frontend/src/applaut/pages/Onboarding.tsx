@@ -135,15 +135,15 @@ function describeError(err: any): string {
   return 'Failed to create profile. Please try again.'
 }
 
-type EngineChoice = 'basic' | 'own_routine'
+type EngineChoice = 'basic' | 'own_routine' | 'applaut_ai'
 
-const ENGINE_OPTIONS: { id: EngineChoice | 'applaut_ai'; title: string; badge: string; text: string; disabled?: boolean }[] = [
+const ENGINE_OPTIONS: { id: EngineChoice; title: string; badge: string; text: string; disabled?: boolean }[] = [
   { id: 'basic', title: 'Applaut job search', badge: 'Ready now · free',
     text: 'Applaut searches company job boards for you and scores every job against your profile. Nothing to set up.' },
   { id: 'own_routine', title: 'Your own Claude routine', badge: 'For IT professionals',
     text: 'Run the AI job search in your own Claude account. Applaut collects the jobs, CVs and cover letters an hour after each run. Needs a paid Claude plan, GitHub, Neon and Cloudflare.' },
-  { id: 'applaut_ai', title: 'Applaut AI', badge: 'Coming soon',
-    text: "Applaut's AI reads every new job against your profile and writes a tailored CV and cover letter. Nothing to set up.", disabled: true },
+  { id: 'applaut_ai', title: 'Applaut AI', badge: 'Early access',
+    text: "Every night Applaut's AI reads new jobs against your master profile and writes a tailored CV and cover letter for the best matches. You add your master profile in Settings next." },
 ]
 
 function Choice({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -255,6 +255,8 @@ export default function Onboarding() {
       })
       if (engine === 'basic') {
         navigate('/applaut/resume')
+      } else if (engine === 'applaut_ai') {
+        navigate('/applaut/settings#master-profile')
       } else {
         setEngineState(await getJobEngine())
         setStep(5)
