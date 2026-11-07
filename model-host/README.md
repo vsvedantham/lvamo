@@ -24,9 +24,18 @@ on :8081. Which model each one runs is pinned, with checksums, in
 A lane uses its host only while both ports report exactly those models, so a
 job scored on one host means the same as one scored on another.
 
-Not deployed yet (2026-11-02): this waits for the first partner VM. The setup
-was checked on the app VM's spare cores (1–3) with `update.sh` and one lane
-over an SSH tunnel, including a host going down mid-run.
+## On the app VM (2026-11-07, until a separate model host exists)
+
+Applaut AI went live with its one model host on the app VM itself, on cores
+1–3, using [`docker-compose.app-vm.yml`](docker-compose.app-vm.yml): no
+WireGuard; the servers join the app's Docker network as `model-host` and
+publish only on 127.0.0.1. In `/home/ubuntu/lvamo/model-host/.env`:
+`COMPOSE_FILE=docker-compose.app-vm.yml`, `WG_ADDRESS=127.0.0.1`,
+`LLAMA_CPUS=1-3`, `LLAMA_THREADS=3`, `LLAMA_API_KEY=…` (the same as
+`APPLAUT_LLM_API_KEY`). In `.env.production`: `APPLAUT_MODEL_HOSTS=model-host`.
+Start the app stack first (the network must exist), then `./update.sh --no-pull`.
+When a separate host is added, stop this one (`docker compose down` here) and
+replace `model-host` in `APPLAUT_MODEL_HOSTS` with its WireGuard address.
 
 ## Add a model host
 

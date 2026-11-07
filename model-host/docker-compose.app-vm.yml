@@ -1,0 +1,79 @@
+# Applaut AI model host on the app VM itself (lvamo-backend), until a separate
+# model host exists. Same models and servers as docker-compose.yml, with two
+# differences:
+#  - No WireGuard. The servers join the app's Docker network (lvamo_default)
+#    under the name `model-host`, so APPLAUT_MODEL_HOSTS=model-host. They
+#    publish only on 127.0.0.1 (for update.sh's checks); nothing is opened to
+#    the internet and no firewall rule changes.
+#  - Cores 1-3 only (LLAMA_CPUS=1-3, LLAMA_THREADS=3 in .env); core 0 stays
+#    with the API, the database and nginx.
+# The ai-worker expects one address serving the scorer on :8080 and the writer
+# on :8081, so both servers share one network namespace, held by `net` (it only
+# sleeps, so it practically never restarts; if it does, run update.sh again).
+#
+# Use: put COMPOSE_FILE=docker-compose.app-vm.yml and WG_ADDRESS=127.0.0.1 in
+# .env (docker compose and update.sh then use this file), start the app stack
+# first (the network must exist), then ./update.sh --no-pull.
+name: lvamo-model
+
+x-llama: &llama
+  # Same pinned image as docker-compose.yml.
+  image: ghcr.io/ggml-org/llama.cpp@sha256:d9e9e74ba3f7ef119b1939162b1631f99b75ec703c310d140cfa2fdac8907389
+  restart: always
+  cpuset: "${LLAMA_CPUS:-1-3}"
+  network_mode: service:net
+  depends_on: [net]
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "3"
+  volumes:
+    - ./models:/models:ro
+
+services:
+  net:
+    image: ghcr.io/ggml-org/llama.cpp@sha256:d9e9e74ba3f7ef119b1939162b1631f99b75ec703c310d140cfa2fdac8907389
+    restart: always
+    entrypoint: ["sleep", "infinity"]
+    cpuset: "${LLAMA_CPUS:-1-3}"
+    mem_limit: 64m
+    networks:
+      lvamo:
+        aliases: [model-host]
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8081"
+
+  scorer:
+    <<: *llama
+    mem_limit: 8g
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    command: >-
+      --model /models/${SCORER_FILE:?run update.sh} --alias ${SCORER_ALIAS:?run update.sh}
+      --api-key ${LLAMA_API_KEY:?set LLAMA_API_KEY in .env}
+      --threads ${LLAMA_THREADS:-3} --threads-batch ${LLAMA_THREADS:-3}
+      --parallel 1 --ctx-size 8192 --cache-ram 0 --jinja --host 0.0.0.0 --port 8080
+
+  writer:
+    <<: *llama
+    mem_limit: 12g
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    command: >-
+      --model /models/${WRITER_FILE:?run update.sh} --alias ${WRITER_ALIAS:?run update.sh}
+      --api-key ${LLAMA_API_KEY:?set LLAMA_API_KEY in .env}
+      --threads ${LLAMA_THREADS:-3} --threads-batch ${LLAMA_THREADS:-3}
+      --parallel 1 --ctx-size 8192 --cache-ram 0 --jinja --host 0.0.0.0 --port 8081
+
+networks:
+  lvamo:
+    external: true
+    name: lvamo_default
