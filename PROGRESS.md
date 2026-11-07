@@ -32,10 +32,14 @@ Migration `0030` (head now `0030`). Platform-level notes:
   (`model-host/docker-compose.app-vm.yml`), the llama.cpp scorer and writer
   on cores 1–3, joined to `lvamo_default` as `model-host`, published only on
   127.0.0.1. Core 0 stays with the API, Postgres and nginx.
-- **nginx resolves `backend` only at start.** Recreating the backend
-  container can give it a new IP and every API returns 502 until
-  `docker compose restart nginx` (~1 min outage on 2026-11-07). Restart nginx
-  after anything that recreates the backend, until `nginx.conf` re-resolves.
+- **nginx now looks the backend up at request time** (`8187380`: Docker's
+  DNS via `resolver 127.0.0.11 valid=10s`, `proxy_pass $backend_upstream`).
+  Before, it resolved `backend` once at start, so a recreated backend with a
+  new IP gave 502 on every API until nginx restarted (~1 min outage on
+  2026-11-07). Verified: backend forced from 172.18.0.5 to .7 with nginx left
+  running; all four APIs back to 200 within ~8 s (the backend's start time).
+  `nginx.conf` is a single-file bind mount: after `git pull` changes it,
+  **restart** the nginx container (a reload keeps reading the old file).
 
 ---
 

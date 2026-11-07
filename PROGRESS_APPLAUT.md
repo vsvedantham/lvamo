@@ -100,10 +100,9 @@ syncs carry on (sync done 08:51 UTC, next check 18:37 UTC).
 **Incident, ~1 min (12:00–12:01 UTC):** `up -d --force-recreate backend
 ai-worker` gave the backend a new container IP; nginx had resolved `backend`
 once at start and kept proxying to the old IP → 502 on every API until
-`docker compose restart nginx`. **Until nginx re-resolves (a `resolver
-127.0.0.11` + variable `proxy_pass`), restart nginx after anything that
-recreates the backend container.** (`deploy.sh` got lucky: the backend kept
-its IP.)
+`docker compose restart nginx`. (`deploy.sh` got lucky: the backend kept
+its IP.) Fixed the same day (`8187380`): nginx resolves the backend at request
+time; see `PROGRESS.md`.
 
 **Still to do:** Venkat logs in as the second account → Settings → job
 engine Applaut AI → Master profile (YAML prepared from his profile) → first
