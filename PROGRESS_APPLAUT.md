@@ -64,6 +64,42 @@ Quick start for next session:
 
 ---
 
+## 2026-11-07 (later): Applaut opened to 5 new people, Applaut AI for all of them
+
+Venkat's call, after the capacity numbers (one host, measured speeds: a normal
+night ~50 min of model time per user, so 5 users ~4 h of the 525-min window;
+a first night ~2.5 h per user, so start people a night or two apart).
+Commit `5c0ee44`, deployed and verified the same day.
+
+- **Sign-up cap**: new optional row `applaut.application_settings.max_users`
+  (`services/registration.py`). Sign-up is open only while
+  `allow_new_registrations = '1'` **and** there are fewer than `max_users`
+  accounts; the register endpoint checks under a row lock, and
+  `GET /settings/allow_new_registrations` returns the effective answer, so the
+  sign-up page shows "closed" by itself once full. A non-number keeps it
+  closed. **Prod: `max_users = 8`** (the 3 accounts of 2026-11-07, Venkat's two
+  and `test@lvamo.com`, plus 5) and `allow_new_registrations = '1'`.
+  A deleted account frees its place.
+- **Applaut AI for everyone**: `APPLAUT_AI_ALLOWLIST=*` means every user; the
+  capacity cap still applies. **Prod: `APPLAUT_AI_ALLOWLIST=*`,
+  `APPLAUT_AI_USERS_PER_HOST=6`** (5 new people + the second account).
+  Backup of the env: `~/backups/.env.production.bak-20261107-b`.
+- **Onboarding** offers Applaut AI ("Early access") and creates the profile on
+  it when there's room (422 "no room" otherwise), then opens Settings at the
+  master profile. Settings warns an Applaut AI user with no master profile
+  that nothing happens until they save one.
+- Tests: 270 pass (`test_registration.py`, two in `test_onboarding_engine.py`).
+- Verified in prod: all four APIs 200; worker serving `model-host`; settings
+  endpoint `0` before and `1` after opening; live sign-up page shows the form;
+  live bundle has the onboarding option and the warning. Not clicked through
+  in a browser: onboarding with Applaut AI (needs a real sign-up).
+
+**Gap for real users:** the master profile can only be written as YAML (or
+grown with "Add bullets from notes"); a new Applaut AI user without one gets
+nothing at night. Next build: master profile from an uploaded CV (v2 step 7).
+
+---
+
 ## 2026-11-07: Applaut AI released to production (model on the app VM)
 
 Venkat decided to release now instead of waiting for the partner's VM: he is
