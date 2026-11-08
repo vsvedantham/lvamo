@@ -1,5 +1,5 @@
-import { type FormEvent, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { type FormEvent, useRef, useState } from 'react'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiErrorMessage } from '../api/errors'
 
@@ -7,7 +7,8 @@ const field: React.CSSProperties = { display: 'flex', flexDirection: 'column', g
 const labelStyle: React.CSSProperties = { fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-2)' }
 
 export default function Login() {
-  const { login } = useAuth()
+  const { login, user, loading: checking } = useAuth()
+  const submitted = useRef(false)  // this form signed them in: its own navigate decides where to
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -18,15 +19,20 @@ export default function Login() {
     e.preventDefault()
     setError('')
     setLoading(true)
+    submitted.current = true
     try {
       await login(email, password)
       navigate('/applaut/dashboard')
     } catch (err: any) {
+      submitted.current = false
       setError(apiErrorMessage(err, 'Invalid email or password.'))
     } finally {
       setLoading(false)
     }
   }
+
+  if (checking) return null  // still checking a saved login
+  if (user && !submitted.current) return <Navigate to="/applaut/dashboard" replace />  // signed in already
 
   return (
     <div style={{ width: '100%', maxWidth: '380px' }}>

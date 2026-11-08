@@ -64,6 +64,18 @@ Quick start for next session:
 
 ---
 
+## 2026-11-08: signed-in users skip the landing and login pages
+
+Reported by Venkat: from the LVAMO hub, Applaut opened its landing page and
+"Log in" asked for credentials although he was still signed in (the token
+was there; only these pages ignored it). Now `/applaut`, `/applaut/login`
+and `/applaut/register` send a signed-in user to `/applaut/dashboard`, as
+Jobref and ProSho's login already did. A bad or expired token is dropped
+and the page shows as before. Checked locally in the browser (signed in,
+signed out, bad token).
+
+---
+
 ## 2026-11-08: master profile from the user's CV (v2 step 7, the rest)
 
 Closes the gap below: a new Applaut AI user no longer has to write YAML.

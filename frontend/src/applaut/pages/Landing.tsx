@@ -1,8 +1,12 @@
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 
 export default function Landing() {
   useDocumentTitle('Applaut — by LVAMO')
+  const { user, loading } = useAuth()
+  if (loading) return null  // still checking a saved login
+  if (user) return <Navigate to="/applaut/dashboard" replace />  // signed in already
   return (
     <div style={{ textAlign: 'center', maxWidth: '560px' }}>
       <div style={{
