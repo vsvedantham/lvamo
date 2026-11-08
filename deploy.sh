@@ -9,7 +9,8 @@ echo "==> Pulling latest code"
 git pull origin main
 
 echo "==> Building production images"
-$COMPOSE build --no-cache backend
+# ai-worker has its own image from the same code: build both, or it keeps the old code
+$COMPOSE build --no-cache backend ai-worker
 
 echo "==> Running database migrations"
 $COMPOSE run --rm backend alembic upgrade head
