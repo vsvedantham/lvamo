@@ -9,6 +9,7 @@ requirement, and facts never move between roles.
 """
 from __future__ import annotations
 
+import html
 import re
 
 from app.applaut.documents.fact_guard import BULLET_NUM_RE
@@ -16,9 +17,32 @@ from app.applaut.documents.tailor import all_skill_items, entry_limits, fact_ids
 
 JD_MAX_CHARS = 6000  # ~1,500 tokens; postings put requirements early
 
+_TAG = re.compile(r"</?[a-zA-Z][\w-]*(?:\s[^<>]*)?/?>")  # a real tag, not "< 5 years"
+_BLOCK = re.compile(r"</?(?:p|div|br|h[1-6]|ul|ol|li|tr|table|section|article|header|footer)\b[^<>]*>", re.I)
+_ENTITY = re.compile(r"&(?:[a-zA-Z]+|#\d+|#x[0-9a-fA-F]+);")
+
+
+def posting_text(description: str) -> str:
+    """A posting as plain text. Most boards send HTML, some escaped twice
+    (&lt;p&gt;&lt;span style=…&gt;); the markup cost the model ~27% more tokens to
+    read and filled the 6,000-character budget before the requirements."""
+    s = description or ""
+    for _ in range(2):  # "&amp;lt;p&amp;gt;" needs two rounds
+        if "<" not in s and _ENTITY.search(s):
+            s = html.unescape(s)
+    if _TAG.search(s):
+        s = re.sub(r"<li\b[^<>]*>", "\n- ", s, flags=re.I)
+        s = _BLOCK.sub("\n", s)
+        s = _TAG.sub("", s)
+        s = html.unescape(s)
+    s = re.sub(r"[ \t\u00a0]+", " ", s)
+    s = re.sub(r" *\n *", "\n", s)
+    s = re.sub(r"\n- *\n+", "\n- ", s)
+    return re.sub(r"\n{2,}- ", "\n- ", s)  # one list, not items a blank line apart
+
 
 def trim_job(description: str) -> str:
-    return re.sub(r"\n{3,}", "\n\n", description or "").strip()[:JD_MAX_CHARS]
+    return re.sub(r"\n{3,}", "\n\n", posting_text(description)).strip()[:JD_MAX_CHARS]
 
 
 def job_message(title: str, company: str, location: str | None, description: str) -> str:

@@ -37,6 +37,24 @@ Start the app stack first (the network must exist), then `./update.sh --no-pull`
 When a separate host is added, stop this one (`docker compose down` here) and
 replace `model-host` in `APPLAUT_MODEL_HOSTS` with its WireGuard address.
 
+## On a Mac, for local work (2026-11-08)
+
+The same file as on the app VM (`docker-compose.app-vm.yml`) runs locally:
+the local app stack's network is also `lvamo_default`. Docker Desktop needs
+**16 GB** of memory: on ARM, llama.cpp repacks Q4_0 weights into its own
+memory, so each server holds ~4.8 GB, and two don't fit in the 8 GB default.
+1. The model (5.38 GB) into `models/`, checksum from `models.lock`
+   (`shasum -a 256 -c`; `update.sh` uses Linux's `sha256sum`).
+2. `model-host/.env`: as on the app VM, with `SCORER_ALIAS=scorer:<alias>@<sha8>`
+   and `WRITER_ALIAS=writer:<alias>@<sha8>` (what `update.sh` writes; the
+   worker's host check compares them) and a local `LLAMA_API_KEY`.
+3. In the repo's `.env`: `APPLAUT_MODEL_HOSTS=model-host` and
+   `APPLAUT_LLM_API_KEY` = that key. Start the app stack, then
+   `docker compose up -d` here; `docker compose --profile ai up ai-worker`
+   in the repo runs the queue.
+The Mac's cores are faster than prod's: compare token counts, not seconds.
+Prod reads ~17 and writes ~4.5 tokens/s (its llama-server logs, 2026-11-08).
+
 ## Add a model host
 
 1. **The VM.** Ampere A1.Flex, 4 OCPU / 24 GB, Ubuntu 24.04 aarch64, 50 GB

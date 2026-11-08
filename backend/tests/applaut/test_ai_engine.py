@@ -398,3 +398,23 @@ async def test_nightly_creates_raw_jobs_and_queues_in_opt_in_order(ai_user, make
 
     again = await nightly.run_nightly(today=date(1999, 1, 1))  # same postings: nothing new, nothing queued twice
     assert again.stats[str(first.id)]["new"] == 0 and again.jobs_queued == 0
+
+
+# ---------------------------------------------------------------- postings as plain text (speed, 2026-11-08)
+
+@pytest.mark.parametrize("raw, text", [
+    ("<h2>The role</h2><p>Build <strong>pipelines</strong> &amp; more</p><ul><li style='font-size:14px'>Python</li>"
+     "<li>SQL</li></ul>", "The role\n\nBuild pipelines & more\n- Python\n- SQL"),
+    ("&lt;p&gt;&lt;span data-contrast=&quot;auto&quot;&gt;Helsing builds AI.&lt;/span&gt;&lt;/p&gt;"
+     "&lt;ul&gt;&lt;li&gt;Kafka&lt;/li&gt;&lt;/ul&gt;", "Helsing builds AI.\n- Kafka"),   # escaped once
+    ("&amp;lt;p&amp;gt;Spark &amp;amp; Delta&amp;lt;/p&amp;gt;", "Spark & Delta"),            # escaped twice
+    ("Requirements:\n- Python\n- < 5 years is fine, 3 > 2\nAT&T", "Requirements:\n- Python\n- < 5 years is fine, 3 > 2\nAT&T"),
+])
+def test_postings_reach_the_model_as_plain_text(raw, text):
+    assert prompts.trim_job(raw) == text
+
+
+def test_markup_no_longer_fills_the_posting_budget():
+    filler = '<li style="font-size:14px;font-family:Arial, Helvetica, sans-serif;">Boilerplate</li>' * 120
+    raw = f"<ul>{filler}</ul><p>Must have: Apache Kafka</p>"
+    assert len(raw) > prompts.JD_MAX_CHARS and "Apache Kafka" in prompts.trim_job(raw)

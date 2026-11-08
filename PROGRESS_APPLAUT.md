@@ -70,6 +70,35 @@ Quick start for next session:
 
 ---
 
+## 2026-11-08: Applaut AI speed work: prod's model locally, postings as plain text
+
+**Prod's model runs locally now** (model-host/README.md "On a Mac"): same
+pinned image, model file (checksum checked), flags and two-server layout,
+joined to the local app network as `model-host`; the worker's own host
+check passes. Docker Desktop needs 16 GB.
+
+**Where prod's time goes** (prod reads ~17 tok/s, writes ~4.5 tok/s; a
+benchmark of 10 real postings and 3 document sets with Venkat's profile,
+sending exactly what the handlers send): scoring a job ~2.0 min (reads
+~1,200 tokens, mostly the posting; writes ~205, three quarters of it the
+requirement lists); a document set ~6.3 min (the main call re-reads the
+posting and writes ~500-600 tokens, 59% of them the letter; then 5 bullet
+rewordings at ~17 s each). The prompt cache works: the profile part is
+reused on every call.
+
+**Fix: postings reach the model as plain text** (`prompts.posting_text`).
+47 of 51 postings were raw HTML, some escaped twice, with inline styles;
+the markup cost 27% more posting tokens and filled the 6,000-character
+budget before the requirements. Now: scoring ~1.7 min per job (-15%),
+document sets ~5.4 min (the posting part of the write call -10%; the rest
+of that figure is a cold cache in the baseline). Quality: a repeat run of
+the same code moves scores by 0.3 points on average, so differences are
+real; the one big one is better (Helsing: German was a "nice to have",
+read as a B1 requirement through the markup, 60 -> 78). Tests: 290 pass.
+Not yet deployed.
+
+---
+
 ## 2026-11-08: signed-in users skip the landing and login pages
 
 Reported by Venkat: from the LVAMO hub, Applaut opened its landing page and
