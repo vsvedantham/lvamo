@@ -97,6 +97,16 @@ real; the one big one is better (Helsing: German was a "nice to have",
 read as a B1 requirement through the markup, 60 -> 78). Tests: 290 pass.
 Not yet deployed.
 
+**Tried and dropped: a compact scoring answer.** Requirements as
+`[name, matched_by]` pairs instead of objects cut the answer from ~225 to
+~155 tokens (~1.7 -> ~1.5 min per job on prod), but changed what the model
+concludes: scores moved 6.6 points on average (vs 0.3 between two runs of
+the same code), and Helsing's German "nice to have" became "B2 required"
+again. Putting the short facts (German first) before the lists fixed one
+job but not Helsing, and the lists filled up with generic entries ("data
+engineering"). The object format stays; output-format tricks on the scorer
+aren't a safe lever.
+
 ---
 
 ## 2026-11-08: signed-in users skip the landing and login pages
