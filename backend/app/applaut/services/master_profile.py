@@ -1,11 +1,12 @@
 import asyncio
 from datetime import datetime, timezone
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.applaut.documents import profile_import
 from app.applaut.documents.profile_schema import ProfileError, parse_yaml, to_yaml, validate_profile
 from app.applaut.documents.render import DocumentError, sample_documents
 from app.applaut.ai import queue
@@ -13,14 +14,25 @@ from app.applaut.ai.hosts import host_addresses
 from app.applaut.models.ai_queue import AIQueueItem
 from app.applaut.models.bullet_draft import BulletDraft
 from app.applaut.models.master_profile import MasterProfile
+from app.applaut.models.profile_import import ProfileImport
 from app.applaut.models.user import User
-from app.applaut.schemas.master_profile import AddFactsRequest, MasterProfileResponse, MasterProfileSave
+from app.applaut.schemas.master_profile import (
+    AddFactsRequest, MasterProfileResponse, MasterProfileSave, ProfileImportResponse,
+)
 from app.applaut.services.audit import log_action
 from app.applaut.services.profile import get_active_profile
 
 
+def _reading_order(data: dict) -> dict:
+    """The saved profile with fields in the schema's order (JSONB keeps its own)."""
+    try:
+        return validate_profile(data)
+    except ProfileError:
+        return data
+
+
 def to_response(mp: MasterProfile) -> MasterProfileResponse:
-    return MasterProfileResponse(data=mp.data, yaml=to_yaml(mp.data), version=mp.version,
+    return MasterProfileResponse(data=mp.data, yaml=to_yaml(_reading_order(mp.data)), version=mp.version,
                                  source=mp.source, updated_at=mp.updated_at)
 
 
@@ -166,3 +178,79 @@ async def add_facts(user: User, entry_id: str, payload: AddFactsRequest, db: Asy
     await db.commit()
     await db.refresh(mp)
     return mp
+
+
+# ---------------------------------------------------------------- master profile from the user's CV (v2 plan §5)
+
+IMPORT_MAX_BYTES = 5 * 1024 * 1024
+
+
+async def _open_import(user: User, db: AsyncSession) -> ProfileImport | None:
+    return await db.scalar(select(ProfileImport).where(
+        ProfileImport.user_id == user.id, ProfileImport.closed_at.is_(None))
+        .order_by(ProfileImport.created_at.desc()).limit(1))
+
+
+async def import_response(imp: ProfileImport, db: AsyncSession) -> ProfileImportResponse:
+    ahead = None
+    if imp.status == "reading":
+        item = await db.scalar(select(AIQueueItem).where(AIQueueItem.profile_import_id == imp.id,
+                                                          AIQueueItem.status.in_(("pending", "running"))))
+        ahead = await queue.ahead_of(db, item) if item is not None and item.status == "pending" else 0
+    return ProfileImportResponse(
+        id=imp.id, file_name=imp.file_name, status=imp.status, ahead=ahead,
+        yaml=to_yaml(profile_import.in_order(imp.draft)) if imp.status == "ready" and imp.draft else None,
+        notes=imp.notes or [], error=imp.error, created_at=imp.created_at, finished_at=imp.finished_at)
+
+
+def _close(imp: ProfileImport) -> None:
+    """Done with: the CV's text and the draft go, so Applaut keeps no copy."""
+    imp.closed_at, imp.lines, imp.draft = datetime.now(timezone.utc), None, None
+
+
+async def start_import(user: User, file: UploadFile, db: AsyncSession) -> ProfileImport:
+    """Read the CV's text (the file itself isn't kept) and queue the writer."""
+    profile = await get_active_profile(user, db)
+    if profile.job_engine != "applaut_ai":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Reading your CV needs Applaut AI as your job engine")
+    if not host_addresses():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Applaut AI can't read your CV right now; please try again later")
+    name = (file.filename or "cv").strip()[:255] or "cv"
+    data = await file.read(IMPORT_MAX_BYTES + 1)
+    if len(data) > IMPORT_MAX_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="The file must be 5 MB or less")
+    try:
+        lines = await asyncio.to_thread(profile_import.read_cv, data, name)
+    except profile_import.ImportProblem as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    old = await _open_import(user, db)  # a new upload replaces one not yet used
+    if old is not None:
+        _close(old)
+        await db.execute(delete(AIQueueItem).where(AIQueueItem.profile_import_id == old.id,
+                                                   AIQueueItem.status == "pending"))
+    imp = ProfileImport(user_id=user.id, status="reading", file_name=name, lines=lines, notes=[])
+    db.add(imp)
+    await db.flush()
+    await queue.enqueue_import(db, imp, profile.id)
+    await log_action(action="master_profile.import", db=db, user_id=str(user.id), entity_type="profile_import",
+                     entity_id=str(imp.id), after_state={"file": name, "lines": len(lines)})
+    await db.commit()
+    await db.refresh(imp)
+    return imp
+
+
+async def latest_import(user: User, db: AsyncSession) -> ProfileImport | None:
+    return await _open_import(user, db)
+
+
+async def close_import(user: User, db: AsyncSession) -> None:
+    """The user saved the profile or dropped the draft. If the writer hasn't
+    started, the item leaves the queue; if it has, its answer is ignored."""
+    imp = await _open_import(user, db)
+    if imp is not None:
+        _close(imp)
+        await db.execute(delete(AIQueueItem).where(AIQueueItem.profile_import_id == imp.id,
+                                                   AIQueueItem.status == "pending"))
+        await db.commit()

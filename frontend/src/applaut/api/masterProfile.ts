@@ -81,3 +81,39 @@ export async function addFacts(entryId: string, facts: string[], draftId?: strin
   return (await client.post<MasterProfile>(`/master-profile/entries/${encodeURIComponent(entryId)}/facts`,
     { facts, draft_id: draftId ?? null })).data
 }
+
+// A master profile drafted from your CV (docs/applaut/APPLAUT_AI_V2_PLAN.md §5):
+// Applaut AI points at your CV's lines and Applaut copies them into a draft,
+// which you check and save in the editor. Nothing in it is new wording.
+
+export interface ProfileImport {
+  id: string
+  file_name: string
+  status: 'reading' | 'ready' | 'failed'
+  /** Queue items before this one, while reading. */
+  ahead: number | null
+  /** The draft as YAML, once ready. */
+  yaml: string | null
+  /** What was left out, or still needs filling in. */
+  notes: string[]
+  error: string | null
+  created_at: string
+  finished_at: string | null
+}
+
+export async function importCv(file: File): Promise<ProfileImport> {
+  const form = new FormData()
+  form.append('file', file)
+  return (await client.post<ProfileImport>('/master-profile/import', form,
+    { headers: { 'Content-Type': 'multipart/form-data' } })).data
+}
+
+/** The open draft from your CV, or null. */
+export async function getProfileImport(): Promise<ProfileImport | null> {
+  return (await client.get<ProfileImport | null>('/master-profile/import')).data
+}
+
+/** Done with the draft (saved or dropped); Applaut deletes the CV's text. */
+export async function closeProfileImport(): Promise<void> {
+  await client.delete('/master-profile/import')
+}

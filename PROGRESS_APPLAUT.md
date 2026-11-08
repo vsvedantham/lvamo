@@ -64,6 +64,42 @@ Quick start for next session:
 
 ---
 
+## 2026-11-08: master profile from the user's CV (v2 step 7, the rest)
+
+Closes the gap below: a new Applaut AI user no longer has to write YAML.
+Settings → Master profile → **Start from your CV** (Applaut AI only):
+upload a .docx or PDF; the writer (queue kind `import_profile`, a few
+minutes) points at the CV's lines; code builds a draft from those lines,
+word for word, and lists what it left out or what is missing. "Load into the
+editor" puts the draft in the YAML editor (asks first if it would replace
+what's there); the user fills the gaps and saves. Saving or "Discard the
+draft" closes the import, and Applaut deletes the CV's text (the file itself
+is never stored). A new upload replaces an unused draft; Cancel takes a
+waiting one out of the queue.
+
+- Migration `0031`: `applaut.profile_imports`, `ai_queue.profile_import_id`,
+  the queue's kind and per-kind checks. Audit: `master_profile.import`.
+- API: `POST/GET/DELETE /api/v1/applaut/master-profile/import`. 409 without
+  Applaut AI or a model host, 413 over 5 MB, 422 for a file it can't read.
+- Saved master profiles now show in the editor in the schema's field order
+  (`personal` first), not Postgres JSONB's key order. The draft keeps the
+  CV's order of skill rows.
+- Tests: 285 pass (`test_profile_import.py`, 15). Clicked through locally in
+  the browser: draft shown → loaded → saved (version 1) → import closed.
+- Real writer (prod's, through a tunnel, 2026-11-08 morning): the three
+  fictional test CVs (.docx, German .docx, the same CV as a PDF) took 70–76 s
+  each (~730 prompt + ~250–310 output tokens). Every draft was a valid
+  profile with no "Left out" notes; what stayed empty was empty in the CV
+  too (the German CV has no places, technologies lines or languages).
+  Venkat's own CV (49 lines): 193 s (1,500 + 555 tokens); same 3 roles,
+  titles, companies, places and dates as his hand-made profile, 6 skills
+  rows, project, education, both certifications, both languages. It found
+  two fixes, both made: a section heading ("TECHNICAL SKILLS") taken as an
+  unlabelled skills row (one unlabelled item is now skipped), and a
+  certification detail spread over two lines that the model joined with
+  " | " (the word-for-word check now ignores separators `| , ; · •`). His
+  draft stays in the scratchpad, not the repo.
+
 ## 2026-11-07 (later): Applaut opened to 5 new people, Applaut AI for all of them
 
 Venkat's call, after the capacity numbers (one host, measured speeds: a normal
@@ -97,6 +133,7 @@ Commit `5c0ee44`, deployed and verified the same day.
 **Gap for real users:** the master profile can only be written as YAML (or
 grown with "Add bullets from notes"); a new Applaut AI user without one gets
 nothing at night. Next build: master profile from an uploaded CV (v2 step 7).
+*Built 2026-11-08, see above.*
 
 ---
 

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { errorMessage } from '../api/jobEngine'
-import { getMasterProfile, openPreview, saveMasterProfileYaml, validationErrors, type MasterProfile } from '../api/masterProfile'
+import { closeProfileImport, getMasterProfile, openPreview, saveMasterProfileYaml, validationErrors, type MasterProfile } from '../api/masterProfile'
 import BulletBankBuilder from './BulletBankBuilder'
+import ProfileFromCv from './ProfileFromCv'
 import { buttonStyle, formatWhen } from './RoutineEngineCard'
 
 // Settings → Master profile, for Applaut AI: what every generated CV and cover
@@ -22,6 +23,8 @@ export default function MasterProfileCard({ canDraft = false }: { canDraft?: boo
   const [busy, setBusy] = useState<'save' | 'cv' | 'cover_letter' | null>(null)
   const [problems, setProblems] = useState<string[]>([])
   const [message, setMessage] = useState<string | null>(null)
+  const [fromCv, setFromCv] = useState(false)  // the editor holds the draft from the user's CV
+  const [cvKey, setCvKey] = useState(0)
 
   useEffect(() => {
     getMasterProfile()
@@ -36,6 +39,11 @@ export default function MasterProfileCard({ canDraft = false }: { canDraft?: boo
     try {
       const mp = await saveMasterProfileYaml(text)
       setSaved(mp); setText(mp.yaml); setMessage(`Saved (version ${mp.version}).`)
+      if (fromCv) {  // the draft is now the profile: Applaut drops the CV's text
+        setFromCv(false)
+        await closeProfileImport().catch(() => undefined)
+        setCvKey(k => k + 1)
+      }
     } catch (err) {
       const errs = validationErrors(err)
       if (errs.length) setProblems(errs)
@@ -68,6 +76,10 @@ export default function MasterProfileCard({ canDraft = false }: { canDraft?: boo
               Applaut AI scores jobs and writes documents only from your master profile, so it does nothing for you
               until you save one here.
             </p>
+          )}
+          {canDraft && (
+            <ProfileFromCv key={cvKey} hasSaved={saved !== null} dirty={dirty}
+              onLoad={yaml => { setText(yaml); setProblems([]); setMessage(null); setFromCv(true) }} />
           )}
           <textarea value={text} onChange={e => setText(e.target.value)} spellCheck={false}
             placeholder={'personal:\n  name: Your Name\n  ...\ndefault_headline: ...\nexperience:\n  - id: company_role\n    facts:\n      - ...'}

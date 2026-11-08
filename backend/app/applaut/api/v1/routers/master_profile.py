@@ -1,12 +1,13 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.applaut.models.user import User
 from app.applaut.schemas.master_profile import (
     AddFactsRequest, BulletDraftResponse, DraftRequest, MasterProfileResponse, MasterProfileSave, PreviewKind,
+    ProfileImportResponse,
 )
 from app.applaut.services import master_profile as svc
 from app.applaut.services.auth import get_current_user
@@ -70,3 +71,24 @@ async def add_facts(entry_id: str, payload: AddFactsRequest, user: User = Depend
     except svc.ProfileError as exc:
         return svc.invalid(exc.errors)
     return svc.to_response(mp)
+
+
+@router.post("/import", response_model=ProfileImportResponse, status_code=status.HTTP_202_ACCEPTED)
+async def import_cv(file: UploadFile = File(...), user: User = Depends(get_current_user),
+                    db: AsyncSession = Depends(get_db)):
+    """Queue Applaut AI to draft a master profile from the user's CV (.docx or .pdf)."""
+    imp = await svc.start_import(user, file, db)
+    return await svc.import_response(imp, db)
+
+
+@router.get("/import", response_model=Optional[ProfileImportResponse])
+async def get_import(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """The open draft from the user's CV (reading, ready or failed), or null."""
+    imp = await svc.latest_import(user, db)
+    return await svc.import_response(imp, db) if imp else None
+
+
+@router.delete("/import", status_code=status.HTTP_204_NO_CONTENT)
+async def close_import(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Done with the draft (saved or dropped); the CV's text is deleted."""
+    await svc.close_import(user, db)

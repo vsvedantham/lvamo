@@ -59,6 +59,15 @@ async def enqueue_template(db: AsyncSession, template, profile_id: uuid.UUID) ->
     return item
 
 
+async def enqueue_import(db: AsyncSession, imp, profile_id: uuid.UUID) -> AIQueueItem:
+    """Queue drafting a master profile from the user's CV (one-time), in the same FIFO."""
+    item = AIQueueItem(kind="import_profile", user_id=imp.user_id, profile_id=profile_id,
+                       profile_import_id=imp.id, status="pending")
+    db.add(item)
+    await db.flush()
+    return item
+
+
 async def ahead_of(db: AsyncSession, item: AIQueueItem) -> int:
     """Items to be served before this pending one (running ones included)."""
     return await db.scalar(select(func.count()).select_from(AIQueueItem).where(

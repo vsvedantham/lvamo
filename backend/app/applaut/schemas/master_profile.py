@@ -58,3 +58,17 @@ class BulletDraftResponse(BaseModel):
 class AddFactsRequest(BaseModel):
     facts: list[str] = Field(min_length=1, max_length=10)
     draft_id: Optional[uuid.UUID] = None  # the drafts these came from; closed once saved
+
+
+class ProfileImportResponse(BaseModel):
+    """A master profile drafted from the user's CV. `yaml` (when ready) goes
+    into the editor for the user to review; nothing is saved until they save."""
+    id: uuid.UUID
+    file_name: str
+    status: Literal["reading", "ready", "failed"]
+    ahead: Optional[int] = None  # queue items before this one, while reading
+    yaml: Optional[str] = None
+    notes: list[str] = []
+    error: Optional[str] = None
+    created_at: datetime
+    finished_at: Optional[datetime] = None

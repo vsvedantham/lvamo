@@ -1,6 +1,7 @@
 """One queue item each: score a job (`score_job`), write its documents
 (`write_docs`), draft CV bullets from the user's notes (`draft_bullets`), or
-make the user's own .docx CV into a template (`build_template`)."""
+make the user's own .docx CV into a template (`build_template`), or draft a
+master profile from the user's CV (`import_profile`)."""
 from __future__ import annotations
 
 import asyncio
@@ -16,7 +17,7 @@ from app.applaut.ai import prompts, scoring
 from app.applaut.ai.provider import Completion, HostUnreachable, ModelError, Provider
 from app.applaut.ai.queue import enqueue
 from app.applaut.documents.fact_guard import check_drafts, check_fact_rewording
-from app.applaut.documents import own_template
+from app.applaut.documents import own_template, profile_import
 from app.applaut.documents.letter import JobInfo, company_display
 from app.applaut.documents.profile_schema import ProfileError, validate_profile
 from app.applaut.documents.render import DocumentError, OwnCv, build_documents
@@ -29,6 +30,7 @@ from app.applaut.models.job_assessment import JobAssessment
 from app.applaut.models.master_profile import MasterProfile
 from app.applaut.models.opportunity import Opportunity
 from app.applaut.models.profile import Profile
+from app.applaut.models.profile_import import ProfileImport
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -318,9 +320,29 @@ async def build_template(db: AsyncSession, item: AIQueueItem, provider: Provider
     return usage
 
 
+async def import_profile(db: AsyncSession, item: AIQueueItem, provider: Provider) -> Usage:
+    """A master profile drafted from the user's CV: the model points at lines,
+    code builds the draft from them (profile_import.build_profile). The user
+    reviews it in the editor; nothing is saved until they save it."""
+    imp = await db.get(ProfileImport, item.profile_import_id)
+    if imp is None or imp.closed_at is not None or imp.status != "reading" or not imp.lines:
+        raise PermanentError("the CV was removed")
+    usage = Usage()
+    c = await provider.complete_json(prompts.IMPORT_SYSTEM, prompts.import_message(imp.lines),
+                                     prompts.IMPORT_SCHEMA, prompts.import_max_tokens(len(imp.lines)))
+    usage.add(c)
+    if not isinstance(c.data, dict) or not isinstance(c.data.get("roles"), list):
+        raise ModelError("the answer has no roles list")
+    draft, imp.notes = profile_import.build_profile(imp.lines, c.data)
+    imp.draft = profile_import.for_storage(draft)
+    imp.status, imp.error, imp.finished_at = "ready", None, datetime.now(timezone.utc)
+    await db.commit()
+    return usage
+
+
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 HANDLERS = {"score_job": score_job, "write_docs": write_docs, "draft_bullets": draft_bullets,
-            "build_template": build_template}
+            "build_template": build_template, "import_profile": import_profile}
 
 
 async def mark_failed(db: AsyncSession, item: AIQueueItem, error: str, answer: dict | None = None) -> None:
@@ -335,6 +357,12 @@ async def mark_failed(db: AsyncSession, item: AIQueueItem, error: str, answer: d
         t = await db.get(CvTemplate, item.cv_template_id)
         if t is not None and t.status == "reading":
             t.status, t.error, t.finished_at = "failed", error[:1000], datetime.now(timezone.utc)
+            await db.commit()
+        return
+    if item.kind == "import_profile":
+        imp = await db.get(ProfileImport, item.profile_import_id)
+        if imp is not None and imp.status == "reading":
+            imp.status, imp.error, imp.finished_at = "failed", error[:1000], datetime.now(timezone.utc)
             await db.commit()
         return
     a = await db.get(JobAssessment, item.assessment_id)

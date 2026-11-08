@@ -353,8 +353,24 @@ No layout changes to the user's template, same as the standard one.
   the photo, colours, date column and 2 pages, with only the headline,
   skills order, bullet order and technologies order changed. Roboto was
   missing on the server before this run (now installed).
-- **Not built (still §7.3)**: the user's own cover letter template, and
-  building the master profile from the uploaded CV.
+- **Master profile from the CV (built 2026-11-08)**: Settings → Master
+  profile → "Start from your CV" (Applaut AI only). The user uploads a .docx
+  or PDF (≤5 MB, ≤6 pages, ≤250 lines; a scanned PDF has no text and is
+  refused). Only the text lines are kept (`applaut.profile_imports`,
+  migration `0031`), never the file. The writer (queue kind
+  `import_profile`) answers with line numbers for the name, headline, each
+  role's bullets (a PDF-wrapped bullet is a group of lines), skills and
+  technologies lines, and copies the short heading pieces (title, company,
+  place, dates, school, degree). Code builds the draft from the CV's own
+  lines and keeps a copied piece only if it is word for word in the CV;
+  anything else is left empty with a note ("Left out …", "Fill in …").
+  Email, phone, LinkedIn and GitHub come from the text by pattern, not the
+  model. The user loads the draft into the YAML editor, fills the gaps and
+  saves; saving (or Discard) closes the import and deletes the CV's text.
+  Code: `documents/profile_import.py`, `ai/prompts.py` (IMPORT_*),
+  `handlers.import_profile`, `components/ProfileFromCv.tsx`; tests
+  `test_profile_import.py`.
+- **Not built (still §7.3)**: the user's own cover letter template.
 
 ---
 
@@ -397,7 +413,7 @@ No layout changes to the user's template, same as the standard one.
 | 4 | B4 (original vs tailored) | Toggle re-renders a CV in < 1 s, tested. **Done 2026-11-04**: `details` column, two endpoints, Documents-page panel; re-render ~0.1 s; `test_cv_bullet_choice.py`. Checked in the browser locally up to the file upload (no R2 bucket locally); the full switch is covered by the API tests |
 | 5 | C (bullet bank builder) | Venkat's bank reaches 8+ facts per role through it. **Built 2026-11-04**: §4 as built; checked in the browser locally with the fake model (keep, edit, discard, add, queued, cancel, no-host refusal). Real writer run 2026-11-05: 7 kinds of notes, 0 untrue drafts after a lead-claim check and prompt fixes (§4). Waits on Venkat drafting for his own roles |
 | 6 | Partner VM goes live | `setup.sh` on the VM, `APPLAUT_MODEL_HOSTS` set, deploy, verify in prod, `PROGRESS_APPLAUT.md` |
-| 7 | D (own template) | As design doc §8 Phase 4. **CV built 2026-11-05** (§5): upload, model labelling in the queue, round trip, both PDFs, switch on/off, generation and bullet switches with the template; `test_own_template.py`; real-model labelling on three test CVs. Venkat's own CV through it: round trip exact, layout kept (§5). Not built: own cover letter template, master profile from the upload |
+| 7 | D (own template) | As design doc §8 Phase 4. **CV built 2026-11-05** (§5): upload, model labelling in the queue, round trip, both PDFs, switch on/off, generation and bullet switches with the template; `test_own_template.py`; real-model labelling on three test CVs. Venkat's own CV through it: round trip exact, layout kept (§5). **Master profile from the upload built 2026-11-08** (§5). Not built: own cover letter template |
 
 Steps 1–5 run on `applaut-ai-local` with the test container on
 `lvamo-backend`; step 6 needs Venkat's go-ahead.

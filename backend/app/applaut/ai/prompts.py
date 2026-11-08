@@ -263,3 +263,52 @@ def template_schema(numbers: list[int]) -> dict:
 
 def template_max_tokens(n: int) -> int:
     return 40 + 9 * n
+
+
+# ---------------------------------------------------------------- master profile from the user's CV
+
+IMPORT_SYSTEM = """You help turn a candidate's CV into a structured profile. Code copies the text; you only point at it. Output JSON only, on one line, in the given shape.
+
+Each CV line is shown as: number| text. Lines are numbered from 1; use 0 for "not in the CV".
+- name_line: the line with the candidate's name. headline_line: one short line near the name saying who they are (e.g. "Data Engineer | Python, Spark"), else 0. A longer profile or summary paragraph is not a headline.
+- location: the candidate's city or country, copied exactly from the contact lines, else "".
+- roles: every job, newest first. title, company, location, start, end: copy each exactly as written in the role's heading lines (e.g. start "Apr 2022", end "Present"); "" when the CV doesn't give it. bullets: the line numbers of each achievement or duty under that job, one inner list per bullet; a bullet that runs over two lines is [12, 13]. technologies_line: a line listing that job's tools, else 0.
+- projects: projects listed apart from jobs (name copied exactly, bullets and technologies_line as for roles). [] when there are none.
+- skills_lines: the lines of the skills list, e.g. "Languages: Python, SQL".
+- education: degree, school, period, each copied exactly. certifications: name and detail, copied exactly.
+- languages: the candidate's English and German levels copied exactly (e.g. "C1", "Fluent"), else "".
+
+Never write a word that isn't in the CV, never correct or translate, and never use a line for two things. Summaries, hobbies and references are left out."""
+
+
+def import_message(lines: list[str]) -> str:
+    return "CV lines:\n" + "\n".join(f"{n}| {text[:LINE_CHARS_IMPORT]}" for n, text in enumerate(lines, 1))
+
+
+LINE_CHARS_IMPORT = 200
+_INT = {"type": "integer"}
+_STR = {"type": "string"}
+_BULLETS = {"type": "array", "items": {"type": "array", "items": _INT}}
+
+
+def _obj(props: dict) -> dict:
+    return {"type": "object", "properties": props, "required": list(props), "additionalProperties": False}
+
+
+IMPORT_SCHEMA = _obj({
+    "name_line": _INT,
+    "headline_line": _INT,
+    "location": _STR,
+    "roles": {"type": "array", "items": _obj({
+        "title": _STR, "company": _STR, "location": _STR, "start": _STR, "end": _STR,
+        "bullets": _BULLETS, "technologies_line": _INT})},
+    "projects": {"type": "array", "items": _obj({"name": _STR, "bullets": _BULLETS, "technologies_line": _INT})},
+    "skills_lines": {"type": "array", "items": _INT},
+    "education": {"type": "array", "items": _obj({"degree": _STR, "school": _STR, "period": _STR})},
+    "certifications": {"type": "array", "items": _obj({"name": _STR, "detail": _STR})},
+    "languages": _obj({"english": _STR, "german": _STR}),
+})
+
+
+def import_max_tokens(n_lines: int) -> int:
+    return min(4000, 400 + 8 * n_lines)

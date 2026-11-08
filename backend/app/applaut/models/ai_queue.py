@@ -26,7 +26,7 @@ class AIQueueItem(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     seq: Mapped[int] = mapped_column(BigInteger, nullable=False,
                                      server_default=sa.text("nextval('applaut.ai_queue_seq')"))
-    kind: Mapped[str] = mapped_column(String(30), nullable=False)  # score_job | write_docs | draft_bullets | build_template
+    kind: Mapped[str] = mapped_column(String(30), nullable=False)  # score_job | write_docs | draft_bullets | build_template | import_profile
     night_run_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), sa.ForeignKey("applaut.night_runs.id", ondelete="SET NULL")
     )
@@ -36,7 +36,8 @@ class AIQueueItem(Base):
     profile_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), sa.ForeignKey("applaut.profiles.id", ondelete="CASCADE"), nullable=False
     )
-    # The job (score_job, write_docs), the notes (draft_bullets) or the upload (build_template) the item is for.
+    # The job (score_job, write_docs), the notes (draft_bullets), the upload (build_template) or the CV
+    # (import_profile) the item is for.
     assessment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), sa.ForeignKey("applaut.job_assessments.id", ondelete="CASCADE")
     )
@@ -45,6 +46,9 @@ class AIQueueItem(Base):
     )
     cv_template_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), sa.ForeignKey("applaut.cv_templates.id", ondelete="CASCADE")
+    )
+    profile_import_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), sa.ForeignKey("applaut.profile_imports.id", ondelete="CASCADE")
     )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
