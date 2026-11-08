@@ -99,6 +99,17 @@ waiting one out of the queue.
   certification detail spread over two lines that the model joined with
   " | " (the word-for-word check now ignores separators `| , ; · •`). His
   draft stays in the scratchpad, not the repo.
+- **Deployed 2026-11-08** (`a3ae7fb`, then `fc310d3`). Prod DB backup first:
+  `~/backups/pre-0031-20261108.dump`. Verified: all four APIs 200; alembic
+  `0031 (head)`; `applaut.profile_imports` exists (0 rows), the queue's kind
+  check allows `import_profile`; `/master-profile/import` answers 403
+  without a login; the live Pages bundle has "Start from your CV". Not yet
+  tried in prod by a real upload.
+- **deploy.sh fixed (`fc310d3`)**: it built only the `backend` image, so
+  `ai-worker` (its own image from the same code) stayed on the old code
+  with no `import_profile` handler. Rebuilt it by hand (worker log: serving
+  `model-host`, both model ports 200; `import_profile` in HANDLERS); the
+  script now builds `backend ai-worker`.
 
 ## 2026-11-07 (later): Applaut opened to 5 new people, Applaut AI for all of them
 
