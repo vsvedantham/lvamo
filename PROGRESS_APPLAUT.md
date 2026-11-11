@@ -70,6 +70,33 @@ Quick start for next session:
 
 ---
 
+## 2026-11-11: plain-language master profile texts; postings as plain text deployed
+
+**First real CV import in prod:** Venkat's 49-line PDF took 217 s on the
+writer (queue item 1, nothing ahead of it) and the draft came back ready.
+Short CVs should take ~1.5-2.5 min on prod's cores.
+
+**Texts rewritten** (`MasterProfileCard.tsx`, `ProfileFromCv.tsx`): the
+card no longer talks about `facts`, YAML or the Claude routine ("Everything
+Applaut knows about you ... never adds anything that isn't here"); the
+reading state says "usually takes 2 to 4 minutes" instead of "a few minutes".
+
+**Deployed** `f601e7d` (branch rebased onto `main`, since the OTP commits
+had landed there with other hashes): this text change plus the plain-text
+postings fix (2026-11-08 entry below). Verified in prod: all four health
+URLs 200; VM at `f601e7d`; ai-worker has `prompts.posting_text` (turns
+`<p>Hi &amp; <b>you</b></p><ul><li>a</li>...` into `Hi & you / - a`) and
+not the uncommitted `write_message` experiment; worker serving the queue
+with both model servers answering; the live Pages bundle has the new texts
+and none of the old ones. Tests before deploy: 191 Applaut tests pass, the
+frontend builds.
+
+Still local and uncommitted: the shorter writer posting
+(`prompts.write_message`), waiting on a headline skill check
+(`fact_guard` doesn't check headline or letter skills against the profile).
+
+---
+
 ## 2026-11-08: Applaut AI speed work: prod's model locally, postings as plain text
 
 **Prod's model runs locally now** (model-host/README.md "On a Mac"): same
@@ -95,7 +122,7 @@ of that figure is a cold cache in the baseline). Quality: a repeat run of
 the same code moves scores by 0.3 points on average, so differences are
 real; the one big one is better (Helsing: German was a "nice to have",
 read as a B1 requirement through the markup, 60 -> 78). Tests: 290 pass.
-Not yet deployed.
+Deployed 2026-11-11 (see the entry above).
 
 **Tried and dropped: a compact scoring answer.** Requirements as
 `[name, matched_by]` pairs instead of objects cut the answer from ~225 to
