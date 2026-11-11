@@ -35,6 +35,8 @@ export interface EmployeeRegisterPayload {
   password: string
   domain: string
   employee: EmployeeDetails
+  // Only while emailed codes are on for Jobref (platform setting).
+  email_code?: string
 }
 
 export interface SeekerRegisterPayload {

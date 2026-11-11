@@ -71,6 +71,18 @@ class Settings(BaseSettings):
     # account. Existing accounts can always sign in. Empty = nobody new.
     prosho_signup_allowlist: str = ""
 
+    # Outgoing email (app/core/email.py). "console" logs instead of sending;
+    # "smtp" sends through SMTP_* (production: Zoho Mail, help@lvamo.com).
+    email_backend: str = "console"
+    smtp_host: str = "smtp.zoho.eu"
+    smtp_port: int = 465
+    smtp_security: str = "ssl"  # "ssl" (465) or "starttls" (587)
+    smtp_username: str = ""
+    smtp_password: str = ""     # a Zoho app-specific password, not the login password
+    email_from_address: str = "help@lvamo.com"
+    email_from_name: str = "LVAMO"
+    email_reply_to: str = ""
+
     # Server
     backend_cors_origins: List[str] = ["http://localhost:5173"]
     backend_port: int = 8000

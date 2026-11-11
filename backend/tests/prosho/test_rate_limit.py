@@ -6,7 +6,7 @@ from sqlalchemy import select
 from app.db.session import AsyncSessionLocal
 from app.prosho.models import ProshoPageStatDaily
 from app.prosho.services import page_stats
-from app.prosho.services.rate_limit import hit
+from app.core.rate_limit import hit
 from tests.prosho.test_evidence import _ingest, project  # noqa: F401  (fixture)
 
 API = "/api/v1/prosho"

@@ -15,6 +15,7 @@ from app.core.security import (
 from app.db.session import get_db
 from app.applaut.models.user import User
 from app.applaut.schemas.auth import LoginRequest, RegisterRequest
+from app.platform.services import email_codes
 
 bearer_scheme = HTTPBearer()
 
@@ -26,10 +27,12 @@ async def register(payload: RegisterRequest, db: AsyncSession) -> tuple[User, st
             status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered",
         )
+    verified = await email_codes.require_code(db, "applaut", payload.email, "register", payload.email_code)
     user = User(
         name=payload.name,
         email=payload.email,
         password_hash=hash_password(payload.password),
+        is_verified=verified,
     )
     db.add(user)
     await db.commit()

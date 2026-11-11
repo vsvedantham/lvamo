@@ -8,7 +8,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.db.session import AsyncSessionLocal
 from app.prosho.models import ProshoPageStatDaily
-from app.prosho.services import rate_limit
+from app.core import rate_limit
 from app.prosho.services.page_stats import referrer_domain
 from tests.prosho.test_github_sync import REPO, FakeGitHub
 

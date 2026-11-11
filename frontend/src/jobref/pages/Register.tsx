@@ -3,6 +3,9 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import BrandedPage from '../../components/BrandedPage'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useJobrefAuth } from '../context/AuthContext'
+import EmailCodeStep from '../../components/EmailCodeStep'
+import { useEmailCodesEnabled } from '../../hooks/useEmailCodesEnabled'
+import { PlatformApiError, sendEmailCode } from '../../api/platform'
 import { linkedInAuthorizeUrl } from '../api/auth'
 import type { EmployeeRegisterPayload, ReferFrequency, ReferralViewCapacity } from '../api/auth'
 
@@ -64,16 +67,26 @@ export default function JobrefRegister() {
 
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  // Employees confirm their email with an emailed code while the platform
+  // setting `otp_verification_enabled` lists jobref. Job seekers don't:
+  // LinkedIn already verified their email.
+  const codesOn = useEmailCodesEnabled('jobref')
+  const [codeStep, setCodeStep] = useState<{ resendAfter: number } | null>(null)
 
-  const handleEmployeeSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    setError('')
+  const errorText = (err: any) => {
+    if (err instanceof PlatformApiError) return err.message
+    const detail = err?.response?.data?.detail
+    return Array.isArray(detail)
+      ? detail.map((d: any) => d.msg).join(' ')
+      : detail ?? 'Registration failed. Please try again.'
+  }
 
+  const createEmployee = async (emailCode?: string) => {
     const payload: EmployeeRegisterPayload = {
       user_type: 'employee',
       first_name: firstName,
       last_name: lastName,
-      email,
+      email: email.trim(),
       phone,
       password,
       domain,
@@ -85,19 +98,26 @@ export default function JobrefRegister() {
         referral_capacity: referralCapacity,
         company_careers_url: companyCareersUrl,
       },
+      ...(emailCode ? { email_code: emailCode } : {}),
     }
+    await register(payload)
+    navigate('/jobref/dashboard')
+  }
 
+  const handleEmployeeSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (codesOn === null) return
+    setError('')
     setLoading(true)
     try {
-      await register(payload)
-      navigate('/jobref/dashboard')
+      if (codesOn) {
+        const sent = await sendEmailCode('jobref', email.trim(), 'register')
+        setCodeStep({ resendAfter: sent.resend_after_seconds })
+      } else {
+        await createEmployee()
+      }
     } catch (err: any) {
-      const detail = err.response?.data?.detail
-      setError(
-        Array.isArray(detail)
-          ? detail.map((d: any) => d.msg).join(' ')
-          : detail ?? 'Registration failed. Please try again.',
-      )
+      setError(errorText(err))
     } finally {
       setLoading(false)
     }
@@ -154,6 +174,20 @@ export default function JobrefRegister() {
               <p style={{ color: 'var(--text-2)', fontSize: '0.825rem' }}>Register directly — no LinkedIn required</p>
             </div>
 
+            {codeStep ? (
+              <EmailCodeStep
+                vertical="jobref"
+                purpose="register"
+                email={email.trim()}
+                resendAfterSeconds={codeStep.resendAfter}
+                submitLabel="Create account"
+                busyLabel="Creating account…"
+                onSubmit={code => createEmployee(code)}
+                errorMessage={errorText}
+                onBack={() => setCodeStep(null)}
+                backLabel="Edit details"
+              />
+            ) : (<>
             {error && (
               <div style={{ padding: '0.7rem 0.875rem', background: 'var(--danger-bg)', border: '1px solid var(--danger-border)', borderRadius: 'var(--radius-xs)', marginBottom: '1.25rem' }}>
                 <p style={{ color: 'var(--danger)', fontSize: '0.825rem', margin: 0 }}>{error}</p>
@@ -234,7 +268,7 @@ export default function JobrefRegister() {
 
               <button
                 type="submit"
-                disabled={loading || !employeeFormValid}
+                disabled={loading || !employeeFormValid || codesOn === null}
                 style={{
                   marginTop: '0.25rem', padding: '0.625rem', background: 'var(--accent)', color: '#fff',
                   border: 'none', borderRadius: 'var(--radius-xs)', fontWeight: 600, fontSize: '0.9rem',
@@ -242,9 +276,10 @@ export default function JobrefRegister() {
                   cursor: loading || !employeeFormValid ? 'not-allowed' : 'pointer',
                 }}
               >
-                {loading ? 'Creating account…' : 'Create account'}
+                {loading ? (codesOn ? 'Sending code…' : 'Creating account…') : (codesOn ? 'Continue' : 'Create account')}
               </button>
             </form>
+            </>)}
           </div>
         )}
 

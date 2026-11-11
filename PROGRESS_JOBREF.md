@@ -2,6 +2,12 @@
 
 > Vertical-specific progress for Jobref. Platform-level infra/architecture
 > lives in [`PROGRESS.md`](PROGRESS.md) — read that first if you haven't.
+>
+> **2026-11-11:** employee sign-up can require a code emailed to the user,
+> and the sign-in page offers password reset by code (all accounts), both
+> while the platform setting `otp_verification_enabled` lists `jobref`. Job
+> seekers' sign-up is unchanged (LinkedIn verifies their email). Built
+> locally, not deployed; details in `PROGRESS.md` (session log 2026-11-11).
 
 ---
 

@@ -2,6 +2,7 @@ import { type FormEvent, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiErrorMessage } from '../api/errors'
+import { useEmailCodesEnabled } from '../../hooks/useEmailCodesEnabled'
 
 const field: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '0.375rem' }
 const labelStyle: React.CSSProperties = { fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-2)' }
@@ -10,6 +11,7 @@ export default function Login() {
   const { login, user, loading: checking } = useAuth()
   const submitted = useRef(false)  // this form signed them in: its own navigate decides where to
   const navigate = useNavigate()
+  const canReset = useEmailCodesEnabled('applaut')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -54,7 +56,12 @@ export default function Login() {
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="you@example.com" autoComplete="email" />
           </div>
           <div style={field}>
-            <label style={labelStyle}>Password</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <label style={labelStyle}>Password</label>
+              {canReset && (
+                <Link to="/applaut/forgot-password" style={{ color: 'var(--accent)', fontSize: '0.8rem', fontWeight: 500 }}>Forgot password?</Link>
+              )}
+            </div>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="••••••••" autoComplete="current-password" />
           </div>
           <button

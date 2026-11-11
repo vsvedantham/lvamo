@@ -11,7 +11,7 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   login: (email: string, password: string) => Promise<void>
-  register: (name: string, email: string, password: string) => Promise<void>
+  register: (name: string, email: string, password: string, emailCode?: string) => Promise<void>
   logout: () => void
 }
 
@@ -40,8 +40,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(me)
   }
 
-  const register = async (name: string, email: string, password: string) => {
-    const { access_token } = await apiRegister(name, email, password)
+  const register = async (name: string, email: string, password: string, emailCode?: string) => {
+    const { access_token } = await apiRegister(name, email, password, emailCode)
     localStorage.setItem(TOKEN_KEY, access_token)
     const me = await getMe()
     setUser(me)

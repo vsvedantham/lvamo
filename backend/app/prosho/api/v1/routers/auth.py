@@ -7,7 +7,8 @@ from app.db.session import get_db
 from app.prosho.models.prosho_user import ProshoUser
 from app.prosho.schemas.auth import AccountDelete, LoginCodeExchange, ProshoUserResponse, TokenResponse
 from app.prosho.services import auth as auth_service
-from app.prosho.services import deletion, github, rate_limit
+from app.core import rate_limit
+from app.prosho.services import deletion, github
 
 router = APIRouter(prefix="/auth")
 

@@ -18,11 +18,14 @@ export async function register(
   name: string,
   email: string,
   password: string,
+  emailCode?: string,
 ): Promise<TokenResponse> {
   const { data } = await client.post<TokenResponse>('/auth/register', {
     name,
     email,
     password,
+    // Only while emailed codes are on for Applaut (platform setting).
+    ...(emailCode ? { email_code: emailCode } : {}),
   })
   return data
 }

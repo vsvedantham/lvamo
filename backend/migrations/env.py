@@ -23,7 +23,7 @@ from app.applaut.models.application_setting import ApplicationSetting  # noqa: E
 from app.jobref.models import (  # noqa: E402, F401
     JobrefCompany, JobrefReferralRequest, JobrefUser,
 )
-from app.platform.models import PlatformSetting  # noqa: E402, F401
+from app.platform.models import EmailCode, PlatformSetting  # noqa: E402, F401
 from app.prosho.models import (  # noqa: E402, F401
     ProshoAuditLog, ProshoClaim, ProshoEvidence, ProshoIngestToken, ProshoProject, ProshoUser,
 )

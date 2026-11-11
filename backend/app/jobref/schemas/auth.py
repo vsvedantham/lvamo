@@ -64,6 +64,10 @@ class EmployeeRegisterRequest(BaseModel):
     password: str = Field(min_length=8)
     domain: str = Field(min_length=1, max_length=255)
     employee: EmployeeDetails
+    # The code emailed by /api/v1/platform/auth/email-codes. Required only
+    # while `otp_verification_enabled` lists jobref. Job seekers have no
+    # such field: LinkedIn already verified their email.
+    email_code: Optional[str] = Field(default=None, max_length=12)
 
     @model_validator(mode="after")
     def check_phone(self) -> "EmployeeRegisterRequest":

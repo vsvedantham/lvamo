@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.prosho.schemas.evidence import MAX_BODY_BYTES, IngestRequest, IngestResponse
 from app.prosho.services import evidence as evidence_service
-from app.prosho.services import rate_limit
+from app.core import rate_limit
 from app.prosho.services.ingest_tokens import project_for_token
 
 router = APIRouter(prefix="/ingest")

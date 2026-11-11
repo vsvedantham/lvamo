@@ -22,7 +22,41 @@
 
 ---
 
-## Session log — 2026-11-08 (latest)
+## Session log — 2026-11-11 (latest)
+
+**Email codes (OTP) for sign-up and password reset, platform-wide.**
+Built and tested locally; **not deployed yet**. Migration `0032` (head now
+`0032`).
+- **Switch:** the row `otp_verification_enabled` in `platform.settings`
+  (public), comma-separated verticals. Seeded empty = off everywhere, so the
+  deploy alone changes nothing. Intended value: `applaut,jobref`.
+- **Where codes apply:** Applaut sign-up; Jobref **employee** sign-up only
+  (job seekers' email comes verified from LinkedIn); password reset for
+  Applaut and Jobref (every account). ProSho is not wired: GitHub sign-in
+  only, and it reads only GitHub-verified emails (decided 2026-11-11).
+- **Backend:** `app/core/email.py` (sender interface: `smtp` for Zoho,
+  `console` logs instead, the default); `app/platform/services/email_codes.py`
+  (6 digits, HMAC-stored, 10 min, 5 tries, 1/min and 5/hour per address,
+  a new code retires the old); new table `platform.email_codes`; endpoints
+  `POST /api/v1/platform/auth/email-codes` and `/password-reset`. Each
+  vertical hands its own account lookup/password setter to the platform
+  (`app/<x>/services/email_accounts.py`, wired in `main.py`), so the
+  platform never imports a vertical. Sign-up endpoints take `email_code`.
+  Reset for an unknown address answers 202 and sends nothing.
+- **Promoted** ProSho's in-memory per-IP limiter to `app/core/rate_limit.py`
+  (ProSho imports updated); the email-code endpoints use it too.
+- **Frontend:** `src/api/platform.ts`, `src/components/EmailCodeStep.tsx`,
+  `src/pages/ForgotPassword.tsx` (routes `/applaut/forgot-password`,
+  `/jobref/forgot-password`), "Forgot password?" on both sign-in pages.
+- **Prod still needs:** Zoho SMTP access for help@lvamo.com (Zoho's free plan
+  has no SMTP), `EMAIL_BACKEND=smtp` + `SMTP_*` in `.env.production`, a DMARC
+  record for lvamo.com (none today; SPF and DKIM `zmail` already exist),
+  then deploy, set the setting, and verify a real email arrives.
+- Tests: `backend/tests/platform/test_email_codes.py` (18).
+
+---
+
+## Session log — 2026-11-08
 
 **Applaut: master profile from the user's CV** (details in
 `PROGRESS_APPLAUT.md`). Migration `0031` (head now `0031`): new table

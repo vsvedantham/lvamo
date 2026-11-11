@@ -5,6 +5,12 @@
 > Applaut's product spec is [`docs/applaut/SPEC.md`](docs/applaut/SPEC.md)
 > (moved there from the repo-root `CLAUDE.md` on 2026-10-11, when `CLAUDE.md`
 > became the LVAMO master spec).
+>
+> **2026-11-11:** sign-up can require a code emailed to the user, and the
+> sign-in page offers password reset by code, both while the platform
+> setting `otp_verification_enabled` lists `applaut`. A code-verified sign-up
+> (or reset) sets `users.is_verified`. Built locally, not deployed; details in
+> `PROGRESS.md` (session log 2026-11-11).
 
 ---
 

@@ -4,7 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.prosho.models.prosho_user import ProshoUser
 from app.prosho.schemas.public import PageEventIn, PublicProject
-from app.prosho.services import page_stats, rate_limit
+from app.core import rate_limit
+from app.prosho.services import page_stats
 from app.prosho.services.auth import get_optional_user
 from app.prosho.services.public import get_public_project
 

@@ -7,7 +7,7 @@ from sqlalchemy import delete, select
 
 from app.db.session import AsyncSessionLocal
 from app.prosho.models import ProshoAuditLog, ProshoClaim, ProshoIngestToken, ProshoProject, ProshoUser
-from app.prosho.services import rate_limit
+from app.core import rate_limit
 from app.prosho.services.auth import issue_access_token
 
 TEST_ID_MIN, TEST_ID_MAX = 9_100_000_000, 9_199_999_999

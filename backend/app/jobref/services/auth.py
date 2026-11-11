@@ -25,6 +25,7 @@ from app.jobref.schemas.auth import (
     SeekerRegisterRequest,
 )
 from app.jobref.services.linkedin import decode_registration_token
+from app.platform.services import email_codes
 
 bearer_scheme = HTTPBearer()
 
@@ -58,6 +59,7 @@ async def _register_employee(payload: EmployeeRegisterRequest, db: AsyncSession)
             status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered",
         )
+    await email_codes.require_code(db, "jobref", payload.email, "register", payload.email_code)
 
     details = payload.employee
     user = JobrefUser(

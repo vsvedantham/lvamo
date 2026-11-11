@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import BrandedPage from '../../components/BrandedPage'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useJobrefAuth } from '../context/AuthContext'
+import { useEmailCodesEnabled } from '../../hooks/useEmailCodesEnabled'
 
 const field: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '0.375rem' }
 const labelStyle: React.CSSProperties = { fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-2)' }
@@ -11,6 +12,7 @@ export default function JobrefLogin() {
   useDocumentTitle('Sign in | Jobref')
   const { login, user, loading: authLoading } = useJobrefAuth()
   const navigate = useNavigate()
+  const canReset = useEmailCodesEnabled('jobref')
   const [params] = useSearchParams()
   const linkedinExisting = params.get('linkedin') === 'existing'
   const [email, setEmail] = useState('')
@@ -67,7 +69,12 @@ export default function JobrefLogin() {
               <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="you@example.com" autoComplete="email" />
             </div>
             <div style={field}>
-              <label style={labelStyle}>Password</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <label style={labelStyle}>Password</label>
+                {canReset && (
+                  <Link to="/jobref/forgot-password" style={{ color: 'var(--accent)', fontSize: '0.8rem', fontWeight: 500 }}>Forgot password?</Link>
+                )}
+              </div>
               <input type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="••••••••" autoComplete="current-password" />
             </div>
             <button

@@ -3,6 +3,7 @@ import { AuthProvider } from './applaut/context/AuthContext'
 import { JobrefAuthProvider } from './jobref/context/AuthContext'
 import Layout from './applaut/components/layout/Layout'
 import Hub from './pages/Hub'
+import ForgotPassword from './pages/ForgotPassword'
 import Landing from './applaut/pages/Landing'
 import Jobref from './jobref/pages/Jobref'
 import JobrefLogin from './jobref/pages/Login'
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="jobref/login" element={<JobrefLogin />} />
           <Route path="jobref/register" element={<JobrefRegister />} />
           <Route path="jobref/register/complete" element={<JobrefRegisterComplete />} />
+          <Route path="jobref/forgot-password" element={<ForgotPassword vertical="jobref" productName="Jobref" loginPath="/jobref/login" branded />} />
           <Route
             path="jobref/dashboard"
             element={
@@ -118,6 +120,7 @@ export default function App() {
             <Route index element={<Landing />} />
             <Route path="login" element={<Login />} />
             <Route path="register" element={<Register />} />
+            <Route path="forgot-password" element={<ForgotPassword vertical="applaut" productName="Applaut" loginPath="/applaut/login" />} />
             <Route
               path="onboarding"
               element={
