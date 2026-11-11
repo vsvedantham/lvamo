@@ -70,6 +70,30 @@ Quick start for next session:
 
 ---
 
+## 2026-11-11: Applaut AI users no longer see Applaut Basic's old shared pool
+
+A new Applaut AI account (signed up 18:15 UTC) showed 56 jobs before any
+run: Applaut Basic's shared pool (24 Greenhouse, 24 Personio, 5 Recruitee,
+3 Lever; last found 2026-10-17, posted Dec 2023 to Oct 2026). Only routine
+users had it hidden. Now every user not on Basic sees only the jobs found
+for them: an assessment by their engine (Applaut AI's nightly run keeps its
+postings in the shared pool and links them by assessment), a routine job,
+or their own posting. Same rule for the dashboard counts (`stats.py`). The
+pool stays under All engines -> Applaut Basic. The empty list now says the
+nightly run is at 22:00 Berlin and needs the master profile.
+
+Also seen: no Applaut AI user existed before today, so every nightly run
+since the release stopped at "no Applaut AI users" (no `night_runs` rows).
+Tonight (2026-11-11, 22:00 Berlin) is the first real one.
+
+**Deployed** `0fde4c8`, verified in prod: all four health URLs 200; VM at
+`0fde4c8`; for the new account the list code returns 0 jobs
+(`include_shared` false), the Applaut Basic filter 56, and the dashboard
+0 found; the live Pages bundle has the new empty-list text. Tests: 193
+Applaut tests pass (2 new).
+
+---
+
 ## 2026-11-11: plain-language master profile texts; postings as plain text deployed
 
 **First real CV import in prod:** Venkat's 49-line PDF took 217 s on the
