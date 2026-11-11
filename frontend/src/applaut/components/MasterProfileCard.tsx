@@ -63,18 +63,15 @@ export default function MasterProfileCard({ canDraft = false }: { canDraft?: boo
       <div>
         <h2 style={h2}>Master profile</h2>
         <p style={{ ...muted, marginTop: '0.3rem' }}>
-          Everything Applaut AI may put in your CV and cover letters, and nothing else: your roles, their bullet
-          points (<code>facts</code>), skills, education and languages. For each job, Applaut picks your most relevant
-          bullets and orders your skills; AI writes the headline and letter paragraphs, and may reword a few bullets
-          to fit the job, using only these facts (you can switch any back on the CV). Same format as the Claude routine's <code>master_profile.yaml</code>, so you can paste that file here.
+          Everything Applaut knows about you: your jobs and what you did in each, your skills, education and
+          languages. Applaut writes your CVs and cover letters only from this, and never adds anything that isn't here.
         </p>
       </div>
       {saved === undefined ? <p style={muted}>Loading…</p> : (
         <>
           {saved === null && canDraft && (
             <p role="alert" style={{ ...muted, color: 'var(--warn)' }}>
-              Applaut AI scores jobs and writes documents only from your master profile, so it does nothing for you
-              until you save one here.
+              Applaut can't score jobs or write documents for you until you save a profile here.
             </p>
           )}
           {canDraft && (

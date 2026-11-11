@@ -65,9 +65,8 @@ export default function ProfileFromCv({ hasSaved, dirty, onLoad }: Props) {
       <div>
         <h3 style={h3}>Start from your CV</h3>
         <p style={{ ...muted, marginTop: '0.3rem' }}>
-          Upload your CV and Applaut AI sorts its lines into a draft profile: your name, headline, roles and their
-          bullets, skills, education. The draft uses only your CV's own words; anything it couldn't place is listed
-          so you can fill it in. Applaut keeps only the CV's text, and deletes it once you save or discard the draft.
+          Upload your CV and Applaut turns it into a draft profile, using only your CV's own words. You check it,
+          fill any gaps and save. Applaut deletes the CV's text once you save or discard the draft.
         </p>
       </div>
 
@@ -76,7 +75,7 @@ export default function ProfileFromCv({ hasSaved, dirty, onLoad }: Props) {
           <p style={muted}>
             Reading <strong>{imp.file_name}</strong>…{' '}
             {imp.ahead ? `${imp.ahead} ${imp.ahead === 1 ? 'item' : 'items'} ahead in the queue. ` : ''}
-            This takes a few minutes; you can leave this page.
+            This usually takes 2 to 4 minutes. You can leave this page.
           </p>
           <button type="button" disabled={busy !== null} style={buttonStyle('ghost', busy !== null)} onClick={close}>
             {busy === 'close' ? 'Cancelling…' : 'Cancel'}
