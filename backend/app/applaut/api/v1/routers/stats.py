@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, select, union
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -44,19 +44,22 @@ async def get_stats(
     good_threshold = profile.good_threshold
     near_miss_threshold = good_threshold - 15
 
-    if profile.job_engine == "own_routine":
-        # Your routine's jobs only (Applaut Basic's shared pool is hidden for
-        # you, as on Opportunities), ranked by the routine's match %.
-        routine_opps = (
-            select(RoutineJob.opportunity_id).where(RoutineJob.user_id == uid)
-            .union(select(Opportunity.id).where(Opportunity.owner_user_id == uid))
+    if profile.job_engine != "basic":
+        # Only the jobs your engine found for you (Applaut Basic's shared pool
+        # is hidden for you, as on Opportunities), ranked by its match %.
+        engine = profile.job_engine
+        found_for_you = union(
+            select(RoutineJob.opportunity_id).where(RoutineJob.user_id == uid),
+            select(Opportunity.id).where(Opportunity.owner_user_id == uid),
+            select(JobAssessment.opportunity_id).where(
+                JobAssessment.profile_id == profile.id, JobAssessment.engine == engine),
         )
         opportunities_found = await db.scalar(
-            select(func.count(Opportunity.id)).where(Opportunity.is_active == True, Opportunity.id.in_(routine_opps))
+            select(func.count(Opportunity.id)).where(Opportunity.is_active == True, Opportunity.id.in_(found_for_you))
         ) or 0
         match = select(func.count(JobAssessment.id)).where(
-            JobAssessment.profile_id == profile.id, JobAssessment.engine == "own_routine",
-            JobAssessment.opportunity_id.in_(routine_opps),
+            JobAssessment.profile_id == profile.id, JobAssessment.engine == engine,
+            JobAssessment.opportunity_id.in_(found_for_you),
         )
         good_matches = await db.scalar(match.where(JobAssessment.match_score >= good_threshold)) or 0
         near_misses = await db.scalar(match.where(

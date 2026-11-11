@@ -113,3 +113,38 @@ async def test_routine_users_hide_shared_basic_jobs_by_default(client, make_user
     _, _, basic_headers = await make_user()
     res = (await client.get(API, headers=basic_headers, params={"page_size": 100})).json()
     assert res["include_shared"] is True and str(shared.id) in {i["id"] for i in res["items"]}
+
+
+async def test_applaut_ai_users_see_only_the_jobs_found_for_them(client, make_user, make_opportunity):
+    # Applaut AI's nightly run keeps its postings in the shared pool and links
+    # them to the user with an assessment; the rest of the pool stays hidden.
+    user, profile, headers = await make_user(job_engine="applaut_ai")
+    await make_opportunity(title="Old Basic job")
+    found = await make_opportunity(title="Found tonight")
+    scored = await make_opportunity(title="Scored 85")
+    async with AsyncSessionLocal() as db:
+        db.add(JobAssessment(user_id=user.id, profile_id=profile.id, opportunity_id=found.id, engine="applaut_ai",
+                             status="raw", matched_skills=[], missing_skills=[], flags=[], raw={}))
+        db.add(JobAssessment(user_id=user.id, profile_id=profile.id, opportunity_id=scored.id, engine="applaut_ai",
+                             match_score=85, matched_skills=[], missing_skills=[], flags=[], raw={}))
+        await db.commit()
+
+    res = (await client.get(API, headers=headers, params={"page_size": 100})).json()
+    assert res["include_shared"] is False
+    assert [i["title"] for i in res["items"]] == ["Scored 85", "Found tonight"]
+    assert res["counts"]["all"] == 2
+
+    basic = (await client.get(API, headers=headers, params={"page_size": 100, "engine": "basic"})).json()
+    assert basic["include_shared"] is True and "Old Basic job" in {i["title"] for i in basic["items"]}
+
+    stats = (await client.get("/api/v1/applaut/stats", headers=headers)).json()
+    assert stats["opportunities_found"] == 2 and stats["good_matches"] == 1
+
+
+async def test_a_new_applaut_ai_user_starts_with_an_empty_list(client, make_user, make_opportunity):
+    _, _, headers = await make_user(job_engine="applaut_ai")
+    await make_opportunity(title="Old Basic job")
+    res = (await client.get(API, headers=headers, params={"page_size": 100})).json()
+    assert res["items"] == [] and res["counts"]["all"] == 0
+    stats = (await client.get("/api/v1/applaut/stats", headers=headers)).json()
+    assert stats["opportunities_found"] == 0

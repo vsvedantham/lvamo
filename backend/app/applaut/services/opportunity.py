@@ -51,9 +51,11 @@ async def list_opportunities_with_scores(
     include_shared: bool | None = None,
 ) -> tuple[list, int, int, int, dict[str, int], bool]:
     """Rows of (opportunity, score, assessment, application, routine_job).
-    Jobs from the user's own routine come first. Users on their own routine
-    don't see Applaut Basic's shared pool unless they ask for it
-    (`include_shared`); a shared posting their routine also found still shows."""
+    Jobs from the user's own routine come first. Users on an AI engine (their
+    own routine or Applaut AI) don't see Applaut Basic's shared pool unless
+    they ask for it (`include_shared`); a shared posting their engine found
+    for them (a routine job, or an assessment: Applaut AI's nightly run keeps
+    its postings in the shared pool) still shows."""
     profile = await get_active_profile(user, db)
     good_threshold = profile.good_threshold
     near_miss_threshold = good_threshold - 15
@@ -89,9 +91,11 @@ async def list_opportunities_with_scores(
     )
 
     if include_shared is None:
-        include_shared = profile.job_engine != "own_routine" or engine == "basic"
+        include_shared = profile.job_engine == "basic" or engine == "basic"
     if not include_shared:
-        query = query.where(or_(Opportunity.owner_user_id.is_not(None), RoutineJob.id.is_not(None)))
+        query = query.where(or_(
+            Opportunity.owner_user_id.is_not(None), RoutineJob.id.is_not(None), assessment.id.is_not(None),
+        ))
 
     if country_code:
         query = query.where(Opportunity.country_code == country_code)

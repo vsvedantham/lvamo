@@ -674,7 +674,9 @@ export default function Opportunities() {
               ? 'Click "Run discovery" to search across all job boards — new jobs are scored automatically.'
               : engine === 'own_routine'
                 ? <>Your routine's jobs appear here an hour after each run. Not connected yet? <Link to="/applaut/settings" style={{ color: 'var(--accent)' }}>Settings → Job engine</Link></>
-                : `New jobs appear here after ${JOB_ENGINE_LABELS[engine]} runs.`}
+                : <>{JOB_ENGINE_LABELS[engine]} looks for jobs every night at 22:00 (Berlin); what it finds for you appears
+                    here. It needs your <Link to="/applaut/settings#master-profile" style={{ color: 'var(--accent)' }}>master profile</Link> to score them.
+                    Older jobs from Applaut Basic are under All engines → {JOB_ENGINE_LABELS.basic}.</>}
           </p>
         </div>
       ) : (
