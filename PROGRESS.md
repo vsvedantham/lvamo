@@ -60,7 +60,7 @@
 - **Verified in production:** all four APIs 200 after the deploy; setting
   public and reads `applaut,jobref`; a real Jobref sign-up code to
   help@lvamo.com → 202 (Zoho accepted it; a send failure answers 503) with
-  no errors in the backend log; Applaut reset for an unknown address → 202,
+  no errors in the backend log, and it **arrived in the inbox, not spam**; Applaut reset for an unknown address → 202,
   nothing sent; ProSho → 404; "Forgot password?" shows on
   www.lvamo.com/jobref/login. Not done in prod: a full sign-up or reset
   (no test accounts were created there).
