@@ -6,8 +6,8 @@
 > **2026-11-11:** employee sign-up can require a code emailed to the user,
 > and the sign-in page offers password reset by code (all accounts), both
 > while the platform setting `otp_verification_enabled` lists `jobref`. Job
-> seekers' sign-up is unchanged (LinkedIn verifies their email). Built
-> locally, not deployed; details in `PROGRESS.md` (session log 2026-11-11).
+> seekers' sign-up is unchanged (LinkedIn verifies their email). Live since
+> 2026-11-11; details in `PROGRESS.md` (session log 2026-11-11).
 
 ---
 

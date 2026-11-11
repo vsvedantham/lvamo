@@ -9,7 +9,7 @@
 > **2026-11-11:** sign-up can require a code emailed to the user, and the
 > sign-in page offers password reset by code, both while the platform
 > setting `otp_verification_enabled` lists `applaut`. A code-verified sign-up
-> (or reset) sets `users.is_verified`. Built locally, not deployed; details in
+> (or reset) sets `users.is_verified`. Live since 2026-11-11; details in
 > `PROGRESS.md` (session log 2026-11-11).
 
 ---

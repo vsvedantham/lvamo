@@ -25,8 +25,8 @@
 ## Session log — 2026-11-11 (latest)
 
 **Email codes (OTP) for sign-up and password reset, platform-wide.**
-Built and tested locally; **not deployed yet**. Migration `0032` (head now
-`0032`).
+**Deployed and live 2026-11-11** (commit `8acec7a`), switched on for
+`applaut,jobref`. Migration `0032` (head now `0032`).
 - **Switch:** the row `otp_verification_enabled` in `platform.settings`
   (public), comma-separated verticals. Seeded empty = off everywhere, so the
   deploy alone changes nothing. Intended value: `applaut,jobref`.
@@ -48,10 +48,22 @@ Built and tested locally; **not deployed yet**. Migration `0032` (head now
 - **Frontend:** `src/api/platform.ts`, `src/components/EmailCodeStep.tsx`,
   `src/pages/ForgotPassword.tsx` (routes `/applaut/forgot-password`,
   `/jobref/forgot-password`), "Forgot password?" on both sign-in pages.
-- **Prod still needs:** Zoho SMTP access for help@lvamo.com (Zoho's free plan
-  has no SMTP), `EMAIL_BACKEND=smtp` + `SMTP_*` in `.env.production`, a DMARC
-  record for lvamo.com (none today; SPF and DKIM `zmail` already exist),
-  then deploy, set the setting, and verify a real email arrives.
+- **Production setup (done 2026-11-11):** Zoho SMTP works on the current
+  plan; help@lvamo.com logs in itself with an app-specific password (kept on
+  the Mac at `~/.lvamo/zoho_smtp_password`, and in `.env.production` as
+  `SMTP_PASSWORD`; backup of the env file before the change:
+  `.env.production.bak-2026-11-11` on the VM). `EMAIL_BACKEND=smtp`,
+  `smtp.zoho.eu:465` ssl. New Cloudflare DNS record `_dmarc.lvamo.com`
+  `v=DMARC1; p=none; adkim=r; aspf=r` (SPF and DKIM `zmail` were already
+  there). The app password was pasted in a chat once: rotate it in Zoho if
+  that matters (update both places).
+- **Verified in production:** all four APIs 200 after the deploy; setting
+  public and reads `applaut,jobref`; a real Jobref sign-up code to
+  help@lvamo.com → 202 (Zoho accepted it; a send failure answers 503) with
+  no errors in the backend log; Applaut reset for an unknown address → 202,
+  nothing sent; ProSho → 404; "Forgot password?" shows on
+  www.lvamo.com/jobref/login. Not done in prod: a full sign-up or reset
+  (no test accounts were created there).
 - Tests: `backend/tests/platform/test_email_codes.py` (18).
 
 ---
