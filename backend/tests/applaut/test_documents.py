@@ -7,7 +7,7 @@ import pytest
 from app.applaut.documents.fact_guard import check_bullet, check_written
 from app.applaut.documents.letter import JobInfo, build_letter, company_display
 from app.applaut.documents.profile_schema import ProfileError, parse_yaml, to_yaml, validate_profile
-from app.applaut.documents.render import DocumentError, build_documents, sample_documents
+from app.applaut.documents.render import DocumentError, _cv_context, _cv_text, build_documents, render_html, sample_documents
 from app.applaut.documents.tailor import (
     apply_picks, drop_one, job_skills, mentioned, order_skill_rows, pick_entries, skill_names,
 )
@@ -201,6 +201,37 @@ def test_a_german_letter_is_named_as_german_not_as_a_pronoun_problem():
     w = copy.deepcopy(WRITTEN)
     w["paragraphs"][0] = w["paragraphs"][0] + " I also enjoy the Datenplattform und die team culture."
     assert not any("German" in e for e in check_written(w, profile(), JOB.description))
+
+
+def test_a_profile_from_a_cv_import_leaves_no_empty_labels():
+    """A CV import gives no photo, work authorization, availability, technologies
+    per role or project dates; the documents leave those out instead of printing
+    bare labels and separators (a complete profile renders as before)."""
+    sparse = copy.deepcopy(PROFILE)
+    sparse["personal"].update(work_authorization="", availability="", work_authorization_short="",
+                              availability_short="", linkedin_url="", github_url="")
+    for e in sparse["experience"]:
+        e["technologies"] = []
+    sparse["projects"] = [{"id": "side", "name": "Side project", "start": "", "end": "", "technologies": [],
+                           "facts": ["Built a small tool that loads 3 CSV files into Postgres every night."]}]
+    sparse["certifications"] = []
+    mp = validate_profile(sparse)
+    ctx = _cv_context(mp, mp["default_headline"], [{"label": "Data", "items": ["SQL"]}], pick_entries(mp, set()))
+    cv = render_html("cv.html.j2", ctx)
+    assert "Technologies used:" not in cv
+    assert "Certifications" not in cv
+    assert 'class="with-photo"' not in cv                     # no room kept for a photo that isn't there
+    assert '<div class="when"></div>' in cv                   # the project without dates: no lone "–"
+    assert 'href=""' not in cv and "LinkedIn" not in cv       # no dead links
+    text = _cv_text(ctx)
+    assert "Side project" in text and "( – )" not in text and "Education" in text
+
+    cl = {"tagline": "T", "date": "D", "recipient_lines": ["R"], "subject": "S", "salutation": "Hi",
+          "paragraphs": ["P"], "closing": "C"}
+    letter = render_html("cover_letter.html.j2", {"p": mp, "cl": cl})
+    contact = letter.split('<div class="contact">')[1].split("</div>")[0]
+    assert " – " not in contact and "&lt;" not in contact     # no bare "–", no escaped markup
+    assert contact.count('<span class="sep">|</span>') == contact.count("|") == 1  # Berlin | email
 
 # ---------------------------------------------------------------- the writer's bullets and skills
 

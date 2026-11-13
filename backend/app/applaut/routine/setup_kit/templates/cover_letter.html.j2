@@ -31,8 +31,20 @@
   <div class="tagline">{{ cl.tagline }}</div>
   <div class="rule"></div>
   <div class="contact">
-    {{ p.personal.location }}<span class="sep">|</span>{{ p.personal.phone }}<span class="sep">|</span><a href="mailto:{{ p.personal.email }}">{{ p.personal.email }}</a><br>
-    <a href="{{ p.personal.linkedin_url }}">{{ p.personal.linkedin_display }}</a><span class="sep">|</span><a href="{{ p.personal.github_url }}">{{ p.personal.github_display }}</a><span class="sep">|</span>{{ p.personal.work_authorization_short }} – {{ p.personal.availability_short }}
+    {#- Empty fields (a profile from a CV import has no work authorization or availability) are left out. #}
+    {%- macro line(parts) %}{% for href, text in parts %}{% if not loop.first %}<span class="sep">|</span>{% endif %}{% if href %}<a href="{{ href }}">{{ text }}</a>{% else %}{{ text }}{% endif %}{% endfor %}{% endmacro %}
+    {%- set me = p.personal %}
+    {%- set first = [] %}
+    {%- if me.get("location") %}{% set first = first + [("", me.location)] %}{% endif %}
+    {%- if me.get("phone") %}{% set first = first + [("", me.phone)] %}{% endif %}
+    {%- if me.get("email") %}{% set first = first + [("mailto:" ~ me.email, me.email)] %}{% endif %}
+    {%- set second = [] %}
+    {%- if me.get("linkedin_url") %}{% set second = second + [(me.linkedin_url, me.get("linkedin_display") or "LinkedIn")] %}{% endif %}
+    {%- if me.get("github_url") %}{% set second = second + [(me.github_url, me.get("github_display") or "GitHub")] %}{% endif %}
+    {%- set status = [me.get("work_authorization_short"), me.get("availability_short")] | select | join(" – ") %}
+    {%- if status %}{% set second = second + [("", status)] %}{% endif %}
+    {{ line(first) }}{% if first and second %}<br>{% endif %}
+    {{ line(second) }}
   </div>
 
   <div class="date">{{ cl.date }}</div>

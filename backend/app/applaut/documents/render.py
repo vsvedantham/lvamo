@@ -101,13 +101,18 @@ def _drop_sentence(paras: list[str]) -> bool:
     return False
 
 
-def render_pdf(template: str, ctx: dict, templates: Path = STANDARD_TEMPLATES) -> tuple[bytes, int]:
+def render_html(template: str, ctx: dict, templates: Path = STANDARD_TEMPLATES) -> str:
     from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
-    from weasyprint import HTML
 
     env = Environment(loader=FileSystemLoader(templates), autoescape=select_autoescape(["html", "j2"]),
                       undefined=StrictUndefined)
-    html = env.get_template(template).render(**ctx)
+    return env.get_template(template).render(**ctx)
+
+
+def render_pdf(template: str, ctx: dict, templates: Path = STANDARD_TEMPLATES) -> tuple[bytes, int]:
+    from weasyprint import HTML
+
+    html = render_html(template, ctx, templates)
     doc = HTML(string=html, base_url=str(templates)).render()
     return doc.write_pdf(), len(doc.pages)
 
@@ -120,13 +125,31 @@ def _cv_context(profile: dict, headline: str, skill_rows: list[dict], picks: dic
 
 
 def _cv_text(ctx: dict) -> str:
-    lines = [ctx["p"]["personal"]["name"], ctx["cv"]["headline"], ""]
+    """The CV as plain text (shown in the app next to the PDF): the same
+    sections, empty fields left out as the template leaves them out."""
+    p = ctx["p"]
+    me = p["personal"]
+    contact = " | ".join(x for x in (me.get("location"), me.get("phone"), me.get("email"),
+                                     me.get("linkedin_url"), me.get("github_url")) if x)
+    lines = [me["name"], ctx["cv"]["headline"], *([contact] if contact else []), ""]
     lines += [f"{r['label']}: {', '.join(r['items'])}" for r in ctx["cv"]["skills"]]
     for e in ctx["experience"] + ctx["projects"]:
-        lines += ["", f"{e.get('title') or e.get('name')} — {e.get('company', '')} ({e['start']} – {e['end']})"]
+        heading = " — ".join(x for x in (e.get("title") or e.get("name"), e.get("company")) if x)
+        when = " – ".join(x for x in (e.get("start"), e.get("end")) if x)
+        lines += ["", f"{heading} ({when})" if when else heading]
         lines += [f"• {b}" for b in e["bullets"]]
         if e["technologies"]:
             lines.append("Technologies: " + ", ".join(e["technologies"]))
+    if p.get("certifications"):
+        lines += ["", "Certifications"] + [" — ".join(x for x in (c.get("name"), c.get("detail"), c.get("status")) if x)
+                                          for c in p["certifications"]]
+    if p.get("education"):
+        lines += ["", "Education"] + [" — ".join(x for x in (ed.get("degree"), ed.get("school"), ed.get("period")) if x)
+                                     for ed in p["education"]]
+    langs = p.get("languages") or {}
+    spoken = [f"{name} ({langs[k]})" for k, name in (("english", "English"), ("german", "German")) if langs.get(k)]
+    if spoken:
+        lines += ["", "Languages: " + " | ".join(spoken)]
     return "\n".join(lines)
 
 
