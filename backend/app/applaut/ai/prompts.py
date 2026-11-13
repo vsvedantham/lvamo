@@ -173,7 +173,7 @@ Hard rules:
 - paragraph 2 (evidence, 80-120 words): the most relevant role's facts matched to the posting's must-haves, with their real numbers.
 - paragraph 3 (second angle, 50-90 words): another role or the project that fits a different part of the job.
 - Write the letter AS the candidate, in the first person ("I built", "my work at"). "You"/"your" may only mean the company or the team, never the candidate.
-- English, plain professional tone. No greeting, sign-off, availability, location or visa details (other code adds those).{f'''
+- In English, even when the posting is in German; plain professional tone. No greeting, sign-off, availability, location or visa details (other code adds those).{f'''
 - Style: {style}''' if style else ''}
 
 Candidate:

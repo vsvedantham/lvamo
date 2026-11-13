@@ -74,3 +74,7 @@ class GenerateDocumentsResponse(BaseModel):
     tailored_resume: DocumentResponse
     cover_letter: DocumentResponse
     mode: str
+
+
+class WriteAgainResponse(BaseModel):
+    docs_status: str

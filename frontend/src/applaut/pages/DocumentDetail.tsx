@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { createApplication } from '../api/applications'
-import { generateDocuments, getDocumentFileLink, getOpportunityDocuments, type DocumentItem, type GenerationMode, type OpportunityDocuments } from '../api/documents'
-import { getOpportunity, type OpportunityDetail } from '../api/opportunity'
+import { generateDocuments, getDocumentFileLink, getOpportunityDocuments, writeDocumentsAgain, type DocumentItem, type GenerationMode, type OpportunityDocuments } from '../api/documents'
+import { aiDocs, getOpportunity, type OpportunityDetail } from '../api/opportunity'
 import { getMyProfile, JOB_ENGINE_LABELS, type JobEngine } from '../api/profile'
 import { apiErrorMessage } from '../api/errors'
 import TailoredBullets from '../components/TailoredBullets'
@@ -61,6 +61,7 @@ export default function DocumentDetail() {
   const [appStarted, setAppStarted] = useState(false)
   const [engine, setEngine] = useState<JobEngine | null>(null)
   const [openingPdf, setOpeningPdf] = useState(false)
+  const [writing, setWriting] = useState(false)
 
   useEffect(() => {
     if (!opportunityId) return
@@ -90,6 +91,21 @@ export default function DocumentDetail() {
       setError(apiErrorMessage(err, 'Generation failed.'))
     } finally {
       setGenerating(false)
+    }
+  }
+
+  // Applaut AI's writing failed for this job: queue it once more.
+  const writeAgain = async () => {
+    if (!opportunityId || !opp?.assessment) return
+    setWriting(true)
+    setError('')
+    try {
+      const { docs_status } = await writeDocumentsAgain(opportunityId)
+      setOpp({ ...opp, assessment: { ...opp.assessment, docs_status: docs_status as typeof opp.assessment.docs_status } })
+    } catch (err: any) {
+      setError(apiErrorMessage(err, 'Could not queue the documents again.'))
+    } finally {
+      setWriting(false)
     }
   }
 
@@ -222,10 +238,22 @@ export default function DocumentDetail() {
           <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>
             {canGenerate
               ? 'Click "Generate documents" to create a tailored resume and cover letter.'
+              : opp && aiDocs(opp) === 'failed'
+                ? "Applaut AI couldn't write a CV and cover letter for this job: the text it wrote didn't pass Applaut's checks twice. Writing again usually works."
+              : opp && aiDocs(opp) === 'pending'
+                ? 'Applaut AI is writing your CV and cover letter for this job. A set takes about 5 minutes, after any jobs ahead of it; come back later.'
+              : opp && aiDocs(opp) === 'not_needed'
+                ? 'Applaut AI writes a CV and cover letter for your best matches only, and this job scored below that.'
               : engine && engine !== 'basic'
                 ? `Your CV and cover letter for this job will appear here once ${JOB_ENGINE_LABELS[engine]} has written them.`
                 : 'Documents for this job come from your job engine.'}
           </p>
+          {opp && aiDocs(opp) === 'failed' && (
+            <button onClick={writeAgain} disabled={writing}
+              style={{ marginTop: '1rem', padding: '0.5rem 1.25rem', background: '#111827', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem', opacity: writing ? 0.7 : 1 }}>
+              {writing ? 'Queuing…' : 'Write again'}
+            </button>
+          )}
         </div>
       ) : (
         <>

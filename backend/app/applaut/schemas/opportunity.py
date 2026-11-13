@@ -42,6 +42,9 @@ class AssessmentInfo(BaseModel):
     first_seen_at: datetime
     last_seen_at: datetime
     times_seen: int
+    # Applaut AI's CV and cover letter for this job: not_needed (scored below
+    # the documents threshold), pending (queued or being written), done, failed.
+    docs_status: str = "not_needed"
 
     model_config = {"from_attributes": True}
 

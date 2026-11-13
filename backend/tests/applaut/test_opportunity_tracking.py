@@ -148,3 +148,54 @@ async def test_a_new_applaut_ai_user_starts_with_an_empty_list(client, make_user
     assert res["items"] == [] and res["counts"]["all"] == 0
     stats = (await client.get("/api/v1/applaut/stats", headers=headers)).json()
     assert stats["opportunities_found"] == 0
+
+
+async def _ai_assessment(user, profile, opp, score: int, docs_status: str) -> JobAssessment:
+    async with AsyncSessionLocal() as db:
+        a = JobAssessment(user_id=user.id, profile_id=profile.id, opportunity_id=opp.id, engine="applaut_ai",
+                          match_score=score, docs_status=docs_status, matched_skills=[], missing_skills=[],
+                          flags=[], raw={"write_docs_error": "the written text broke the rules twice"})
+        db.add(a)
+        await db.commit()
+        return a
+
+
+async def test_each_job_says_where_applaut_ais_documents_are(client, make_user, make_opportunity):
+    user, profile, headers = await make_user(job_engine="applaut_ai")
+    for title, score, docs in (("Written", 84, "done"), ("Queued", 90, "pending"), ("Failed", 95, "failed"),
+                               ("Below", 70, "not_needed")):
+        await _ai_assessment(user, profile, await make_opportunity(title=title), score, docs)
+    items = (await client.get(API, headers=headers, params={"page_size": 100})).json()["items"]
+    assert {i["title"]: i["assessment"]["docs_status"] for i in items} == {
+        "Written": "done", "Queued": "pending", "Failed": "failed", "Below": "not_needed"}
+
+
+async def test_write_again_queues_a_failed_set_only(client, make_user, make_opportunity):
+    from app.applaut.models.ai_queue import AIQueueItem
+    from app.applaut.models.audit_log import AuditLog
+
+    user, profile, headers = await make_user(job_engine="applaut_ai")
+    failed, done = await make_opportunity(title="Failed"), await make_opportunity(title="Written")
+    a = await _ai_assessment(user, profile, failed, 95, "failed")
+    await _ai_assessment(user, profile, done, 88, "done")
+
+    r = await client.post(f"{API}/{failed.id}/documents/write-again", headers=headers)
+    assert r.status_code == 200, r.text
+    assert r.json() == {"docs_status": "pending"}
+    async with AsyncSessionLocal() as db:
+        assert (await db.get(JobAssessment, a.id)).docs_status == "pending"
+        items = list(await db.scalars(select(AIQueueItem).where(AIQueueItem.assessment_id == a.id)))
+        assert [(i.kind, i.status) for i in items] == [("write_docs", "pending")]
+        logged = await db.scalar(select(AuditLog).where(AuditLog.action == "documents.write_again",
+                                                        AuditLog.entity_id == str(failed.id)))
+        assert logged.before_state["error"] == "the written text broke the rules twice"
+
+    # queued now, so not again; written documents are left alone; nothing for a job it didn't score
+    assert (await client.post(f"{API}/{failed.id}/documents/write-again", headers=headers)).status_code == 409
+    assert (await client.post(f"{API}/{done.id}/documents/write-again", headers=headers)).status_code == 409
+    other = await make_opportunity(title="Not scored")
+    assert (await client.post(f"{API}/{other.id}/documents/write-again", headers=headers)).status_code == 404
+
+    # another user can't touch this user's job; a Basic user has nothing to write again
+    _, _, basic_headers = await make_user()
+    assert (await client.post(f"{API}/{failed.id}/documents/write-again", headers=basic_headers)).status_code == 409

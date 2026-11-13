@@ -13,6 +13,7 @@ import {
   type MatchFilter,
   type NearMissKeyword,
   type Opportunity,
+  aiDocs,
 } from '../api/opportunity'
 import { getMyProfile, JOB_ENGINE_LABELS, type JobEngine } from '../api/profile'
 import { decideNearMiss } from '../api/scoring'
@@ -253,6 +254,14 @@ async function copyText(text: string): Promise<boolean> {
 }
 
 /** Apply ↗ · Copy folder path · Documents · Mark as applied · Not available — and Undo. */
+const DOCS_LABEL: Record<string, string> = {
+  done: 'Documents',
+  pending: 'Documents (being written)',
+  failed: 'Documents (failed)',
+  not_needed: 'Documents',
+  basic: 'Generate documents',
+}
+
 function JobActions({ opp, showDocuments, onTracked }: {
   opp: Opportunity
   showDocuments: boolean
@@ -303,7 +312,7 @@ function JobActions({ opp, showDocuments, onTracked }: {
         )}
         {showDocuments && (
           <button type="button" onClick={() => navigate(`/applaut/documents/${opp.id}`)} style={actionBtn()}>
-            {opp.is_private || opp.routine ? 'Documents' : 'Generate documents'}
+            {DOCS_LABEL[aiDocs(opp) ?? (opp.is_private || opp.routine ? 'done' : 'basic')]}
           </button>
         )}
         {state === 'open' && (
@@ -430,8 +439,11 @@ function OpportunityCard({ opp, goodThreshold, nearMissThreshold, onUpdate, onTr
 
       {needsReview && <NearMissPanel opp={opp} goodThreshold={goodThreshold} onUpdate={onUpdate} />}
       <div style={{ marginTop: needsReview ? '0.875rem' : 0 }}>
-        {/* Documents: an AI engine's own PDFs, or Applaut's templates for good Basic matches. */}
-        <JobActions opp={opp} showDocuments={category === 'good' || opp.is_private || !!opp.routine} onTracked={onTracked} />
+        {/* Documents: an AI engine's own PDFs, or Applaut's templates for good Basic matches.
+            Applaut AI writes them from its own threshold, so its status decides. */}
+        <JobActions opp={opp} onTracked={onTracked} showDocuments={aiDocs(opp)
+          ? aiDocs(opp) !== 'not_needed'
+          : category === 'good' || opp.is_private || !!opp.routine} />
       </div>
     </div>
   )

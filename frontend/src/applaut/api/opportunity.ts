@@ -35,6 +35,15 @@ export interface Assessment {
   first_seen_at: string
   last_seen_at: string
   times_seen: number
+  /** Applaut AI's CV and cover letter: not_needed (scored below the documents threshold), pending (queued or being written), done, failed. */
+  docs_status: AiDocsStatus
+}
+
+export type AiDocsStatus = 'not_needed' | 'pending' | 'done' | 'failed'
+
+/** Applaut AI's documents status for this job, or null when Applaut AI didn't score it. */
+export function aiDocs(opp: { assessment: Assessment | null }): AiDocsStatus | null {
+  return opp.assessment?.engine === 'applaut_ai' ? opp.assessment.docs_status : null
 }
 
 export type TrackingState = 'open' | 'applied' | 'unavailable'

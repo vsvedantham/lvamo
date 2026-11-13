@@ -181,6 +181,27 @@ def test_letter_must_be_first_person():
     assert check_written(WRITTEN, profile(), JOB.description) == []  # "your team of 8" is the company
 
 
+
+GERMAN = [  # a German letter (the posting was German): first person, but not English
+    "Acme entwickelt eine Plattform für Datenprodukte, und genau das ist meine Arbeit. Als Data Engineer habe ich "
+    "Pipelines mit Airflow und dbt aufgebaut, die Daten für die Analyse bereitstellen und die ich seit Jahren selbst betreue.",
+    "Bei Acme GmbH habe ich den Spark-Job für die Abrechnung neu geschrieben, und die Laufzeit ist von 6 Stunden auf "
+    "40 Minuten gesunken. Zudem habe ich 12 Pipelines mit Airflow gebaut, die die Daten in das Warehouse laden.",
+    "Ich möchte diese Erfahrung in Ihr Team einbringen, wo die Daten für die Kunden eine große Rolle spielen. "
+    "Ich arbeite gern mit dem Team an den Pipelines und an der Qualität der Daten für die Plattform.",
+]
+
+
+def test_a_german_letter_is_named_as_german_not_as_a_pronoun_problem():
+    w = {**copy.deepcopy(WRITTEN), "paragraphs": GERMAN}
+    errors = check_written(w, profile(), JOB.description)
+    assert errors == ["the letter is in German; write the headline and all 3 paragraphs in English, "
+                      "even when the job posting is in German"]
+    # English with a German company name or a German word or two is still English
+    w = copy.deepcopy(WRITTEN)
+    w["paragraphs"][0] = w["paragraphs"][0] + " I also enjoy the Datenplattform und die team culture."
+    assert not any("German" in e for e in check_written(w, profile(), JOB.description))
+
 # ---------------------------------------------------------------- the writer's bullets and skills
 
 TAILORED = [  # what the writer returns for JOB, most relevant first

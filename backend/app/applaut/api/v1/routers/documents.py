@@ -13,6 +13,7 @@ from app.applaut.schemas.document import (
     DocumentResponse,
     GenerateDocumentsResponse,
     OpportunityDocumentsResponse,
+    WriteAgainResponse,
 )
 from app.applaut.services.auth import get_current_user
 from app.applaut.services.document import (
@@ -23,6 +24,7 @@ from app.applaut.services.document import (
     get_document,
     get_document_file_link,
     get_opportunity_documents,
+    write_again,
 )
 
 router = APIRouter()
@@ -41,6 +43,16 @@ async def generate(
         cover_letter=cover_doc,
         mode=mode,
     )
+
+
+@router.post("/opportunities/{opportunity_id}/documents/write-again", response_model=WriteAgainResponse)
+async def write_documents_again(
+    opportunity_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Applaut AI: queue a failed CV and cover letter for this job once more."""
+    return WriteAgainResponse(docs_status=await write_again(opportunity_id, current_user, db))
 
 
 @router.get(

@@ -42,6 +42,20 @@ ABOUT_CANDIDATE_AS_YOU_RE = re.compile(
     r"migrated|designed|developed|automated|maintained|managed|created|delivered|role at|experience|background|"
     r"work on|work at|capability|skills)\b", re.I)
 
+# Postings are often German; the letter is always English. A German answer is
+# named as German, so the retry fixes the language: the first-person check
+# only knows English pronouns and would send the model after the wrong thing.
+GERMAN_WORDS = frozenset(
+    "und der die das den dem des ich mit für von zu ist nicht auf bei ein eine einen einem meine mein meinen "
+    "meiner ihre ihrer ihr sie wir als auch sowie im zur zum durch über wo dass habe".split())
+LETTERS_RE = re.compile(r"[a-zäöüß]+")
+
+
+def looks_german(text: str) -> bool:
+    words = LETTERS_RE.findall(text.lower())
+    hits = sum(w in GERMAN_WORDS for w in words)
+    return hits >= 3 and hits >= 0.08 * len(words)
+
 
 def _numbers(text: str) -> set[str]:
     return set(NUM_RE.findall(text))
@@ -84,6 +98,9 @@ def check_written(written: dict, profile: dict, job_text: str) -> list[str]:
     paras = [p.strip() for p in written.get("paragraphs") or []]
     profile_text = json.dumps(profile, ensure_ascii=False)
 
+    if looks_german(" ".join([headline, *paras])):
+        errors.append("the letter is in German; write the headline and all 3 paragraphs in English, "
+                      "even when the job posting is in German")
     if not headline:
         errors.append("headline is empty")
     elif len(headline.split()) > HEADLINE_MAX_WORDS:
@@ -100,7 +117,7 @@ def check_written(written: dict, profile: dict, job_text: str) -> list[str]:
             errors.append(f"paragraph {i} has {words} words; use {PARAGRAPH_WORDS[0]}-{PARAGRAPH_WORDS[1]}")
         for n in sorted(_numbers(p) - allowed):
             errors.append(f"paragraph {i}: number '{n}' is not in the profile or the job posting - remove it")
-        if ABOUT_CANDIDATE_AS_YOU_RE.search(p) or not FIRST_PERSON_RE.search(p):
+        if not looks_german(p) and (ABOUT_CANDIDATE_AS_YOU_RE.search(p) or not FIRST_PERSON_RE.search(p)):
             errors.append(f"paragraph {i} must be in the first person, as the candidate (I, my); "
                           "'you'/'your' may only mean the company")
     return errors

@@ -271,3 +271,34 @@ async def get_document_file_link(document_id: str, user: User, db: AsyncSession)
     stem = "CV" if doc.document_type == "tailored_resume" else "Cover_Letter"
     file_name = doc.file_name or f"{stem}.pdf"
     return generate_presigned_url(doc.r2_key, expires_in=FILE_LINK_SECONDS, download_name=file_name), file_name
+
+
+async def write_again(opportunity_id: str, user: User, db: AsyncSession) -> str:
+    """Queue Applaut AI's CV and cover letter for this job once more, after the
+    writing failed (the text broke the rules twice, or the model host failed).
+    Only for a failed set: written or queued documents are left alone."""
+    from app.applaut.ai.queue import enqueue
+    from app.applaut.models.job_assessment import JobAssessment
+
+    profile = await get_active_profile(user, db)
+    if profile.job_engine != "applaut_ai":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Only Applaut AI writes documents again")
+    opp = await _get_opportunity(opportunity_id, user, db)
+    a = await db.scalar(select(JobAssessment).where(
+        JobAssessment.profile_id == profile.id, JobAssessment.opportunity_id == opp.id,
+        JobAssessment.engine == "applaut_ai"))
+    if a is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Applaut AI hasn't scored this job")
+    if a.docs_status != "failed":
+        raise HTTPException(status.HTTP_409_CONFLICT, {
+            "done": "The documents for this job are already written",
+            "pending": "The documents for this job are already being written",
+        }.get(a.docs_status, "Applaut AI doesn't write documents for this job's score"))
+    error = (a.raw or {}).get("write_docs_error")
+    a.docs_status = "pending"
+    await enqueue(db, "write_docs", a)
+    await log_action(action="documents.write_again", db=db, user_id=str(user.id), entity_type="opportunity",
+                     entity_id=str(opp.id), before_state={"docs_status": "failed", "error": error},
+                     after_state={"docs_status": "pending"})
+    await db.commit()
+    return a.docs_status

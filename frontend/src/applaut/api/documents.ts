@@ -108,3 +108,9 @@ export async function chooseBulletVersion(
   )
   return data
 }
+
+/** Applaut AI: queue a failed CV and cover letter for this job once more. */
+export async function writeDocumentsAgain(opportunityId: string): Promise<{ docs_status: string }> {
+  const { data } = await client.post<{ docs_status: string }>(`/opportunities/${opportunityId}/documents/write-again`)
+  return data
+}
