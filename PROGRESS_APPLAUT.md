@@ -70,6 +70,60 @@ Quick start for next session:
 
 ---
 
+## 2026-11-13: first nightly run checked; documents button, German letters, empty-field templates
+
+**First real nightly run** (2026-11-11, 22:00 Berlin, one Applaut AI user):
+46 postings, 41 matched (DE, Data Engineer), 40 scored that night and 1 the
+next (~100 s each). 11 scored >= 80 -> documents: 10 written (~5.5 min per
+set, done by 00:14 Berlin), 1 failed. 30 scored 55-79 (no documents).
+
+**Documents button** (`1e9b8db`): the Opportunities list said "Generate
+documents" on every Applaut AI job and showed no button at 80-84 (documents
+from 80, "good" from 85). Jobs now carry `assessment.docs_status`; the
+button reads Documents / Documents (being written) / Documents (failed).
+
+**The failed set was a German letter** (German posting), in the first
+person; `check_written` only knows English pronouns, so the retry was told
+to fix pronouns and wrote German again. Now `fact_guard.looks_german` names
+it as German, the prompt says English even for German postings, and a
+failed set can be queued again: Write again on its Documents page
+(`POST /opportunities/{id}/documents/write-again`, audited
+`documents.write_again`). Verified in prod: that job written again in 442 s,
+in English.
+
+**Half-baked CVs** (`1b7e9c5`): the standard templates (the routine's)
+assumed a complete routine profile. With a CV-imported profile they printed
+an empty "Technologies used:" per role (the import gives no technologies per
+role), a lone dash for an undated project, a blank band kept for a missing
+photo plus empty work authorization/availability lines, and the letter's
+contact line ended in "| -". Empty fields are now left out; a complete
+profile renders the same text and links as before (checked against the old
+templates). The in-app CV text now has contact, certifications, education
+and languages. Test: `test_a_profile_from_a_cv_import_leaves_no_empty_labels`.
+
+**Existing documents rebuilt** with the fixed templates, code only (no
+model), by a one-off script: CVs via `rerender_cv` from their stored
+details; letters (no stored details) built again from the stored profile and
+paragraphs with the original date, used only when the text equalled the
+stored letter exactly. Dry run first: all 11 sets kept the same bullets and
+the same letter text, letters 1 page. Written: 22 new current documents, the
+22 old versions kept (is_current false), 22 audit entries
+`documents.rerender_template`. Driveblock CV and letter downloaded from R2
+and checked.
+
+**Deployed and verified:** `1e9b8db` and `1b7e9c5`; all four health URLs
+200; the list code gives 41 jobs (10 done, 1 failed -> done, 30 not_needed);
+the live bundle has the new button texts. Tests: 197 Applaut tests; one
+pre-existing time-of-day failure, `test_routine_checks.py::
+test_finished_run_queues_sync_an_hour_after_it_finished` (fails at ~18:40
+UTC with or without these changes; test only).
+
+Still open: the writer picks the minimum bullets for the current role (3 of
+5) though the CV has room; the Driveblock letter says "owned and maintained"
+where the fact says "Maintained" (wording the rules don't catch).
+
+---
+
 ## 2026-11-11: Applaut AI users no longer see Applaut Basic's old shared pool
 
 A new Applaut AI account (signed up 18:15 UTC) showed 56 jobs before any
