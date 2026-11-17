@@ -70,6 +70,55 @@ Quick start for next session:
 
 ---
 
+## 2026-11-17: CV import captures the whole CV
+
+**Why:** Venkat compared his routine's CV with Applaut AI's (GlassDollar,
+Talon.One): Applaut AI's was far weaker. Same template; a code-only render
+with the routine's profile looked close to the routine's CV, so most of the
+gap was the **profile the CV import built**, the rest the writer (next).
+
+**What the import lost on Venkat's two-column PDF** (pdfminer prints a label
+on one line and its items below; bullet signs "–" on their own lines):
+every bullet's third line (the prompt's example was "[12, 13]"); the whole
+TECHNICAL SKILLS section (the model pointed only at the core competencies);
+"Opportunity Card Holder" / "available immediately" (no field); project
+dates (no field, so "( – )"); the headline's second line; per-role
+technologies (none on the CV).
+
+**Fix** (`documents/profile_import.py`, `ai/prompts.py` IMPORT_SYSTEM and
+IMPORT_SCHEMA, `cv.html.j2`):
+- Bullets: code adds lines that continue the sentence (no full stop yet, and
+  the next line starts lower-case or with a digit, or the text ends with a
+  comma, dash or joining word; never a date, heading or e-mail line; at most
+  3); a lone bullet-sign line ends a bullet.
+- Skills: label lines pair with item lines in order (two stacked labels over
+  two item lines); lines the model skipped inside a list and labels above
+  where a list starts are taken; ALL-CAPS headings name loose items ("Core
+  Competencies"). A competencies list beside labelled rows becomes
+  `additional_skills` (matching only, no CV row).
+- Headline takes the skills line under it.
+- `work_authorization` / `availability` copied into `*_short`; the
+  sentence forms are left for the user (notes say so); the CV header falls
+  back to the short form.
+- Projects get `start` / `end`.
+- A role with no technologies line gets the skills its bullets name (2+).
+
+**Checked locally** with prod's model on Venkat's three CV variants (data,
+cloud ops, backend; 62–72 s each): all 12 bullets whole on each, all 5
+labelled skill rows correct, headline, status, project dates. A code-only CV
+from the new draft now has the routine's structure.
+
+**Deployed and verified:** `75b795a`; all four health URLs 200; new code in
+backend and ai-worker. A build_profile check in prod found that two stacked
+labels the model skips get mis-paired; fixed in `f7b6f83` (test
+`test_stacked_labels_the_model_skipped_still_name_their_items`), **not yet
+deployed**. Tests: 316 pass (time-of-day test deselected).
+
+**Next:** the writer (rewords ~23% of bullets, minimum bullets, copies
+"Senior" from the job title into the headline); empty Personio descriptions
+scored from the title alone. The shorter-writer experiment is in
+`git stash` ("writer experiment: shorter write_message").
+
 ## 2026-11-13: first nightly run checked; documents button, German letters, empty-field templates
 
 **First real nightly run** (2026-11-11, 22:00 Berlin, one Applaut AI user):
