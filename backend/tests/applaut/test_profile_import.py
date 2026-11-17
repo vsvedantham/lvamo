@@ -222,6 +222,16 @@ def test_a_two_column_pdf_cv_is_read_whole():
     assert any("personal.work_authorization" in n for n in notes)
 
 
+def test_stacked_labels_the_model_skipped_still_name_their_items():
+    lines = ["Alex Example", "TECHNICAL SKILLS", "Cloud Platforms", "Architecture", "Microsoft Azure, Docker",
+             "Medallion Lakehouse, Autoscaling", "Programming", "Python, SQL"]
+    for given in ([5, 6, 8], [4, 5, 6, 8]):  # both stacked labels skipped; the top one skipped
+        draft, _ = build_profile(lines, {"name_line": 1, "roles": [], "skills_lines": given})
+        assert draft["skills"] == {"Cloud Platforms": ["Microsoft Azure", "Docker"],
+                                   "Architecture": ["Medallion Lakehouse", "Autoscaling"],
+                                   "Programming": ["Python", "SQL"]}, given
+
+
 def test_a_bullet_is_not_run_into_the_next_line_of_another_kind():
     lines = ["Alex Example", "Built 12 pipelines for sales", "Jan 2020 – Dec 2021", "Wrote checks without a full stop",
              "Migrated 30 reports", "2014 – 2018", "Ran the team with", "• Hired 2 engineers."]

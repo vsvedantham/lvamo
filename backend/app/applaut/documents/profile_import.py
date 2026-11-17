@@ -179,6 +179,11 @@ def _section_name(heading: str) -> str:
     return part.title() if part.isupper() else part
 
 
+def _is_label(text: str) -> bool:
+    """A skill row's name alone on its line, its items on a later one."""
+    return not _is_heading(text) and not _is_list(text) and len(text.split()) <= 5 and not text.endswith(".")
+
+
 def _is_list(text: str) -> bool:
     return any(len(own_template._split_items(text, sep)) > 1 for sep in LIST_SEPARATORS if sep in text)
 
@@ -273,10 +278,15 @@ def _skill_lines(b: _Builder, nums) -> list[int]:
         if len(gap) <= 3 and not any(g in b.used or _is_heading(b.lines[g - 1]) for g in gap):
             out.update(gap)
     for first in [n for n in sorted(out) if n - 1 not in out and n > 1]:  # where each list starts
-        above, line = b.lines[first - 2], b.lines[first - 1]
-        if (first - 1 not in b.used and not _is_heading(above) and not _is_list(above) and len(above.split()) <= 5
-                and not own_template._split_label(line) and _is_list(line)):
-            out.add(first - 1)
+        below = first  # the list's first line, past any labels it starts with
+        while below <= len(b.lines) and _is_label(b.lines[below - 1]) and below - first < 4:
+            below += 1
+        if below > len(b.lines) or own_template._split_label(b.lines[below - 1]) or not _is_list(b.lines[below - 1]):
+            continue
+        m = first - 1  # every label stacked above it ("Cloud Platforms", "Architecture")
+        while m >= 1 and first - m <= 4 and m not in b.used and m not in out and _is_label(b.lines[m - 1]):
+            out.add(m)
+            m -= 1
     return sorted(out)
 
 
@@ -332,15 +342,17 @@ def _skills(b: _Builder, nums) -> tuple[dict[str, list[str]], set[str]]:
 
 
 def _pair(labels: list[str], items: list[list[str]], section: str, add, flush, drop_one: bool = False) -> None:
-    """Labels stacked above as many item lines name them in order; labels
+    """Labels stacked above as many item lines name them in order (fewer
+    labels name the last item lines); labels
     with no item lines are skills themselves (or, one alone right above a
     "Label: items" line, a heading such as "Skills")."""
     if items:
         k = min(len(labels), len(items))
         named = labels[len(labels) - k:]
         flush(labels[:len(labels) - k], section)
+        start = len(items) - k  # a label the model skipped is one at the top: the last item lines have names
         for i, found in enumerate(items):
-            add(named[i] if i < k else section, found, loose=i >= k)
+            add(named[i - start] if i >= start else section, found, loose=i < start)
         labels.clear()
         items.clear()
     elif drop_one and len(labels) == 1:
