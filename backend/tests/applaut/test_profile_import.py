@@ -78,7 +78,8 @@ def test_a_good_answer_gives_a_profile_that_saves_once_checked():
                                "Cloud": ["Microsoft Azure", "AWS"]}
     acme, beta = draft["experience"]
     assert acme["id"] == "acme_gmbh_data_engineer" and acme["facts"][1].startswith("Rewrote the Spark")
-    assert acme["technologies"] == ["Python", "Airflow", "Apache PySpark", "dbt"] and beta["technologies"] == []
+    assert acme["technologies"] == ["Python", "Airflow", "Apache PySpark", "dbt"]  # its technologies line
+    assert beta["technologies"] == []  # none on the CV, and its bullets name one skill only (SQL)
     assert draft["projects"][0]["name"] == "Weather Lake"
     assert draft["education"] == [{"period": "2018 – 2020", "degree": "M.Sc. Computer Science", "school": "TU Berlin"}]
     assert not any(n.startswith("Left out") for n in notes)
@@ -131,6 +132,103 @@ def test_a_piece_over_two_lines_and_a_skills_heading():
     assert draft["certifications"][0]["detail"] == "Academy learning path | Pipelines | Performance"
     assert draft["certifications"][1]["detail"] == ""  # "paths" isn't in the CV
     assert any('"Academy learning paths"' in n for n in notes)
+
+
+# A two-column PDF as pdfminer reads it: a label on one line and its items
+# below (two labels stacked over their two item lines), bullets cut at the
+# model's second line, the work permit and start date in the contact and
+# summary lines, and project dates.
+TWO_COLUMN = [
+    "Alex Example",                                                       # 1
+    "Data Engineer",                                                      # 2
+    "Python | Azure Databricks | SQL",                                    # 3
+    "alex@example.invalid",                                               # 4
+    "Opportunity Card Holder • English (C1)",                             # 5
+    "PROFILE",                                                            # 6
+    "Data engineer in Berlin, holding an Opportunity Card and available", # 7
+    "immediately.",                                                       # 8
+    "CORE COMPETENCIES",                                                  # 9
+    "Azure Databricks / PySpark",                                         # 10
+    "Cloud Cost Optimization",                                            # 11
+    "EXPERIENCE",                                                         # 12
+    "Data Engineer",                                                      # 13
+    "Acme GmbH",                                                          # 14
+    "Jan 2022 – Present",                                                 # 15
+    "–",                                                                  # 16
+    "Built a Databricks framework with shared libraries and parameterized", # 17
+    "workflows, consolidating millions of records into one dataset that",  # 18
+    "enabled rapid onboarding of new clients.",                           # 19
+    "–",                                                                  # 20
+    "Cut monthly Azure costs by 20% with autoscaling and Docker.",        # 21
+    "PROJECTS",                                                           # 22
+    "Weather Lake",                                                       # 23
+    "2026 – Present",                                                     # 24
+    "–",                                                                  # 25
+    "Collected 3 years of weather data with Python and",                  # 26
+    "SQL on a small server.",                                             # 27
+    "–",                                                                  # 28
+    "Charted it for 2 schools, with",                                     # 29
+    "a weekly report.",                                                   # 30
+    "TECHNICAL SKILLS",                                                   # 31
+    "Programming Languages",                                              # 32
+    "Python, SQL, C#",                                                    # 33
+    "Cloud Platforms",                                                    # 34
+    "Architecture",                                                       # 35
+    "Microsoft Azure, Docker, Cloudflare R2",                             # 36
+    "Medallion Lakehouse, Autoscaling",                                   # 37
+    "EDUCATION",                                                          # 38
+    "B.Tech Mechanical Engineering",                                      # 39
+    "2014 – 2018",                                                        # 40
+]
+TWO_COLUMN_ANSWER = {
+    "name_line": 1, "headline_line": 2, "location": "", "work_authorization": "Opportunity Card Holder",
+    "availability": "available immediately",
+    "roles": [{"title": "Data Engineer", "company": "Acme GmbH", "location": "", "start": "Jan 2022", "end": "Present",
+               "bullets": [[17, 18], [21]], "technologies_line": 0}],
+    "projects": [{"name": "Weather Lake", "start": "2026", "end": "Present", "bullets": [[26, 27, 28], [29]],
+                  "technologies_line": 0}],
+    "skills_lines": [10, 11, 33, 35, 36, 37],   # skips a label, an item line and a label between
+    "education": [], "certifications": [], "languages": {"english": "C1", "german": ""},
+}
+
+
+def test_a_two_column_pdf_cv_is_read_whole():
+    draft, notes = build_profile(TWO_COLUMN, TWO_COLUMN_ANSWER)
+    assert draft["default_headline"] == "Data Engineer | Python | Azure Databricks | SQL"
+    p = draft["personal"]
+    assert p["work_authorization_short"] == "Opportunity Card Holder"
+    assert p["availability_short"] == "Available immediately"
+    assert "work_authorization" not in p and "availability" not in p  # sentences the user writes
+    assert draft["skills"] == {
+        "Programming Languages": ["Python", "SQL", "C#"],
+        "Cloud Platforms": ["Microsoft Azure", "Docker", "Cloudflare R2"],
+        "Architecture": ["Medallion Lakehouse", "Autoscaling"],
+    }
+    # the competencies list beside labelled rows: for matching, not a CV row of its own
+    assert draft["additional_skills"] == ["Azure Databricks", "PySpark", "Cloud Cost Optimization"]
+    role = draft["experience"][0]
+    assert role["facts"] == [
+        "Built a Databricks framework with shared libraries and parameterized workflows, consolidating millions of "
+        "records into one dataset that enabled rapid onboarding of new clients.",
+        "Cut monthly Azure costs by 20% with autoscaling and Docker."]
+    assert role["technologies"] == ["Autoscaling", "Docker"]  # what its bullets name, spelled as the skill rows do
+    project = draft["projects"][0]
+    assert (project["start"], project["end"]) == ("2026", "Present")
+    assert project["facts"] == ["Collected 3 years of weather data with Python and SQL on a small server.",
+                                "Charted it for 2 schools, with a weekly report."]  # the "–" line ends the first
+    assert project["technologies"] == ["Python", "SQL"]
+    assert not any(n.startswith("Left out") for n in notes)
+    assert any("technologies are the skills its bullets name" in n for n in notes)
+    assert any("personal.work_authorization" in n for n in notes)
+
+
+def test_a_bullet_is_not_run_into_the_next_line_of_another_kind():
+    lines = ["Alex Example", "Built 12 pipelines for sales", "Jan 2020 – Dec 2021", "Wrote checks without a full stop",
+             "Migrated 30 reports", "2014 – 2018", "Ran the team with", "• Hired 2 engineers."]
+    answer = {"name_line": 1, "roles": [{"title": "", "company": "", "bullets": [[2], [4], [7]]}]}
+    draft, _ = build_profile(lines, answer)
+    assert draft["experience"][0]["facts"] == [
+        "Built 12 pipelines for sales", "Wrote checks without a full stop", "Ran the team with"]
 
 
 def test_dates_are_not_a_phone_number():

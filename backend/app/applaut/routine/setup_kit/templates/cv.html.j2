@@ -58,10 +58,11 @@
     {%- if p.personal.get("github_url") %}{% set links = links + [(p.personal.github_url, "GitHub")] %}{% endif %}
     {%- if links %}<br>
     {% for href, text in links %}{% if not loop.first %} <span style="color:#1155cc;font-weight:700">|</span> {% endif %}<a href="{{ href }}">{{ text }}</a>{% endfor %}{% endif %}
-    {%- if p.personal.get("work_authorization") %}<br>
-    {{ p.personal.work_authorization }}{% endif %}
-    {%- if p.personal.get("availability") %}<br>
-    {{ p.personal.availability }}{% endif %}
+    {#- A profile from a CV import may have only the short forms. #}
+    {%- for key in ("work_authorization", "availability") %}
+    {%- set status = p.personal.get(key) or p.personal.get(key ~ "_short") %}
+    {%- if status %}<br>
+    {{ status }}{% endif %}{% endfor %}
   </div>
 </header>
 

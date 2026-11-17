@@ -296,13 +296,14 @@ IMPORT_SYSTEM = """You help turn a candidate's CV into a structured profile. Cod
 Each CV line is shown as: number| text. Lines are numbered from 1; use 0 for "not in the CV".
 - name_line: the line with the candidate's name. headline_line: one short line near the name saying who they are (e.g. "Data Engineer | Python, Spark"), else 0. A longer profile or summary paragraph is not a headline.
 - location: the candidate's city or country, copied exactly from the contact lines, else "".
-- roles: every job, newest first. title, company, location, start, end: copy each exactly as written in the role's heading lines (e.g. start "Apr 2022", end "Present"); "" when the CV doesn't give it. bullets: the line numbers of each achievement or duty under that job, one inner list per bullet; a bullet that runs over two lines is [12, 13]. technologies_line: a line listing that job's tools, else 0.
-- projects: projects listed apart from jobs (name copied exactly, bullets and technologies_line as for roles). [] when there are none.
-- skills_lines: the lines of the skills list, e.g. "Languages: Python, SQL".
+- work_authorization: the candidate's right to work or visa, copied exactly (e.g. "Opportunity Card Holder", "EU citizen"), else "". availability: when they can start, copied exactly (e.g. "available immediately"), else "". Both may come from the contact lines or the summary.
+- roles: every job, newest first. title, company, location, start, end: copy each exactly as written in the role's heading lines (e.g. start "Apr 2022", end "Present"); "" when the CV doesn't give it. bullets: the line numbers of each achievement or duty under that job, one inner list per bullet holding every line of it: a bullet printed over three lines is [12, 13, 14]. A bullet ends where its sentence ends. technologies_line: a line listing that job's tools, else 0.
+- projects: projects listed apart from jobs (name, start and end copied exactly; bullets and technologies_line as for roles). [] when there are none.
+- skills_lines: every line of every skills section (e.g. core competencies, technical skills), in order: "Languages: Python, SQL" lines, label lines such as "Cloud Platforms" printed above their items, and the item lines.
 - education: degree, school, period, each copied exactly. certifications: name and detail, copied exactly.
 - languages: the candidate's English and German levels copied exactly (e.g. "C1", "Fluent"), else "".
 
-Never write a word that isn't in the CV, never correct or translate, and never use a line for two things. Summaries, hobbies and references are left out."""
+Never write a word that isn't in the CV, never correct or translate, and never use a line for two things. Apart from those two, summaries, hobbies and references are left out."""
 
 
 def import_message(lines: list[str]) -> str:
@@ -323,10 +324,13 @@ IMPORT_SCHEMA = _obj({
     "name_line": _INT,
     "headline_line": _INT,
     "location": _STR,
+    "work_authorization": _STR,
+    "availability": _STR,
     "roles": {"type": "array", "items": _obj({
         "title": _STR, "company": _STR, "location": _STR, "start": _STR, "end": _STR,
         "bullets": _BULLETS, "technologies_line": _INT})},
-    "projects": {"type": "array", "items": _obj({"name": _STR, "bullets": _BULLETS, "technologies_line": _INT})},
+    "projects": {"type": "array", "items": _obj({"name": _STR, "start": _STR, "end": _STR, "bullets": _BULLETS,
+                                                 "technologies_line": _INT})},
     "skills_lines": {"type": "array", "items": _INT},
     "education": {"type": "array", "items": _obj({"degree": _STR, "school": _STR, "period": _STR})},
     "certifications": {"type": "array", "items": _obj({"name": _STR, "detail": _STR})},
