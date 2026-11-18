@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { useJobEngine } from '../../context/jobEngine'
 import Logo from '../../../components/Logo'
 import BrandedPage from '../../../components/BrandedPage'
 import {
@@ -225,6 +226,10 @@ const navItems = [
 
 function Sidebar({ isMobile, open, onClose }: { isMobile: boolean; open: boolean; onClose: () => void }) {
   const { user, logout } = useAuth()
+  const engine = useJobEngine(user?.id)
+  // Resume is Applaut Basic's master resume; Applaut AI works from the master
+  // profile in Settings, so its users don't get the page.
+  const items = navItems.filter(item => item.to !== '/applaut/resume' || (engine !== null && engine !== 'applaut_ai'))
 
   return (
     <aside style={{
@@ -263,7 +268,7 @@ function Sidebar({ isMobile, open, onClose }: { isMobile: boolean; open: boolean
 
       {/* Nav links */}
       <nav style={{ flex: 1, padding: '0.625rem 0.5rem', display: 'flex', flexDirection: 'column', gap: '0.125rem', overflowY: 'auto' }}>
-        {navItems.map(item => (
+        {items.map(item => (
           <NavLink
             key={item.to}
             to={item.to}

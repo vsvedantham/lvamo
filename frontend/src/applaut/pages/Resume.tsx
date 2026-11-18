@@ -1,5 +1,7 @@
 import { type ChangeEvent, type DragEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import { useJobEngine } from '../context/jobEngine'
 import {
   type CertificationEntry,
   type EducationEntry,
@@ -136,6 +138,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function ResumePage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const engine = useJobEngine(user?.id)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [existing, setExisting] = useState<Resume | null>(null)
@@ -207,6 +211,8 @@ export default function ResumePage() {
     }
   }
 
+  // Applaut AI doesn't use the master resume; its CVs come from the master profile.
+  if (engine === 'applaut_ai') return <Navigate to="/applaut/settings#profile" replace />
   if (checking) return <p style={{ color: 'var(--text-2)' }}>Loading…</p>
 
   return (

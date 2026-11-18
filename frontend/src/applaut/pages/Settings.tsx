@@ -12,6 +12,8 @@ import RoutineSetupKit from '../components/RoutineSetupKit'
 import MasterProfileCard from '../components/MasterProfileCard'
 import CvTemplateCard from '../components/CvTemplateCard'
 import JobSearchSummary from '../components/JobSearchSummary'
+import { useAuth } from '../context/AuthContext'
+import { announceJobEngine } from '../context/jobEngine'
 
 // Settings → Job engine (docs/applaut/JOB_ENGINES_DESIGN.md §3.4, §6.6–6.8).
 // Secrets are write-only: the form never receives them back, only hints.
@@ -494,6 +496,7 @@ function AiTabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
 // --- page
 
 export default function Settings() {
+  const { user } = useAuth()
   const [state, setState] = useState<JobEngineState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [noProfile, setNoProfile] = useState(false)
@@ -527,7 +530,9 @@ export default function Settings() {
     }
     setSwitching(engine)
     try {
-      setState(await setJobEngine(engine, confirm))
+      const next = await setJobEngine(engine, confirm)
+      setState(next)
+      if (user) announceJobEngine(user.id, next.engine)
       setRefreshKey(k => k + 1)
     } catch (err) {
       setError(errorMessage(err))

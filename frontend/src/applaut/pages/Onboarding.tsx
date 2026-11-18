@@ -2,6 +2,8 @@ import { type KeyboardEvent, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getJobEngine, type JobEngineState } from '../api/jobEngine'
 import { createProfile } from '../api/profile'
+import { useAuth } from '../context/AuthContext'
+import { announceJobEngine } from '../context/jobEngine'
 import RoutineSetupKit from '../components/RoutineSetupKit'
 import { ConnectionForm } from './Settings'
 
@@ -164,6 +166,7 @@ const hint: React.CSSProperties = { margin: 0, fontSize: '0.78rem', color: 'var(
 
 export default function Onboarding() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [step, setStep] = useState(1)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -253,6 +256,7 @@ export default function Onboarding() {
         job_engine: engine,
         discovery_enabled: engine === 'basic' && autoDiscovery === true,
       })
+      if (user) announceJobEngine(user.id, engine)
       if (engine === 'basic') {
         navigate('/applaut/resume')
       } else if (engine === 'applaut_ai') {

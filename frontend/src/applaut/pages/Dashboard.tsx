@@ -5,6 +5,7 @@ import { getMyProfile, JOB_ENGINE_LABELS, type Profile } from '../api/profile'
 import { getJobEngine, type EngineCard } from '../api/jobEngine'
 import RoutineEngineCard from '../components/RoutineEngineCard'
 import { getMyResume, type Resume } from '../api/resume'
+import { getMasterProfile, type MasterProfile } from '../api/masterProfile'
 import { getDashboardStats, type DashboardStats } from '../api/stats'
 import { disableDiscovery, enableDiscovery, getSchedulerStatus, type SchedulerStatus } from '../api/scheduler'
 
@@ -137,6 +138,16 @@ function EngineWidget({ profile }: { profile: Profile | null }) {
   return <div style={{ marginBottom: '1.25rem' }}><RoutineEngineCard card={card} onChange={setCard} /></div>
 }
 
+/** "3 roles · 1 project · 11 bullets" from a master profile. */
+function masterCounts(data: Record<string, any>): string | null {
+  const roles = Array.isArray(data?.experience) ? data.experience : []
+  const projects = Array.isArray(data?.projects) ? data.projects : []
+  if (!roles.length && !projects.length) return null
+  const bullets = [...roles, ...projects].reduce((n: number, e: any) => n + (Array.isArray(e?.facts) ? e.facts.length : 0), 0)
+  const n = (k: number, one: string) => `${k} ${one}${k === 1 ? '' : 's'}`
+  return [n(roles.length, 'role'), projects.length ? n(projects.length, 'project') : null, n(bullets, 'bullet')].filter(Boolean).join(' · ')
+}
+
 function SetupCard({ title, description, href, cta }: { title: string; description: string; href: string; cta: string }) {
   return (
     <div style={{ padding: '1.25rem', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -175,14 +186,16 @@ export default function Dashboard() {
   const { user } = useAuth()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [resume, setResume] = useState<Resume | null>(null)
+  const [master, setMaster] = useState<MasterProfile | null>(null)  // Applaut AI's master profile
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.allSettled([getMyProfile(), getMyResume(), getDashboardStats()]).then(([p, r, s]) => {
+    Promise.allSettled([getMyProfile(), getMyResume(), getDashboardStats(), getMasterProfile()]).then(([p, r, s, m]) => {
       setProfile(p.status === 'fulfilled' ? p.value : null)
       setResume(r.status === 'fulfilled' ? r.value : null)
       setStats(s.status === 'fulfilled' ? s.value : null)
+      setMaster(m.status === 'fulfilled' ? m.value : null)
       setLoading(false)
     })
   }, [])
@@ -240,7 +253,23 @@ export default function Dashboard() {
               </InfoCard>
             )}
 
-            {resume === null ? (
+            {profile?.job_engine === 'applaut_ai' ? (
+              // Applaut AI works from the master profile, not Basic's master resume.
+              master === null ? (
+                <SetupCard
+                  title="Set up your master profile"
+                  description="Applaut AI scores jobs and writes your CV and cover letter only from your master profile. Start from your CV; it takes a few minutes."
+                  href="/applaut/settings#profile"
+                  cta="Set up master profile"
+                />
+              ) : (
+                <InfoCard title="Master profile">
+                  <InfoRow label="Saved" value={`version ${master.version} · ${new Date(master.updated_at).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}`} />
+                  {masterCounts(master.data) && <InfoRow label="Contains" value={masterCounts(master.data)!} />}
+                  <Link to="/applaut/settings#profile" style={{ fontSize: '0.8rem', color: 'var(--accent)', textDecoration: 'none', marginTop: '0.25rem' }}>View / edit →</Link>
+                </InfoCard>
+              )
+            ) : resume === null ? (
               <SetupCard
                 title="Upload your resume"
                 description="Upload your master resume and AI will extract your skills, experience, and education."
@@ -261,7 +290,7 @@ export default function Dashboard() {
               </InfoCard>
             )}
 
-            {profile && resume && (
+            {profile && resume && profile.job_engine !== 'applaut_ai' && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.75rem' }}>
                 <SetupCard title="Find & score jobs" description="Run discovery, see match scores, and act on near misses — all in one place." href="/applaut/opportunities" cta="View opportunities" />
                 <SetupCard title="Documents" description="Generate tailored resumes and cover letters from your good matches." href="/applaut/opportunities?match=good" cta="View good matches" />
