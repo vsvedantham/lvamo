@@ -69,6 +69,9 @@ class Opportunity(Base, UUIDPrimaryKey, TimestampMixin):
     posted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # When discovery last saw the posting on its source (shared pool); unseen
+    # for discovery.engine.EXPIRE_AFTER means closed.
+    last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     raw_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
     scores: Mapped[list[Score]] = relationship(back_populates="opportunity")

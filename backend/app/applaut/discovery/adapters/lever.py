@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 import httpx
 
 from app.applaut.discovery.base import JobListing, JobSourceAdapter
@@ -14,6 +16,7 @@ class LeverAdapter(JobSourceAdapter):
         company_slug: str,
         target_countries: list[str],
         target_roles: list[str],
+        skills: list[str] | tuple = (),
     ) -> list[JobListing]:
         url = f"{BASE_URL}/{company_slug}?mode=json&limit=100"
         try:
@@ -28,7 +31,7 @@ class LeverAdapter(JobSourceAdapter):
         results = []
         for job in jobs:
             title = job.get("text", "")
-            if not matches_roles(title, target_roles):
+            if not matches_roles(title, target_roles, skills):
                 continue
 
             categories = job.get("categories", {})
@@ -54,6 +57,8 @@ class LeverAdapter(JobSourceAdapter):
                     country_code=country_code,
                     description=job.get("descriptionPlain") or job.get("description"),
                     remote_option=remote_option,
+                    posted_at=(datetime.fromtimestamp(job["createdAt"] / 1000, tz=timezone.utc)
+                               if isinstance(job.get("createdAt"), (int, float)) else None),
                     raw_data=job,
                 )
             )

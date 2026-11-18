@@ -2,6 +2,7 @@ import xml.etree.ElementTree as ET
 
 import httpx
 
+from app.applaut.discovery.adapters.ashby import parse_time
 from app.applaut.discovery.base import JobListing, JobSourceAdapter
 from app.applaut.discovery.location import matches_countries, matches_roles, resolve_country, resolve_remote_option
 
@@ -22,6 +23,7 @@ class PersonioAdapter(JobSourceAdapter):
         company_slug: str,
         target_countries: list[str],
         target_roles: list[str],
+        skills: list[str] | tuple = (),
     ) -> list[JobListing]:
         # Personio retired its /api/v1/jobs JSON endpoint (now 404s, replaced by
         # a client-rendered SPA); the legacy /xml feed (their "workzag-jobs"
@@ -40,7 +42,7 @@ class PersonioAdapter(JobSourceAdapter):
         results = []
         for position in root.findall("position"):
             title = (position.findtext("name") or "").strip()
-            if not matches_roles(title, target_roles):
+            if not matches_roles(title, target_roles, skills):
                 continue
 
             location_raw = (position.findtext("office") or "").strip() or None
@@ -63,6 +65,7 @@ class PersonioAdapter(JobSourceAdapter):
                 employment_type = "part_time"
 
             job_id = (position.findtext("id") or "").strip()
+            posted_at = parse_time((position.findtext("createdAt") or "").strip())
             results.append(
                 JobListing(
                     source=self.source_name,
@@ -75,6 +78,7 @@ class PersonioAdapter(JobSourceAdapter):
                     description=description,
                     employment_type=employment_type,
                     remote_option=remote_option,
+                    posted_at=posted_at,
                     raw_data={child.tag: child.text for child in position if child.tag != "jobDescriptions"},
                 )
             )

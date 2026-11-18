@@ -1,5 +1,6 @@
 import httpx
 
+from app.applaut.discovery.adapters.ashby import parse_time
 from app.applaut.discovery.base import JobListing, JobSourceAdapter
 from app.applaut.discovery.location import matches_countries, matches_roles, resolve_country, resolve_remote_option
 
@@ -14,6 +15,7 @@ class GreenhouseAdapter(JobSourceAdapter):
         company_slug: str,
         target_countries: list[str],
         target_roles: list[str],
+        skills: list[str] | tuple = (),
     ) -> list[JobListing]:
         url = f"{BASE_URL}/{company_slug}/jobs?content=true"
         try:
@@ -28,7 +30,7 @@ class GreenhouseAdapter(JobSourceAdapter):
         results = []
         for job in data.get("jobs", []):
             title = job.get("title", "")
-            if not matches_roles(title, target_roles):
+            if not matches_roles(title, target_roles, skills):
                 continue
 
             location_raw = job.get("location", {}).get("name")
@@ -56,6 +58,7 @@ class GreenhouseAdapter(JobSourceAdapter):
                     country_code=country_code,
                     description=job.get("content"),
                     remote_option=remote_option,
+                    posted_at=parse_time(job.get("first_published") or job.get("updated_at")),
                     raw_data=job,
                 )
             )

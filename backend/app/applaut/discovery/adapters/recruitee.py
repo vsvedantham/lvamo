@@ -38,6 +38,7 @@ class RecruiteeAdapter(JobSourceAdapter):
         company_slug: str,
         target_countries: list[str],
         target_roles: list[str],
+        skills: list[str] | tuple = (),
     ) -> list[JobListing]:
         url = BASE_URL.format(slug=company_slug)
         try:
@@ -55,7 +56,7 @@ class RecruiteeAdapter(JobSourceAdapter):
         results = []
         for offer in offers:
             title = offer.get("title", "")
-            if not matches_roles(title, target_roles):
+            if not matches_roles(title, target_roles, skills):
                 continue
 
             is_remote = bool(offer.get("remote"))

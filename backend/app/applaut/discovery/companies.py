@@ -57,6 +57,10 @@ CURATED_BOARDS: list[tuple[JobSourceAdapter, str]] = [
 ]
 
 
+# (source, slug) → the company's name as written ("MaibornWolff"), from company_boards.json.
+BOARD_NAMES: dict[tuple[str, str], str] = {}
+
+
 def _load_scripted_boards() -> list[tuple[JobSourceAdapter, str]]:
     """Load companies discovered by scripts/discover_company_slugs.py.
 
@@ -70,6 +74,8 @@ def _load_scripted_boards() -> list[tuple[JobSourceAdapter, str]]:
     entries = json.loads(data_path.read_text(encoding="utf-8"))
     boards = []
     for entry in entries:
+        if entry.get("name"):
+            BOARD_NAMES[(entry["adapter"], entry["slug"].lower())] = entry["name"]
         adapter = ADAPTER_REGISTRY.get(entry["adapter"])
         if adapter is None:
             continue

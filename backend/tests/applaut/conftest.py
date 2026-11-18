@@ -64,7 +64,7 @@ def make_opportunity():
                 company_name=fields.pop("company_name", "Test GmbH"),
                 country_code=fields.pop("country_code", "DE"),
                 owner_user_id=owner.id if owner else None,
-                is_active=True,
+                is_active=fields.pop("is_active", True),
                 raw_data={},
                 **fields,
             )

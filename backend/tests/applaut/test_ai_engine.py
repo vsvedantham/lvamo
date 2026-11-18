@@ -369,24 +369,34 @@ async def test_nightly_creates_raw_jobs_and_queues_in_opt_in_order(ai_user, make
     second, second_p = await ai_user()
     no_master, _ = await ai_user(master=False)  # its jobs wait until it has a master profile
     await make_user()  # a Basic user: no AI work
-    listings = [JobListing(source=TEST_SOURCE, external_id=f"n{i}", title=t, company_name="Night GmbH",
+    listings = [JobListing(source=TEST_SOURCE, external_id=f"n{i}", title=t, company_name=c,
                            application_url=f"https://example.invalid/{i}", location_raw="Berlin, Germany",
                            country_code="DE", description=d)
-                for i, (t, d) in enumerate([
-                    ("Data Engineer", JOB.description), ("Data Engineer (Spark)", JOB.description + " Spark Python SQL"),
-                    ("Senior Data Engineer", "Kotlin only."), ("Pastry Chef", "Cakes.")])]
+                for i, (t, c, d) in enumerate([
+                    ("Data Engineer", "Night GmbH", JOB.description),
+                    ("Data Engineer (Spark)", "Night GmbH", JOB.description + " Spark Python SQL"),
+                    ("Senior Data Engineer", "Night GmbH", "Kotlin only. " * 30),
+                    ("Pastry Chef", "Night GmbH", "Cakes."),
+                    ("Data Engineer (m/w/d)", "Night", JOB.description),     # the first job again, on another site
+                    ("Data Engineer", "Other GmbH", "Apply now."),           # too little to score: waits
+                ])]
 
-    async def fake_fetch(countries, roles):
-        assert countries == ["DE"] and roles == ["Data Engineer"]
+    async def fake_fetch(countries, roles, skills=()):
+        assert countries == ["DE"] and roles == ["Data Engineer"] and "Python" in skills
         return listings
+
+    async def no_expiry(db):
+        return 0
     monkeypatch.setattr(nightly, "fetch_listings", fake_fetch)
+    monkeypatch.setattr(nightly, "expire_unseen", no_expiry)
     monkeypatch.setattr(settings, "applaut_ai_score_cap", 2)
 
     night = await nightly.run_nightly(today=date(1999, 1, 1))
-    assert night.users >= 3 and night.jobs_found == 4
+    assert night.users >= 3 and night.jobs_found == 6
     s = night.stats[str(first.id)]
-    assert s == {"matched": 3, "new": 3, "queued": 2, "waiting": 1}
-    assert night.stats[str(no_master.id)] == {"matched": 3, "new": 3, "queued": 0, "waiting": 3}
+    assert s == {"matched": 4, "new": 3, "no_description": 1, "queued": 2, "waiting": 1}
+    assert night.stats[str(no_master.id)] == {"matched": 4, "new": 3, "no_description": 1, "queued": 0, "waiting": 3}
+    assert night.stats["_pool"]["postings"] == 6 and night.stats["_pool"]["by_source"] == {TEST_SOURCE: 6}
     async with AsyncSessionLocal() as db:
         items = list(await db.scalars(select(AIQueueItem).where(AIQueueItem.night_run_id == night.id).order_by(AIQueueItem.seq)))
     owners = [i.user_id for i in items]

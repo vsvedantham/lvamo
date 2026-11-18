@@ -31,6 +31,7 @@ class WorkableAdapter(JobSourceAdapter):
         company_slug: str,
         target_countries: list[str],
         target_roles: list[str],
+        skills: list[str] | tuple = (),
     ) -> list[JobListing]:
         url = f"{BASE_URL}/{company_slug}/jobs"
         all_jobs: list[dict] = []
@@ -54,7 +55,7 @@ class WorkableAdapter(JobSourceAdapter):
         results = []
         for job in all_jobs:
             title = job.get("title", "")
-            if not matches_roles(title, target_roles):
+            if not matches_roles(title, target_roles, skills):
                 continue
 
             location = job.get("location") or {}

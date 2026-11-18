@@ -46,11 +46,6 @@
   },
   {
     "adapter": "greenhouse",
-    "slug": "doctolib",
-    "name": "Doctolib"
-  },
-  {
-    "adapter": "greenhouse",
     "slug": "trustpilot",
     "name": "Trustpilot"
   },
@@ -175,11 +170,6 @@
     "name": "Mirakl"
   },
   {
-    "adapter": "recruitee",
-    "slug": "meltwater",
-    "name": "Meltwater"
-  },
-  {
     "adapter": "greenhouse",
     "slug": "adyen",
     "name": "Adyen"
@@ -215,11 +205,6 @@
     "name": "Wolt"
   },
   {
-    "adapter": "lever",
-    "slug": "aircall",
-    "name": "Aircall"
-  },
-  {
     "adapter": "smartrecruiters",
     "slug": "Beamery",
     "name": "Beamery"
@@ -246,11 +231,6 @@
   },
   {
     "adapter": "greenhouse",
-    "slug": "marqeta",
-    "name": "Marqeta"
-  },
-  {
-    "adapter": "greenhouse",
     "slug": "smartlyio",
     "name": "Smartly.io"
   },
@@ -265,11 +245,6 @@
     "name": "Scandit"
   },
   {
-    "adapter": "lever",
-    "slug": "ledger",
-    "name": "Ledger"
-  },
-  {
     "adapter": "recruitee",
     "slug": "otovo",
     "name": "Otovo"
@@ -278,11 +253,6 @@
     "adapter": "lever",
     "slug": "jobandtalent",
     "name": "Jobandtalent"
-  },
-  {
-    "adapter": "lever",
-    "slug": "fresha",
-    "name": "Fresha"
   },
   {
     "adapter": "greenhouse",
@@ -305,11 +275,6 @@
     "name": "Pipedrive"
   },
   {
-    "adapter": "recruitee",
-    "slug": "weekday",
-    "name": "Weekday"
-  },
-  {
     "adapter": "greenhouse",
     "slug": "wallapop",
     "name": "Wallapop"
@@ -323,11 +288,6 @@
     "adapter": "greenhouse",
     "slug": "elastic",
     "name": "Elastic"
-  },
-  {
-    "adapter": "lever",
-    "slug": "superside",
-    "name": "Superside"
   },
   {
     "adapter": "lever",
@@ -376,11 +336,6 @@
   },
   {
     "adapter": "greenhouse",
-    "slug": "toogoodtogo",
-    "name": "Too Good To Go"
-  },
-  {
-    "adapter": "greenhouse",
     "slug": "onrunning",
     "name": "On Running"
   },
@@ -388,11 +343,6 @@
     "adapter": "smartrecruiters",
     "slug": "BoostAi",
     "name": "Boost AI"
-  },
-  {
-    "adapter": "recruitee",
-    "slug": "userpilot",
-    "name": "Userpilot"
   },
   {
     "adapter": "smartrecruiters",
@@ -423,11 +373,6 @@
     "adapter": "lever",
     "slug": "zopa",
     "name": "Zopa"
-  },
-  {
-    "adapter": "greenhouse",
-    "slug": "clickhouse",
-    "name": "ClickHouse"
   },
   {
     "adapter": "greenhouse",
@@ -480,11 +425,6 @@
     "name": "BigCommerce"
   },
   {
-    "adapter": "greenhouse",
-    "slug": "ibanfirst",
-    "name": "iBanFirst"
-  },
-  {
     "adapter": "recruitee",
     "slug": "ibanfirst",
     "name": "iBanFirst"
@@ -511,16 +451,6 @@
   },
   {
     "adapter": "greenhouse",
-    "slug": "hightouch",
-    "name": "Hightouch"
-  },
-  {
-    "adapter": "smartrecruiters",
-    "slug": "Check24",
-    "name": "Check24"
-  },
-  {
-    "adapter": "greenhouse",
     "slug": "workato",
     "name": "Workato"
   },
@@ -538,16 +468,6 @@
     "adapter": "smartrecruiters",
     "slug": "Pubnub",
     "name": "PubNub"
-  },
-  {
-    "adapter": "greenhouse",
-    "slug": "amplitude",
-    "name": "Amplitude"
-  },
-  {
-    "adapter": "greenhouse",
-    "slug": "truelayer",
-    "name": "TrueLayer"
   },
   {
     "adapter": "greenhouse",
@@ -576,18 +496,8 @@
   },
   {
     "adapter": "greenhouse",
-    "slug": "sisense",
-    "name": "Sisense"
-  },
-  {
-    "adapter": "greenhouse",
     "slug": "bottomlinetechnologies",
     "name": "Bottomline Technologies"
-  },
-  {
-    "adapter": "greenhouse",
-    "slug": "hextechnologies",
-    "name": "Hex Technologies"
   },
   {
     "adapter": "greenhouse",
@@ -633,11 +543,6 @@
     "adapter": "greenhouse",
     "slug": "betsson",
     "name": "Betsson"
-  },
-  {
-    "adapter": "recruitee",
-    "slug": "adzuna",
-    "name": "Adzuna"
   },
   {
     "adapter": "smartrecruiters",
@@ -711,11 +616,6 @@
   },
   {
     "adapter": "greenhouse",
-    "slug": "skyscanner",
-    "name": "Skyscanner"
-  },
-  {
-    "adapter": "greenhouse",
     "slug": "housinganywhere",
     "name": "Housing Anywhere"
   },
@@ -743,11 +643,6 @@
     "adapter": "smartrecruiters",
     "slug": "PeopleCanFly",
     "name": "People Can Fly"
-  },
-  {
-    "adapter": "recruitee",
-    "slug": "tensquaregames",
-    "name": "Ten Square Games"
   },
   {
     "adapter": "recruitee",
@@ -780,11 +675,6 @@
     "name": "Staffbase"
   },
   {
-    "adapter": "greenhouse",
-    "slug": "parloa",
-    "name": "Parloa"
-  },
-  {
     "adapter": "lever",
     "slug": "finn",
     "name": "Finn"
@@ -793,11 +683,6 @@
     "adapter": "greenhouse",
     "slug": "ecoworks",
     "name": "ecoworks"
-  },
-  {
-    "adapter": "recruitee",
-    "slug": "constellr",
-    "name": "constellr"
   },
   {
     "adapter": "greenhouse",
@@ -843,11 +728,6 @@
     "adapter": "greenhouse",
     "slug": "marvelfusion",
     "name": "Marvel Fusion"
-  },
-  {
-    "adapter": "greenhouse",
-    "slug": "blackforestlabs",
-    "name": "Black Forest Labs"
   },
   {
     "adapter": "smartrecruiters",
@@ -898,11 +778,6 @@
     "adapter": "recruitee",
     "slug": "instagrid",
     "name": "Instagrid"
-  },
-  {
-    "adapter": "recruitee",
-    "slug": "speexx",
-    "name": "Speexx"
   },
   {
     "adapter": "greenhouse",
@@ -1131,11 +1006,6 @@
   },
   {
     "adapter": "greenhouse",
-    "slug": "urbansportsclub",
-    "name": "Urban Sports Club"
-  },
-  {
-    "adapter": "greenhouse",
     "slug": "avimedical",
     "name": "Avi Medical"
   },
@@ -1160,19 +1030,9 @@
     "name": "Netzsch Group"
   },
   {
-    "adapter": "recruitee",
-    "slug": "kompassgroup",
-    "name": "Kompass Group"
-  },
-  {
     "adapter": "smartrecruiters",
     "slug": "RedcarePharmacy",
     "name": "Redcare Pharmacy"
-  },
-  {
-    "adapter": "recruitee",
-    "slug": "siemensenergy",
-    "name": "Siemens Energy"
   },
   {
     "adapter": "smartrecruiters",
@@ -1196,11 +1056,6 @@
   },
   {
     "adapter": "personio",
-    "slug": "fever",
-    "name": "Fever"
-  },
-  {
-    "adapter": "personio",
     "slug": "timify",
     "name": "TIMIFY"
   },
@@ -1218,11 +1073,6 @@
     "adapter": "personio",
     "slug": "bounti",
     "name": "Bounti"
-  },
-  {
-    "adapter": "personio",
-    "slug": "payhawk",
-    "name": "Payhawk"
   },
   {
     "adapter": "personio",
@@ -1261,11 +1111,6 @@
   },
   {
     "adapter": "personio",
-    "slug": "peeriot",
-    "name": "Peeriot"
-  },
-  {
-    "adapter": "personio",
     "slug": "penta",
     "name": "Penta"
   },
@@ -1276,23 +1121,8 @@
   },
   {
     "adapter": "personio",
-    "slug": "buena",
-    "name": "Buena"
-  },
-  {
-    "adapter": "personio",
-    "slug": "perfood",
-    "name": "Perfood"
-  },
-  {
-    "adapter": "personio",
     "slug": "tandem",
     "name": "Tandem"
-  },
-  {
-    "adapter": "personio",
-    "slug": "tangany",
-    "name": "Tangany"
   },
   {
     "adapter": "personio",
@@ -1303,16 +1133,6 @@
     "adapter": "personio",
     "slug": "tanso",
     "name": "Tanso"
-  },
-  {
-    "adapter": "personio",
-    "slug": "bullfinch",
-    "name": "Bullfinch"
-  },
-  {
-    "adapter": "personio",
-    "slug": "bunch",
-    "name": "Bunch"
   },
   {
     "adapter": "personio",
@@ -1331,18 +1151,8 @@
   },
   {
     "adapter": "personio",
-    "slug": "phrase",
-    "name": "Phrase"
-  },
-  {
-    "adapter": "personio",
     "slug": "recup",
     "name": "reCup"
-  },
-  {
-    "adapter": "personio",
-    "slug": "retorio",
-    "name": "retorio"
   },
   {
     "adapter": "personio",
@@ -1351,18 +1161,8 @@
   },
   {
     "adapter": "personio",
-    "slug": "flowfox",
-    "name": "Flowfox"
-  },
-  {
-    "adapter": "personio",
     "slug": "floy",
     "name": "Floy"
-  },
-  {
-    "adapter": "personio",
-    "slug": "simpleclub",
-    "name": "simpleclub"
   },
   {
     "adapter": "personio",
@@ -1391,28 +1191,13 @@
   },
   {
     "adapter": "personio",
-    "slug": "cabify",
-    "name": "Cabify"
-  },
-  {
-    "adapter": "personio",
     "slug": "cambrium",
     "name": "Cambrium"
   },
   {
     "adapter": "personio",
-    "slug": "framer",
-    "name": "Framer"
-  },
-  {
-    "adapter": "personio",
     "slug": "wealthpilot",
     "name": "wealthpilot"
-  },
-  {
-    "adapter": "personio",
-    "slug": "cargonexx",
-    "name": "Cargonexx"
   },
   {
     "adapter": "personio",
@@ -1423,11 +1208,6 @@
     "adapter": "personio",
     "slug": "zvoove",
     "name": "zvoove"
-  },
-  {
-    "adapter": "personio",
-    "slug": "freshflow",
-    "name": "Freshflow"
   },
   {
     "adapter": "personio",
@@ -1468,16 +1248,6 @@
     "adapter": "personio",
     "slug": "certivity",
     "name": "Certivity"
-  },
-  {
-    "adapter": "personio",
-    "slug": "channable",
-    "name": "Channable"
-  },
-  {
-    "adapter": "personio",
-    "slug": "qualifyze",
-    "name": "Qualifyze"
   },
   {
     "adapter": "personio",
@@ -1536,11 +1306,6 @@
   },
   {
     "adapter": "personio",
-    "slug": "unosecur",
-    "name": "Unosecur"
-  },
-  {
-    "adapter": "personio",
     "slug": "glassdollar",
     "name": "Glassdollar"
   },
@@ -1566,18 +1331,8 @@
   },
   {
     "adapter": "personio",
-    "slug": "mentimeter",
-    "name": "Mentimeter"
-  },
-  {
-    "adapter": "personio",
     "slug": "contabo",
     "name": "Contabo"
-  },
-  {
-    "adapter": "personio",
-    "slug": "rencore",
-    "name": "Rencore"
   },
   {
     "adapter": "personio",
@@ -1641,28 +1396,8 @@
   },
   {
     "adapter": "personio",
-    "slug": "voize",
-    "name": "Voize"
-  },
-  {
-    "adapter": "personio",
-    "slug": "advastore",
-    "name": "Advastore"
-  },
-  {
-    "adapter": "personio",
     "slug": "starface",
     "name": "STARFACE"
-  },
-  {
-    "adapter": "personio",
-    "slug": "adverity",
-    "name": "Adverity"
-  },
-  {
-    "adapter": "personio",
-    "slug": "voltstorage",
-    "name": "VoltStorage"
   },
   {
     "adapter": "personio",
@@ -1673,11 +1408,6 @@
     "adapter": "personio",
     "slug": "voltfang",
     "name": "Voltfang"
-  },
-  {
-    "adapter": "personio",
-    "slug": "daedalus",
-    "name": "Daedalus"
   },
   {
     "adapter": "personio",
@@ -1711,11 +1441,6 @@
   },
   {
     "adapter": "personio",
-    "slug": "schaeffler",
-    "name": "Schaeffler AG"
-  },
-  {
-    "adapter": "personio",
     "slug": "wandelbots",
     "name": "Wandelbots"
   },
@@ -1746,11 +1471,6 @@
   },
   {
     "adapter": "personio",
-    "slug": "alasco",
-    "name": "Alasco"
-  },
-  {
-    "adapter": "personio",
     "slug": "aware7",
     "name": "AWARE7"
   },
@@ -1758,11 +1478,6 @@
     "adapter": "personio",
     "slug": "hornetsecurity",
     "name": "Hornetsecurity"
-  },
-  {
-    "adapter": "personio",
-    "slug": "dermanostic",
-    "name": "Dermanostic"
   },
   {
     "adapter": "personio",
@@ -1776,11 +1491,6 @@
   },
   {
     "adapter": "personio",
-    "slug": "hypofriend",
-    "name": "Hypofriend"
-  },
-  {
-    "adapter": "personio",
     "slug": "wingcopter",
     "name": "Wingcopter"
   },
@@ -1788,11 +1498,6 @@
     "adapter": "personio",
     "slug": "semron",
     "name": "Semron"
-  },
-  {
-    "adapter": "personio",
-    "slug": "wolt",
-    "name": "Wolt"
   },
   {
     "adapter": "personio",
@@ -1816,33 +1521,8 @@
   },
   {
     "adapter": "personio",
-    "slug": "doinstruct",
-    "name": "Doinstruct"
-  },
-  {
-    "adapter": "personio",
-    "slug": "wunderflats",
-    "name": "Wunderflats"
-  },
-  {
-    "adapter": "personio",
-    "slug": "architrave",
-    "name": "Architrave"
-  },
-  {
-    "adapter": "personio",
-    "slug": "ariadne",
-    "name": "Ariadne"
-  },
-  {
-    "adapter": "personio",
     "slug": "shyftplan",
     "name": "Shyftplan"
-  },
-  {
-    "adapter": "personio",
-    "slug": "assemblio",
-    "name": "Assemblio"
   },
   {
     "adapter": "personio",
@@ -1856,18 +1536,8 @@
   },
   {
     "adapter": "personio",
-    "slug": "simpleshow",
-    "name": "Simpleshow"
-  },
-  {
-    "adapter": "personio",
     "slug": "silverflow",
     "name": "Silverflow"
-  },
-  {
-    "adapter": "personio",
-    "slug": "neura-robotics",
-    "name": "Neura Robotics"
   },
   {
     "adapter": "personio",
@@ -1876,23 +1546,8 @@
   },
   {
     "adapter": "personio",
-    "slug": "egym",
-    "name": "EGYM"
-  },
-  {
-    "adapter": "personio",
     "slug": "skoove",
     "name": "Skoove"
-  },
-  {
-    "adapter": "personio",
-    "slug": "instagrid",
-    "name": "Instagrid"
-  },
-  {
-    "adapter": "personio",
-    "slug": "smava",
-    "name": "Smava"
   },
   {
     "adapter": "personio",
@@ -1926,16 +1581,6 @@
   },
   {
     "adapter": "personio",
-    "slug": "nordantech",
-    "name": "Nordantech"
-  },
-  {
-    "adapter": "personio",
-    "slug": "ecosia",
-    "name": "Ecosia"
-  },
-  {
-    "adapter": "personio",
     "slug": "jedox",
     "name": "Jedox"
   },
@@ -1958,16 +1603,6 @@
     "adapter": "personio",
     "slug": "banxware",
     "name": "Banxware"
-  },
-  {
-    "adapter": "personio",
-    "slug": "speexx",
-    "name": "Speexx"
-  },
-  {
-    "adapter": "personio",
-    "slug": "elephant-company",
-    "name": "Elephant Company"
   },
   {
     "adapter": "personio",
@@ -2011,28 +1646,13 @@
   },
   {
     "adapter": "personio",
-    "slug": "entyre",
-    "name": "Entyre"
-  },
-  {
-    "adapter": "personio",
     "slug": "comforte",
     "name": "comforte"
   },
   {
     "adapter": "personio",
-    "slug": "berlin-brands-group",
-    "name": "Berlin Brands Group"
-  },
-  {
-    "adapter": "personio",
     "slug": "one-data",
     "name": "One Data"
-  },
-  {
-    "adapter": "personio",
-    "slug": "constellr",
-    "name": "constellr"
   },
   {
     "adapter": "personio",
@@ -2043,16 +1663,6 @@
     "adapter": "personio",
     "slug": "orderbird",
     "name": "Orderbird"
-  },
-  {
-    "adapter": "personio",
-    "slug": "everstox",
-    "name": "Everstox"
-  },
-  {
-    "adapter": "personio",
-    "slug": "storytel",
-    "name": "Storytel"
   },
   {
     "adapter": "personio",
@@ -2101,11 +1711,6 @@
   },
   {
     "adapter": "personio",
-    "slug": "superlist",
-    "name": "Superlist"
-  },
-  {
-    "adapter": "personio",
     "slug": "blickfeld",
     "name": "Blickfeld"
   },
@@ -2126,11 +1731,6 @@
   },
   {
     "adapter": "personio",
-    "slug": "fashion-cloud",
-    "name": "Fashion Cloud"
-  },
-  {
-    "adapter": "personio",
     "slug": "feather",
     "name": "Feather"
   },
@@ -2146,33 +1746,8 @@
   },
   {
     "adapter": "personio",
-    "slug": "urbansportsclub",
-    "name": "Urban Sports Club"
-  },
-  {
-    "adapter": "personio",
-    "slug": "customeralliance",
-    "name": "Customer Alliance"
-  },
-  {
-    "adapter": "personio",
-    "slug": "scalablecapital",
-    "name": "Scalable Capital"
-  },
-  {
-    "adapter": "personio",
     "slug": "ailylabs",
     "name": "Aily Labs"
-  },
-  {
-    "adapter": "personio",
-    "slug": "xolife",
-    "name": "XO Life"
-  },
-  {
-    "adapter": "personio",
-    "slug": "avimedical",
-    "name": "Avi Medical"
   },
   {
     "adapter": "personio",
@@ -2213,11 +1788,6 @@
     "adapter": "personio",
     "slug": "koppla",
     "name": "Koppla"
-  },
-  {
-    "adapter": "personio",
-    "slug": "sessions",
-    "name": "Sessions"
   },
   {
     "adapter": "greenhouse",
@@ -2270,19 +1840,9 @@
     "name": "Hades"
   },
   {
-    "adapter": "personio",
-    "slug": "collimatehealth",
-    "name": "Collimate Health"
-  },
-  {
     "adapter": "smartrecruiters",
     "slug": "NandaTechnologies",
     "name": "Nanda Technologies"
-  },
-  {
-    "adapter": "personio",
-    "slug": "next-kraftwerke",
-    "name": "Next Kraftwerke"
   },
   {
     "adapter": "personio",
@@ -2321,11 +1881,6 @@
   },
   {
     "adapter": "lever",
-    "slug": "trustyou",
-    "name": "TrustYou"
-  },
-  {
-    "adapter": "lever",
     "slug": "kpler",
     "name": "Kpler"
   },
@@ -2336,11 +1891,6 @@
   },
   {
     "adapter": "personio",
-    "slug": "reprisk",
-    "name": "RepRisk"
-  },
-  {
-    "adapter": "personio",
     "slug": "adsquare",
     "name": "adsquare"
   },
@@ -2348,11 +1898,6 @@
     "adapter": "greenhouse",
     "slug": "awin",
     "name": "Awin"
-  },
-  {
-    "adapter": "personio",
-    "slug": "audibene",
-    "name": "audibene"
   },
   {
     "adapter": "greenhouse",
@@ -2498,5 +2043,200 @@
     "adapter": "lever",
     "slug": "agile-defense",
     "name": "Agile Defense"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "doctolib",
+    "name": "Doctolib"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "ledger",
+    "name": "Ledger"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "toogoodtogo",
+    "name": "Too Good To Go"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "clickhouse",
+    "name": "ClickHouse"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "hightouch",
+    "name": "Hightouch"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "amplitude",
+    "name": "Amplitude"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "truelayer",
+    "name": "TrueLayer"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "sisense",
+    "name": "Sisense"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "parloa",
+    "name": "Parloa"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "buena",
+    "name": "Buena"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "bunch",
+    "name": "Bunch"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "phrase",
+    "name": "Phrase"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "voize",
+    "name": "Voize"
+  },
+  {
+    "adapter": "lever",
+    "slug": "alasco",
+    "name": "Alasco"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "doinstruct",
+    "name": "Doinstruct"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "egym",
+    "name": "EGYM"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "almedia",
+    "name": "almedia"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "clera",
+    "name": "clera"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "elevenlabs",
+    "name": "elevenlabs"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "lemon-markets",
+    "name": "lemon-markets"
+  },
+  {
+    "adapter": "greenhouse",
+    "slug": "skdse",
+    "name": "skdse"
+  },
+  {
+    "adapter": "greenhouse",
+    "slug": "vinteden",
+    "name": "vinteden"
+  },
+  {
+    "adapter": "personio",
+    "slug": "bitcap",
+    "name": "bitcap"
+  },
+  {
+    "adapter": "personio",
+    "slug": "legartis",
+    "name": "legartis"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "statista",
+    "name": "Statista GmbH"
+  },
+  {
+    "adapter": "personio",
+    "slug": "exmox-gmbh",
+    "name": "exmox GmbH"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "n8n",
+    "name": "n8n"
+  },
+  {
+    "adapter": "smartrecruiters",
+    "slug": "scalablegmbh",
+    "name": "Scalable GmbH"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "circuithub",
+    "name": "CircuitHub"
+  },
+  {
+    "adapter": "personio",
+    "slug": "edri",
+    "name": "E.ON Drive Infrastructure GmbH (EDRI)"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "kayak",
+    "name": "KAYAK"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "taktile",
+    "name": "Taktile GmbH"
+  },
+  {
+    "adapter": "greenhouse",
+    "slug": "autoscout24",
+    "name": "AutoScout24"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "constructor",
+    "name": "Constructor"
+  },
+  {
+    "adapter": "personio",
+    "slug": "tmh",
+    "name": "The Mobility House Energy GmbH"
+  },
+  {
+    "adapter": "smartrecruiters",
+    "slug": "Redcare-Pharmacy",
+    "name": "Redcare Pharmacy"
+  },
+  {
+    "adapter": "smartrecruiters",
+    "slug": "RepRiskAG",
+    "name": "RepRisk AG"
+  },
+  {
+    "adapter": "ashby",
+    "slug": "GetYourGuide",
+    "name": "GetYourGuide"
+  },
+  {
+    "adapter": "greenhouse",
+    "slug": "engelhart",
+    "name": "Engelhart"
   }
 ]

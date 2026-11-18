@@ -4,7 +4,12 @@
 # synonym still gets fetched, not just scored.
 ROLE_SYNONYMS: dict[str, list[str]] = {
     "data engineer": ["data engineer", "analytics engineer", "etl developer", "pipeline engineer",
-                      "big data engineer", "data platform engineer", "data infrastructure"],
+                      "big data engineer", "data platform engineer", "data infrastructure",
+                      "data engineering", "data integration engineer", "data warehouse engineer",
+                      "dwh engineer", "dwh developer", "etl engineer", "elt engineer", "big data developer",
+                      "dataops", "data ops engineer", "analytics developer", "bi engineer", "bi developer",
+                      "data warehouse developer", "datenengineer", "data-engineer", "dateningenieur",
+                      "databricks engineer", "databricks developer", "spark engineer", "spark developer"],
     "data scientist": ["data scientist", "ml engineer", "machine learning engineer",
                        "ai engineer", "research scientist", "applied scientist"],
     "data analyst": ["data analyst", "business analyst", "analytics analyst",

@@ -70,6 +70,19 @@ async def test_mark_applied_unavailable_and_undo(client, make_user, make_opportu
     assert len(apps) == 3
 
 
+async def test_a_closed_job_leaves_the_list_unless_you_applied(client, make_user, make_opportunity):
+    user, _, headers = await make_user()
+    applied = await make_opportunity(title="Closed but applied")
+    closed = await make_opportunity(title="Closed", is_active=False)
+    r = await client.put(f"{API}/{applied.id}/tracking", json={"state": "applied"}, headers=headers)
+    assert r.status_code == 200
+    async with AsyncSessionLocal() as db:
+        (await db.get(type(applied), applied.id)).is_active = False
+        await db.commit()
+    titles = {i["title"] for i in (await client.get(API, headers=headers, params={"page_size": 100})).json()["items"]}
+    assert "Closed but applied" in titles and "Closed" not in titles
+
+
 async def test_tracking_is_per_user_and_private_jobs_hidden(client, make_user, make_opportunity):
     owner, _, owner_headers = await make_user()
     _, _, other_headers = await make_user()

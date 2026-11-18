@@ -84,7 +84,9 @@ async def list_opportunities_with_scores(
         .outerjoin(Application, (Application.opportunity_id == Opportunity.id) & (Application.user_id == user.id))
         .outerjoin(RoutineJob, (RoutineJob.opportunity_id == Opportunity.id) & (RoutineJob.user_id == user.id))
         .where(
-            Opportunity.is_active == True,
+            # A closed posting leaves the list, unless you applied or marked it (your record of it).
+            or_(Opportunity.is_active == True,
+                Application.status.in_(APPLIED_STATUSES + UNAVAILABLE_STATUSES)),
             visible_to(user.id),
             or_(Score.user_decision.is_(None), Score.user_decision != "dismiss"),
         )

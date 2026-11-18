@@ -29,5 +29,6 @@ class JobSourceAdapter(ABC):
         company_slug: str,
         target_countries: list[str],
         target_roles: list[str],
+        skills: list[str] | tuple = (),
     ) -> list[JobListing]:
         """Fetch and filter jobs for a single company board."""
