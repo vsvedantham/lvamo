@@ -70,6 +70,28 @@ Quick start for next session:
 
 ---
 
+## 2026-11-18: Dashboard shows work mode and countries in words
+
+**Why:** the Dashboard profile card showed `remote_preference` raw ("Remote:
+any") and country codes ("DE").
+
+**What (frontend only):** `api/profile.ts` `WORK_MODE_LABELS` (remote_only →
+Remote only, hybrid, onsite → On-site, any → "Remote, hybrid or on-site") and
+`countryNames` (Intl.DisplayNames, code as fallback). Dashboard: "Work mode:
+…", "Countries: Germany". Onboarding's field is "Work mode" with the same
+labels. Stored values unchanged.
+
+**Checked locally:** Dashboard reads "Countries: Germany", "Work mode:
+Remote, hybrid or on-site"; onboarding step 2 shows the four labels
+(form left without saving; no profile created).
+
+**Deployed 2026-11-18 (45d9353), verified:** pushed to main (frontend
+only); Pages serves `index-1HVrV_p4.js` with the new labels and
+DisplayNames; lvamo.com `/`, `/applaut/dashboard`, `/applaut/onboarding`
+200; applaut, jobref, prosho health and `verticals_enabled` 200.
+
+---
+
 ## 2026-11-18: Applaut AI users no longer see the Resume page
 
 **Why:** Resume is Applaut Basic's master resume (rule-based skill scoring,
