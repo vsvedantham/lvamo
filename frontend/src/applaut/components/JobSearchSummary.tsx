@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom'
 import { listAiRuns, type AiNight, type AiRunsResponse } from '../api/jobEngine'
 import { formatWhen } from './RoutineEngineCard'
 
-// Applaut AI's nightly runs for this user: what each night searched, what fit
-// them, and what the AI did with it. Settings shows the list
-// (#nightly-runs); Opportunities shows last night in one line.
+// Job search summary: Applaut AI's nightly searches for this user, what each
+// one found, what fit them, and what the AI did with it. Settings shows the
+// list (#job-search-summary); Opportunities shows the last search in one line.
 
 export const SOURCE_NAMES: Record<string, string> = {
   greenhouse: 'Greenhouse',
@@ -89,39 +89,39 @@ function NightRow({ night: n, threshold }: { night: AiNight; threshold: number }
   )
 }
 
-/** Settings → Nightly runs. */
-export default function NightlyRuns() {
+/** Settings → Job search summary. */
+export default function JobSearchSummary() {
   const [data, setData] = useState<AiRunsResponse | null>(null)
   const [failed, setFailed] = useState(false)
   const [all, setAll] = useState(false)
   useEffect(() => { listAiRuns().then(setData).catch(() => setFailed(true)) }, [])
-  // Opened from a #nightly-runs link: the cards above load first and push this
+  // Opened from a #job-search-summary link: the cards above load first and push this
   // one down, so scroll to it again once they (and this list) have rendered.
   useEffect(() => {
-    if (!data || window.location.hash !== '#nightly-runs') return
-    const t = window.setTimeout(() => document.getElementById('nightly-runs')?.scrollIntoView({ behavior: 'smooth' }), 300)
+    if (!data || window.location.hash !== '#job-search-summary') return
+    const t = window.setTimeout(() => document.getElementById('job-search-summary')?.scrollIntoView({ behavior: 'smooth' }), 300)
     return () => window.clearTimeout(t)
   }, [data])
 
   const t = data?.totals
   const nights = data ? (all ? data.nights : data.nights.slice(0, SHOWN)) : []
   return (
-    <div style={card} id="nightly-runs">
-      <h2 style={h2}>Nightly runs</h2>
+    <div style={card} id="job-search-summary">
+      <h2 style={h2}>Job search summary</h2>
       <p style={muted}>
-        Every night at 22:00 (Berlin) Applaut's AI checks every job source, keeps the jobs that fit your countries
+        Every night at 22:00 (Berlin) Applaut's AI searches every job source, keeps the jobs that fit your countries
         and roles, and scores the new ones against your master profile. Jobs it scores {data?.doc_threshold ?? 80}% or
         more get a tailored CV and cover letter.
-        {data && <> Next run: <strong style={{ color: 'var(--text-1)' }}>{formatWhen(data.next_run_at)}</strong>.</>}
+        {data && <> Next search: <strong style={{ color: 'var(--text-1)' }}>{formatWhen(data.next_run_at)}</strong>.</>}
       </p>
-      {failed ? <p style={muted}>Couldn't load the runs. Try again later.</p>
+      {failed ? <p style={muted}>Couldn't load your job searches. Try again later.</p>
         : data === null ? <p style={muted}>Loading…</p>
-        : data.nights.length === 0 ? <p style={muted}>No runs for you yet. Your first one is {formatWhen(data.next_run_at)}.</p>
+        : data.nights.length === 0 ? <p style={muted}>No searches for you yet. The first one is {formatWhen(data.next_run_at)}.</p>
         : (
           <>
             {t && (
               <p style={{ ...muted, color: 'var(--text-1)' }}>
-                {plural(t.nights, 'night')} so far: <strong>{t.new}</strong> new jobs for you, <strong>{t.scored}</strong> scored,{' '}
+                {plural(t.nights, 'search', 'searches')} so far: <strong>{t.new}</strong> new jobs for you, <strong>{t.scored}</strong> scored,{' '}
                 <strong>{t.good}</strong> at {data.doc_threshold}%+, <strong>{t.docs_done}</strong> with a CV and cover letter.
               </p>
             )}
@@ -130,7 +130,7 @@ export default function NightlyRuns() {
             </ul>
             {data.nights.length > SHOWN && (
               <button type="button" onClick={() => setAll(a => !a)} style={linkButton}>
-                {all ? 'Show fewer' : `Show all ${data.nights.length} nights`}
+                {all ? 'Show fewer' : `Show all ${data.nights.length} searches`}
               </button>
             )}
           </>
@@ -139,18 +139,18 @@ export default function NightlyRuns() {
   )
 }
 
-/** Opportunities: last night in one line, linking to Settings → Nightly runs. */
-export function LastNight() {
+/** Opportunities: the last search in one line, linking to Settings → Job search summary. */
+export function LastSearch() {
   const [data, setData] = useState<AiRunsResponse | null>(null)
   useEffect(() => { listAiRuns(1).then(setData).catch(() => setData(null)) }, [])
   if (!data) return null
   const n = data.nights[0]
-  const link = <Link to="/applaut/settings#nightly-runs" style={{ color: 'var(--accent)' }}>Nightly runs</Link>
+  const link = <Link to="/applaut/settings#job-search-summary" style={{ color: 'var(--accent)' }}>Job search summary</Link>
   return (
     <p style={{ color: 'var(--text-2)', fontSize: '0.8rem', margin: '0.2rem 0 0' }}>
       {n
-        ? <>{nightLabel(n.run_date)}: {n.new} new for you, {n.scored} scored{n.scoring_left ? ` (${n.scoring_left} to go)` : ''}, {n.good} at {data.doc_threshold}%+ · {link}</>
-        : <>First nightly run {formatWhen(data.next_run_at)} · {link}</>}
+        ? <>Last search, {nightLabel(n.run_date)}: {n.new} new for you, {n.scored} scored{n.scoring_left ? ` (${n.scoring_left} to go)` : ''}, {n.good} at {data.doc_threshold}%+ · {link}</>
+        : <>First job search {formatWhen(data.next_run_at)} · {link}</>}
     </p>
   )
 }
