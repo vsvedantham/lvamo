@@ -70,6 +70,41 @@ Quick start for next session:
 
 ---
 
+## 2026-11-18: Applaut AI Settings in three tabs
+
+**Why:** Venkat found Applaut AI's Settings overwhelming: one long page with
+the engine grid, an always-open YAML editor, two different "Upload your CV"
+buttons (profile import vs CV template), the bullets builder and the
+summary at the bottom.
+
+**What (frontend only):** for `job_engine = applaut_ai`, Settings has tabs
+**Job search** (`#job-search`: Job search summary, then the engine in one
+line with "Change engine"), **Your profile** (`#profile`: master profile,
+then Add bullets from notes as its own card, `#add-bullets`) and **CV
+layout** (`#cv-layout`: the CV template card, worded "layout", button
+"Upload your CV layout (.docx)"). Old anchors map to their tab
+(`#master-profile`, `#job-search-summary`, `#job-engine`, `#cv-template`).
+Master profile (every engine): a saved profile is a status line (version,
+saved when, roles/projects/bullets) with Preview CV, Preview cover letter,
+Edit profile; the YAML editor opens on Edit, for a loaded CV draft, or with
+nothing saved; "Close editor"/"Discard changes" folds it. With a saved
+profile, Start from your CV is one "Upload a newer CV" line. The current
+engine no longer shows "Coming soon". Basic keeps its page (tidier profile
+card); own routine unchanged.
+
+**Checked locally** (desktop + 375px, no horizontal scroll): each tab, Edit
+profile / Close editor, `#master-profile` opens Your profile, Opportunities'
+Job search summary link, Basic layout.
+
+**Deployed 2026-11-18 (4215598), verified:** pushed to main (frontend only,
+no backend deploy); Pages serves `index-CIeYYPZw.js` containing the new
+strings (cv-layout, Change engine, Close editor, Upload a newer CV, Your
+profile); lvamo.com `/`, `/applaut/settings`, `/applaut/login` 200; applaut,
+jobref, prosho health and `verticals_enabled` 200. The signed-in page was
+not opened in prod (the browser pane isn't signed in).
+
+---
+
 ## 2026-11-18: Job search summary for Applaut AI users
 
 **Why:** an Applaut AI user had no way to see how many nightly searches had
