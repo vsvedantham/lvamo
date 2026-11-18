@@ -70,6 +70,42 @@ Quick start for next session:
 
 ---
 
+## 2026-11-18: Job search summary for Applaut AI users
+
+**Why:** an Applaut AI user had no way to see how many nightly searches had
+run or what each one found for them.
+
+**What:** `GET /api/v1/applaut/job-engine/ai/runs` (`services/ai_runs.py`)
+lists the nights a user was part of (`night_runs.stats` has their id) with
+the queue's work for that night: postings checked, fit your search, new,
+scored (left/failed), at 80%+ (`applaut_ai_doc_threshold`), CVs & cover
+letters (left/failed), over the nightly limit, skipped without a
+description, closed postings, per-source counts; plus totals over all
+nights and the next run time. UI (`components/JobSearchSummary.tsx`):
+Settings → **Job search summary** card (`#job-search-summary`, latest 7,
+"Show all", sources on expand) and one "Last search, <date>: …" line on
+Opportunities linking to it. Shown only for `job_engine = applaut_ai`.
+First named "Nightly runs"; renamed on Venkat's request.
+
+**Tests:** `tests/applaut/test_ai_runs.py` (totals, per-night fields, only
+your own work, Basic user gets nothing). Full suite: 322 passed; 6 list tests
+fail locally only while the Mac's dev DB holds the 116 real jobs fetched
+on 2026-11-18 (they push test rows off page 1); with those parked, 16/16 pass.
+Checked in the local browser (desktop + 375px, no horizontal scroll; the
+`#job-search-summary` link lands on the card after the cards above load).
+
+**Deployed 2026-11-18 (499a75e, f705350), verified in prod:** applaut,
+jobref, prosho health and `verticals_enabled` all 200; prod on f705350;
+`/job-engine/ai/runs` without a token → 403; the service run in the prod
+container for the one applaut_ai user: 7 nights, 45 new, 45 scored, 12 at
+80%+, 11 with documents, next run 21:00Z, last night 2026-11-17 (44
+postings checked, 40 matched, 0 new). Per-source counts start with
+tonight's run (the old nights have no `_pool` stats). Pages serves the new
+bundle (`job-search-summary` in `index-BjNlbDpS.js`); the signed-in page was
+not opened (the browser pane isn't signed in to prod).
+
+---
+
 ## 2026-11-18: Applaut's own job search: new sources, closed jobs expire
 
 **Why:** Applaut AI's nightly search found ~45 Data Engineer jobs in Germany
