@@ -70,7 +70,7 @@ Quick start for next session:
 
 ---
 
-## 2026-11-17: CV import captures the whole CV
+## 2026-11-17/18: CV import captures the whole CV
 
 **Why:** Venkat compared his routine's CV with Applaut AI's (GlassDollar,
 Talon.One): Applaut AI's was far weaker. Same template; a code-only render
@@ -111,8 +111,11 @@ from the new draft now has the routine's structure.
 **Deployed and verified:** `75b795a`; all four health URLs 200; new code in
 backend and ai-worker. A build_profile check in prod found that two stacked
 labels the model skips get mis-paired; fixed in `f7b6f83` (test
-`test_stacked_labels_the_model_skipped_still_name_their_items`), **not yet
-deployed**. Tests: 316 pass (time-of-day test deselected).
+`test_stacked_labels_the_model_skipped_still_name_their_items`), deployed
+2026-11-18 as `8ffd8d1`: all four health URLs 200, and build_profile in the
+prod backend pairs "Cloud Platforms" / "Architecture" with their item lines
+whether the model gives all lines, skips both labels or skips the top one.
+Tests: 316 pass (time-of-day test deselected).
 
 **Next:** the writer (rewords ~23% of bullets, minimum bullets, copies
 "Senior" from the job title into the headline); empty Personio descriptions
