@@ -97,9 +97,12 @@ export default function BulletBankBuilder({ saved, dirty, onSaved }: {
     setChoices(cs => cs.map((c, k) => (k === i ? { ...c, ...change } : c)))
 
   return (
-    <section style={{ borderTop: '1px solid var(--border)', paddingTop: '0.875rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+    <section id="add-bullets" style={{
+      padding: '1.25rem', background: 'var(--bg-surface)', border: '1px solid var(--border)',
+      borderRadius: 'var(--radius)', display: 'flex', flexDirection: 'column', gap: '0.875rem',
+    }}>
       <div>
-        <h3 style={{ fontSize: '0.9rem', fontWeight: 600, margin: 0, color: 'var(--text-1)' }}>Add bullets from notes</h3>
+        <h2 style={{ fontSize: '1rem', fontWeight: 600, margin: 0, color: 'var(--text-1)' }}>Add bullets from notes</h2>
         <p style={{ ...muted, marginTop: '0.3rem' }}>
           The more bullets a role has, the more Applaut AI can pick from for each job (8–12 per role works well).
           Describe what you did in your own words; Applaut AI drafts bullets from it, using only what you wrote. You

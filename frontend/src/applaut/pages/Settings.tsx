@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   errorMessage, getJobEngine, listRoutineRuns, listRoutineSyncs, removeRoutineConnection, saveRoutineConnection,
   setJobEngine, testRoutineConnection,
@@ -397,6 +397,100 @@ function History({ refreshKey }: { refreshKey: number }) {
   )
 }
 
+// --- job engine choice
+
+function EngineOptions({ state, switching, choose }: {
+  state: JobEngineState; switching: JobEngine | null; choose: (e: JobEngine) => void
+}) {
+  return (
+    <>
+      <div role="radiogroup" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
+        {ENGINES.map(engine => {
+          const active = state.engine === engine.id
+          const early = engine.id === 'applaut_ai' && (state.applaut_ai_available || active)
+          const e = early ? { ...engine, badge: 'Early access', disabled: false } : engine
+          return (
+            <button key={e.id} type="button" role="radio" aria-checked={active} disabled={e.disabled || switching !== null}
+              onClick={() => choose(e.id)}
+              style={{
+                textAlign: 'left', padding: '0.875rem', borderRadius: 'var(--radius-sm)', cursor: e.disabled ? 'default' : 'pointer',
+                background: active ? 'var(--accent-glow)' : 'var(--bg-elevated)', opacity: e.disabled ? 0.55 : 1,
+                border: `1px solid ${active ? 'var(--accent-border)' : 'var(--border)'}`, display: 'flex', flexDirection: 'column', gap: '0.4rem',
+              }}>
+              <span style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', alignItems: 'center' }}>
+                <span style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-1)' }}>{JOB_ENGINE_LABELS[e.id]}</span>
+                {active && <span style={{ fontSize: '0.7rem', color: 'var(--accent)', fontWeight: 600 }}>Current</span>}
+              </span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{e.badge}</span>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-2)', lineHeight: 1.45 }}>{switching === e.id ? 'Switching…' : e.text}</span>
+            </button>
+          )
+        })}
+      </div>
+      <p style={{ ...muted, fontSize: '0.75rem' }}>You can change this any time. Your jobs and documents stay when you switch.</p>
+    </>
+  )
+}
+
+/** The engine in use in one line; the choice opens on "Change engine". */
+function EngineSummary({ state, switching, choose }: {
+  state: JobEngineState; switching: JobEngine | null; choose: (e: JobEngine) => void
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div style={card} id="job-engine">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 280px' }}>
+          <h2 style={h2}>Job engine</h2>
+          <p style={{ ...muted, marginTop: '0.3rem' }}>
+            You're using <strong style={{ color: 'var(--text-1)' }}>{JOB_ENGINE_LABELS[state.engine]}</strong>. You can switch
+            to your own Claude routine or to Applaut Basic; your jobs and documents stay.
+          </p>
+        </div>
+        <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} style={buttonStyle()}>
+          {open ? 'Close' : 'Change engine'}
+        </button>
+      </div>
+      {open && <EngineOptions state={state} switching={switching} choose={choose} />}
+    </div>
+  )
+}
+
+// --- Applaut AI: three tabs
+
+type Tab = 'search' | 'profile' | 'cv'
+const TABS: { id: Tab; label: string; hash: string; about: string }[] = [
+  { id: 'search', label: 'Job search', hash: 'job-search', about: 'What Applaut AI found for you each night, and which engine searches for you.' },
+  { id: 'profile', label: 'Your profile', hash: 'profile', about: 'What Applaut AI knows about you. Every CV and cover letter is written only from this.' },
+  { id: 'cv', label: 'CV layout', hash: 'cv-layout', about: 'How your CV looks. What it says comes from your profile.' },
+]
+// Links into Settings (#master-profile, #job-search-summary, …) open the tab holding that section.
+const TAB_OF_HASH: Record<string, Tab> = {
+  'job-search': 'search', 'job-search-summary': 'search', 'job-engine': 'search',
+  profile: 'profile', 'master-profile': 'profile', 'add-bullets': 'profile',
+  'cv-layout': 'cv', 'cv-template': 'cv',
+}
+
+function AiTabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
+  return (
+    <div role="tablist" style={{ display: 'flex', gap: '0.25rem', borderBottom: '1px solid var(--border)', overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none' }}>
+      {TABS.map(t => {
+        const active = tab === t.id
+        return (
+          <button key={t.id} type="button" role="tab" aria-selected={active} onClick={() => onTab(t.id)}
+            style={{
+              padding: '0.55rem 0.875rem', background: 'none', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+              borderBottom: `2px solid ${active ? 'var(--accent)' : 'transparent'}`,
+              color: active ? 'var(--text-1)' : 'var(--text-2)', fontWeight: active ? 600 : 400, fontSize: '0.875rem',
+            }}>
+            {t.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 // --- page
 
 export default function Settings() {
@@ -406,6 +500,9 @@ export default function Settings() {
   const [switching, setSwitching] = useState<JobEngine | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const location = useLocation()
+  const navigate = useNavigate()
+  const tab: Tab = TAB_OF_HASH[location.hash.slice(1)] ?? 'search'
+  const openTab = (t: Tab) => navigate({ hash: TABS.find(x => x.id === t)!.hash }, { replace: true })
 
   const load = useCallback(() => {
     getJobEngine().then(s => { setState(s); setError(null) }).catch(err => {
@@ -416,7 +513,9 @@ export default function Settings() {
   useEffect(load, [load])
 
   useEffect(() => {
-    if (state && location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior: 'smooth' })
+    const id = location.hash.slice(1)
+    if (!state || !id || TABS.some(t => t.hash === id)) return  // a tab, not a section in it
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
   }, [state, location.hash])
 
   const choose = async (engine: JobEngine) => {
@@ -443,7 +542,11 @@ export default function Settings() {
     <div style={{ maxWidth: '760px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       <div>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: '0 0 0.25rem', color: 'var(--text-1)' }}>Settings</h1>
-        <p style={{ ...muted, fontSize: '0.875rem' }}>Job engine: what finds jobs for you and writes your CV and cover letter.</p>
+        <p style={{ ...muted, fontSize: '0.875rem' }}>
+          {state?.engine === 'applaut_ai'
+            ? 'Applaut AI looks for jobs every night and writes a tailored CV and cover letter for your best matches.'
+            : 'Job engine: what finds jobs for you and writes your CV and cover letter.'}
+        </p>
       </div>
       {error && <p style={{ ...muted, color: 'var(--danger)' }}>{error}</p>}
       {noProfile ? (
@@ -452,34 +555,25 @@ export default function Settings() {
           <p style={muted}>Your job engine belongs to your profile. Create it (roles, countries, skills), then come back here to choose an engine.</p>
           <Link to="/applaut/onboarding" style={{ ...buttonStyle('primary'), alignSelf: 'flex-start' }}>Set up profile</Link>
         </div>
-      ) : !state ? (!error && <p style={muted}>Loading…</p>) : (
+      ) : !state ? (!error && <p style={muted}>Loading…</p>
+      ) : state.engine === 'applaut_ai' ? (
+        <>
+          <AiTabs tab={tab} onTab={openTab} />
+          <p style={muted}>{TABS.find(t => t.id === tab)!.about}</p>
+          {tab === 'search' && (
+            <>
+              <JobSearchSummary />
+              <EngineSummary state={state} switching={switching} choose={choose} />
+            </>
+          )}
+          {tab === 'profile' && <MasterProfileCard canDraft />}
+          {tab === 'cv' && <CvTemplateCard />}
+        </>
+      ) : (
         <>
           <div style={card}>
             <h2 style={h2}>Job engine</h2>
-            <div role="radiogroup" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
-              {ENGINES.map(engine => {
-                const early = engine.id === 'applaut_ai' && state.applaut_ai_available
-                const e = early ? { ...engine, badge: 'Early access', disabled: false } : engine
-                const active = state.engine === e.id
-                return (
-                  <button key={e.id} type="button" role="radio" aria-checked={active} disabled={e.disabled || switching !== null}
-                    onClick={() => choose(e.id)}
-                    style={{
-                      textAlign: 'left', padding: '0.875rem', borderRadius: 'var(--radius-sm)', cursor: e.disabled ? 'default' : 'pointer',
-                      background: active ? 'var(--accent-glow)' : 'var(--bg-elevated)', opacity: e.disabled ? 0.55 : 1,
-                      border: `1px solid ${active ? 'var(--accent-border)' : 'var(--border)'}`, display: 'flex', flexDirection: 'column', gap: '0.4rem',
-                    }}>
-                    <span style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-1)' }}>{JOB_ENGINE_LABELS[e.id]}</span>
-                      {active && <span style={{ fontSize: '0.7rem', color: 'var(--accent)', fontWeight: 600 }}>Current</span>}
-                    </span>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{e.badge}</span>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--text-2)', lineHeight: 1.45 }}>{switching === e.id ? 'Switching…' : e.text}</span>
-                  </button>
-                )
-              })}
-            </div>
-            <p style={{ ...muted, fontSize: '0.75rem' }}>You can change this any time. Your jobs and documents stay when you switch.</p>
+            <EngineOptions state={state} switching={switching} choose={choose} />
           </div>
 
           {state.engine === 'own_routine' && (
@@ -503,9 +597,7 @@ export default function Settings() {
             </>
           )}
 
-          {state.engine !== 'own_routine' && <MasterProfileCard canDraft={state.engine === 'applaut_ai'} />}
-          {state.engine === 'applaut_ai' && <CvTemplateCard />}
-          {state.engine === 'applaut_ai' && <JobSearchSummary />}
+          {state.engine === 'basic' && <MasterProfileCard />}
         </>
       )}
     </div>

@@ -6,7 +6,7 @@ import {
 } from '../api/cvTemplate'
 import { buttonStyle, formatWhen } from './RoutineEngineCard'
 
-// Settings → CV template (Applaut AI): the standard template, or the user's own
+// Settings → CV layout (Applaut AI): the standard template, or the user's own
 // .docx CV. Applaut AI reads the upload once; the user compares their file with
 // Applaut's version before switching it on.
 
@@ -111,12 +111,12 @@ export default function CvTemplateCard() {
   return (
     <div style={card} id="cv-template">
       <div>
-        <h2 style={h2}>CV template</h2>
+        <h2 style={h2}>CV layout</h2>
         <p style={{ ...muted, marginTop: '0.3rem' }}>
-          Applaut AI uses the standard template unless you upload your own CV as a Word file (.docx). Your layout
-          stays exactly as it is: for each job only the headline under your name, the order of your skills, each
-          role's bullets and its technologies line change, all from your master profile. Cover letters keep the
-          standard template.
+          Applaut AI writes your CVs in its standard layout, or in your own: upload your CV as a Word file (.docx)
+          and it keeps exactly that look. For each job only the headline under your name, the order of your skills,
+          and each role's bullets and technologies change, all from your profile. Cover letters always use the
+          standard layout.
         </p>
       </div>
 
@@ -124,14 +124,14 @@ export default function CvTemplateCard() {
         <>
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <p style={{ ...muted, color: 'var(--text-1)' }}>
-              In use: <strong>{active ? `your template (${active.file_name})` : 'the standard template'}</strong>
+              In use: <strong>{active ? `your own layout (${active.file_name})` : 'the standard layout'}</strong>
               {active?.decided_at && <span style={muted}> · since {formatWhen(active.decided_at)}</span>}
             </p>
             {active && (
               <button type="button" disabled={busy !== null} style={buttonStyle('ghost', busy !== null)}
                 onClick={() => run('stop', () => removeCvTemplate(active.id), 'Could not switch it off',
-                  'Switched back to the standard template. CVs already written keep theirs.')}>
-                {busy === 'stop' ? 'Switching…' : 'Use the standard template'}
+                  'Switched back to the standard layout. CVs already written keep theirs.')}>
+                {busy === 'stop' ? 'Switching…' : 'Use the standard layout'}
               </button>
             )}
           </div>
@@ -150,7 +150,7 @@ export default function CvTemplateCard() {
 
           {latest?.status === 'failed' && (
             <p role="alert" style={{ ...muted, color: 'var(--danger)', overflowWrap: 'anywhere' }}>
-              Applaut couldn't make <strong>{latest.file_name}</strong> into a template: {latest.error}
+              Applaut couldn't make <strong>{latest.file_name}</strong> into a layout: {latest.error}
             </p>
           )}
 
@@ -160,7 +160,7 @@ export default function CvTemplateCard() {
               <div>
                 <h3 style={h3}>Check {latest.file_name} before using it</h3>
                 <p style={{ ...muted, marginTop: '0.3rem' }}>
-                  Open both PDFs: Applaut's version is your file rebuilt from the template with your own text, and
+                  Open both PDFs: Applaut's version is your file rebuilt as a layout with your own text, and
                   should look the same.
                 </p>
               </div>
@@ -175,8 +175,8 @@ export default function CvTemplateCard() {
                 <button type="button" disabled={busy !== null || !latest.can_use}
                   style={buttonStyle('primary', busy !== null || !latest.can_use)}
                   onClick={() => run('use', () => useCvTemplate(latest.id), 'Could not switch it on',
-                    'Your template is on. Every new CV uses it.')}>
-                  {busy === 'use' ? 'Switching on…' : 'Use this template'}
+                    'Your layout is on. Every new CV uses it.')}>
+                  {busy === 'use' ? 'Switching on…' : 'Use this layout'}
                 </button>
                 <button type="button" disabled={busy !== null} style={buttonStyle('ghost', busy !== null)}
                   onClick={() => run('discard', () => removeCvTemplate(latest.id), 'Could not discard it')}>Discard</button>
@@ -191,7 +191,7 @@ export default function CvTemplateCard() {
                 onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) upload(f) }} />
               <button type="button" disabled={busy !== null} style={buttonStyle(active || latest ? 'ghost' : 'primary', busy !== null)}
                 onClick={() => fileInput.current?.click()}>
-                {busy === 'upload' ? 'Uploading…' : active || latest ? 'Upload another .docx' : 'Upload your CV (.docx)'}
+                {busy === 'upload' ? 'Uploading…' : active || latest ? 'Upload another .docx' : 'Upload your CV layout (.docx)'}
               </button>
               <span style={{ ...muted, fontSize: '0.75rem' }}>
                 Word or Google Docs (File → Download → Microsoft Word). Up to 5 MB.

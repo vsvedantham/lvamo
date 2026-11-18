@@ -59,16 +59,20 @@ export default function ProfileFromCv({ hasSaved, dirty, onLoad }: Props) {
   }
 
   if (imp === undefined) return null
+  // With a saved profile and no draft under way, this is one line: upload a newer CV.
+  const compact = hasSaved && !['reading', 'ready', 'failed'].includes(imp?.status ?? '')
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '0.875rem',
-                  display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-      <div>
+    <div style={compact
+      ? { display: 'flex', flexDirection: 'column', gap: '0.5rem' }
+      : { border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '0.875rem',
+          display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      {!compact && <div>
         <h3 style={h3}>Start from your CV</h3>
         <p style={{ ...muted, marginTop: '0.3rem' }}>
           Upload your CV and Applaut turns it into a draft profile, using only your CV's own words. You check it,
           fill any gaps and save. Applaut deletes the CV's text once you save or discard the draft.
         </p>
-      </div>
+      </div>}
 
       {imp?.status === 'reading' && (
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -124,9 +128,13 @@ export default function ProfileFromCv({ hasSaved, dirty, onLoad }: Props) {
             onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) upload(f) }} />
           <button type="button" disabled={busy !== null} style={buttonStyle(hasSaved ? 'ghost' : 'primary', busy !== null)}
             onClick={() => fileInput.current?.click()}>
-            {busy === 'upload' ? 'Uploading…' : 'Upload your CV (.docx or .pdf)'}
+            {busy === 'upload' ? 'Uploading…' : hasSaved ? 'Upload a newer CV' : 'Upload your CV (.docx or .pdf)'}
           </button>
-          <span style={{ ...muted, fontSize: '0.75rem' }}>Up to 5 MB. A scanned PDF has no text to read.</span>
+          <span style={{ ...muted, fontSize: '0.75rem', flex: '1 1 240px' }}>
+            {hasSaved
+              ? 'Changed jobs? Applaut makes a new draft from your CV (.docx or .pdf, up to 5 MB). Your saved profile stays until you save the draft.'
+              : 'Up to 5 MB. A scanned PDF has no text to read.'}
+          </span>
         </div>
       )}
 
