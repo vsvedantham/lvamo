@@ -174,3 +174,36 @@ export function errorMessage(err: unknown, fallback = 'Something went wrong'): s
   if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg).replace(/^Value error, /, '')
   return fallback
 }
+
+/** One Applaut AI nightly run, as one user sees it (backend schemas AiNight). */
+export interface AiNight {
+  run_date: string            // YYYY-MM-DD, Berlin
+  started_at: string
+  discovery_done_at: string | null
+  postings_checked: number    // every posting the search found that night (all users)
+  by_source: Record<string, number>
+  closed: number | null       // postings gone from their board, closed that night
+  matched: number             // fit your countries and roles, with a description
+  new: number                 // not scored for you before
+  no_description: number
+  queued: number              // sent to scoring
+  waiting: number             // over the nightly limit: scored on a later night
+  scored: number
+  scoring_left: number
+  scoring_failed: number
+  good: number                // scored at doc_threshold or more
+  docs_done: number
+  docs_left: number
+  docs_failed: number
+}
+
+export interface AiRunsResponse {
+  nights: AiNight[]
+  totals: { nights: number; new: number; scored: number; good: number; docs_done: number }
+  doc_threshold: number
+  next_run_at: string
+}
+
+export async function listAiRuns(limit = 30): Promise<AiRunsResponse> {
+  return (await client.get('/job-engine/ai/runs', { params: { limit } })).data
+}

@@ -4,10 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.applaut.models.user import User
 from app.applaut.schemas.job_engine import (
-    ConnectionTestRequest, ConnectionTestResponse, JobEngineResponse, RoutineConnectionInput,
+    AiRunsResponse, ConnectionTestRequest, ConnectionTestResponse, JobEngineResponse, RoutineConnectionInput,
     RoutineRunInfo, RoutineSyncInfo, SetEngineRequest, SyncNowResponse,
 )
 from app.applaut.routine.kit import KIT_FILENAME, build_setup_kit
+from app.applaut.services import ai_runs
 from app.applaut.services import job_engine as svc
 from app.applaut.services.audit import log_action
 from app.applaut.services.auth import get_current_user
@@ -63,6 +64,13 @@ async def sync_now(user: User = Depends(get_current_user), db: AsyncSession = De
 async def list_runs(limit: int = Query(50, ge=1, le=200), user: User = Depends(get_current_user),
                     db: AsyncSession = Depends(get_db)):
     return await svc.list_runs(user, db, limit)
+
+
+@router.get("/ai/runs", response_model=AiRunsResponse)
+async def list_ai_runs(limit: int = Query(30, ge=1, le=120), user: User = Depends(get_current_user),
+                       db: AsyncSession = Depends(get_db)):
+    """Applaut AI's nightly runs as they went for you, newest first, with totals."""
+    return await ai_runs.list_nights(user.id, db, limit)
 
 
 @router.get("/routine/syncs", response_model=list[RoutineSyncInfo])

@@ -1,6 +1,6 @@
 import re
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal, Optional
 from urllib.parse import urlsplit
 
@@ -206,3 +206,42 @@ class SyncNowResponse(BaseModel):
     queued: bool
     message: str
     card: EngineCard
+
+
+# ---------------------------------------------------------------- Applaut AI's nightly runs
+
+class AiNight(BaseModel):
+    """One nightly run, as it went for this user."""
+    run_date: date
+    started_at: datetime
+    discovery_done_at: Optional[datetime]
+    postings_checked: int                 # every source, one listing per job (all users' searches together)
+    by_source: dict[str, int] = {}
+    closed: Optional[int] = None          # jobs closed that night (gone from their source); since 2026-11-18
+    matched: int                          # postings that fit your roles and places
+    new: int                              # of those, new to you
+    no_description: int = 0               # fit you, but no description yet: they wait
+    queued: int                           # sent to the model to score
+    waiting: int                          # left for later nights (the nightly cap)
+    scored: int                           # scored so far
+    scoring_left: int                     # still in the queue
+    scoring_failed: int
+    good: int                             # scored at or above the documents threshold
+    docs_done: int
+    docs_left: int
+    docs_failed: int
+
+
+class AiRunTotals(BaseModel):
+    nights: int
+    new: int
+    scored: int
+    good: int
+    docs_done: int
+
+
+class AiRunsResponse(BaseModel):
+    nights: list[AiNight]
+    totals: AiRunTotals
+    doc_threshold: int
+    next_run_at: datetime

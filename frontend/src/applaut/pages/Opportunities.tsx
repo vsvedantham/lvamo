@@ -18,12 +18,10 @@ import {
 import { getMyProfile, JOB_ENGINE_LABELS, type JobEngine } from '../api/profile'
 import { decideNearMiss } from '../api/scoring'
 import { apiErrorMessage } from '../api/errors'
+import { LastNight, SOURCE_NAMES } from '../components/NightlyRuns'
 
 const SOURCE_LABELS: Record<string, string> = {
-  greenhouse: 'Greenhouse',
-  lever: 'Lever',
-  ashby: 'Ashby',
-  personio: 'Personio',
+  ...SOURCE_NAMES,
   own_routine: 'Your Claude routine',
   applaut_ai: 'Applaut AI',
 }
@@ -581,6 +579,7 @@ export default function Opportunities() {
         <div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, color: 'var(--text-1)' }}>Opportunities</h1>
           {counts && <p style={{ color: 'var(--text-2)', fontSize: '0.825rem', marginTop: '0.2rem' }}>{counts.open} to review · {counts.applied} applied</p>}
+          {engine === 'applaut_ai' && <LastNight />}
         </div>
         {isBasic ? (
           <button
