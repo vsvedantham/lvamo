@@ -70,6 +70,37 @@ Quick start for next session:
 
 ---
 
+## 2026-11-18: Applaut AI users no longer see the Resume page
+
+**Why:** Resume is Applaut Basic's master resume (rule-based skill scoring,
+template CV/letter, required by Basic's document generation); Applaut AI
+never reads it and works from the master profile, so for AI users it was a
+confusing extra "upload your CV" place, and the Dashboard kept asking them
+to upload a resume.
+
+**What (frontend only):** `context/jobEngine.ts` `useJobEngine(userId)`
+(loaded once per user; Settings and onboarding call `announceJobEngine` on
+a switch). For `applaut_ai`: the sidebar drops Resume (also hidden until the
+engine is known), `/applaut/resume` redirects to `/applaut/settings#profile`,
+and the Dashboard's resume card becomes a Master profile card (saved
+version and date, roles/projects/bullets, View / edit) or "Set up your
+master profile"; Basic's quick-link cards are not shown to them. Basic and
+own routine unchanged.
+
+**Checked locally:** AI user: sidebar without Resume, Dashboard master
+profile card, `/applaut/resume` → Settings → Your profile; switching to
+Basic in Settings brings Resume back without a reload; Basic Dashboard
+still shows "Upload your resume".
+
+**Deployed 2026-11-18 (b4f1e66), verified:** pushed to main (frontend
+only); Pages serves `index-Dq8x69M8.js` with the new code
+(`applaut:job-engine`, "Set up master profile", "View / edit"); lvamo.com
+`/`, `/applaut/dashboard`, `/applaut/resume` 200; applaut, jobref, prosho
+health and `verticals_enabled` 200. Signed-in pages not opened in prod (the
+browser pane isn't signed in).
+
+---
+
 ## 2026-11-18: Applaut AI Settings in three tabs
 
 **Why:** Venkat found Applaut AI's Settings overwhelming: one long page with
