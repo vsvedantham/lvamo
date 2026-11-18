@@ -70,6 +70,55 @@ Quick start for next session:
 
 ---
 
+## 2026-11-18: Applaut's own job search: new sources, closed jobs expire
+
+**Why:** Applaut AI's nightly search found ~45 Data Engineer jobs in Germany
+and 0–2 new a night since 2026-11-11; the Claude routine finds ~10 strong
+jobs a week, mostly from sources Applaut didn't read (Ashby 23, Arbeitnow 22,
+Arbeitsagentur 14 of its 125 synced jobs). 94 of the 500 company boards were
+dead (404), Ashby had none, closed postings never left the list, 2023
+"evergreen" postings and per-city duplicates (MaibornWolff 5×) were scored,
+and 8 of 28 Personio postings had no description (scored from the title).
+
+**Built** (`e2466a2`, `discovery/`):
+- `search/bundesagentur.py`: Jobsuche API v6 (`X-API-Key: jobboerse-jobsuche`;
+  v4 search is 403), full-time, last 60 days, terms = role titles + synonyms +
+  up to 8 distinctive skills; descriptions from v4 `jobdetails` (base64 ref)
+  for new postings only. `search/arbeitnow.py`: public API, 300/page, pages
+  until older than 60 days, 1 s between pages. Both only when DE is a target.
+- Ashby adapter on the official posting API. Boards: 91 dead removed (25
+  found again under the same slug on another ATS, mostly Ashby), the
+  routine's boards and those of its synced jobs added: 448 boards, 26 Ashby.
+- `search/personio_page.py`: an empty Personio feed description is read from
+  the job page's JobPosting JSON-LD.
+- `engine.prepare`: drop postings older than 60 days; one listing per
+  (company, title without gender marks), employer's board before Arbeitnow
+  before Bundesagentur, places merged. `store_listings` marks every listed
+  posting seen (`opportunities.last_seen_at`, migration 0033) and reopens a
+  closed one; `expire_unseen` closes shared jobs unseen for 3 days, run by
+  the nightly only when the fetch is at least half of last night's.
+- Job list: a closed job stays only if the user applied or marked it.
+- Nightly: jobs with under 100 characters of description wait
+  (`no_description` in stats); the same job already assessed (another site)
+  isn't assessed again; closed raws aren't queued; `stats._pool` has
+  postings / new / closed / by_source.
+- Matching: more Data Engineer titles (DWH, BI, analytics, Databricks…);
+  a non-generic profile skill + a role word in a title matches; student,
+  intern, trainee, thesis postings never match unless a target role asks;
+  ~35 more countries recognised (London, Vienna, North Macedonia…).
+
+**Checked:** locally a fetch + store gave 146 jobs (BA 89, Arbeitnow 27,
+boards 30), all with descriptions, 69 s + 2 s. Tests: 327 pass (11 new in
+`test_discovery.py`, nightly and tracking tests extended).
+
+**Deployed and verified:** `e2466a2`; all four health URLs 200; alembic at
+0033, 72 shared rows backfilled with `last_seen_at`; a read-only fetch from
+prod with the AI user's targets and skills: 142 postings in 72 s
+(Bundesagentur 85, Arbeitnow 28, Personio 7, Greenhouse 8, Ashby 7,
+SmartRecruiters 6, Lever 1). The first full nightly is 2026-11-18 22:00
+Berlin: expect 100+ new raw jobs, 40 scored a night (best pre-score first),
+so ~3–4 nights to clear; check `night_runs.stats` next session.
+
 ## 2026-11-17/18: CV import captures the whole CV
 
 **Why:** Venkat compared his routine's CV with Applaut AI's (GlassDollar,
