@@ -1,7 +1,7 @@
 import { type KeyboardEvent, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getJobEngine, type JobEngineState } from '../api/jobEngine'
-import { createProfile } from '../api/profile'
+import { createProfile, WORK_MODE_LABELS } from '../api/profile'
 import { useAuth } from '../context/AuthContext'
 import { announceJobEngine } from '../context/jobEngine'
 import RoutineSetupKit from '../components/RoutineSetupKit'
@@ -37,12 +37,7 @@ const EMPLOYMENT_TYPES = [
   { value: 'internship', label: 'Internship' },
 ]
 
-const REMOTE_OPTIONS = [
-  { value: 'remote_only', label: 'Remote only' },
-  { value: 'hybrid', label: 'Hybrid' },
-  { value: 'onsite', label: 'On-site' },
-  { value: 'any', label: 'Any' },
-]
+const REMOTE_OPTIONS = ['remote_only', 'hybrid', 'onsite', 'any'].map(value => ({ value, label: WORK_MODE_LABELS[value] }))
 
 const inputStyle: React.CSSProperties = {
   display: 'block',
@@ -335,7 +330,7 @@ export default function Onboarding() {
               </div>
             </FieldGroup>
 
-            <FieldGroup label="Remote preference">
+            <FieldGroup label="Work mode">
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 {REMOTE_OPTIONS.map(o => (
                   <label

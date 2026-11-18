@@ -8,6 +8,21 @@ export const JOB_ENGINE_LABELS: Record<JobEngine, string> = {
   own_routine: 'Your Claude routine',
 }
 
+/** Profile.remote_preference in words (Dashboard, onboarding). */
+export const WORK_MODE_LABELS: Record<string, string> = {
+  remote_only: 'Remote only',
+  hybrid: 'Hybrid',
+  onsite: 'On-site',
+  any: 'Remote, hybrid or on-site',
+}
+
+/** "Germany, Austria" from ISO codes, falling back to the code. */
+export function countryNames(codes: string[]): string {
+  let names: Intl.DisplayNames | null = null
+  try { names = new Intl.DisplayNames(['en'], { type: 'region' }) } catch { /* old browser: codes */ }
+  return codes.map(c => { try { return names?.of(c.toUpperCase()) ?? c } catch { return c } }).join(', ')
+}
+
 export interface Profile {
   id: string
   user_id: string

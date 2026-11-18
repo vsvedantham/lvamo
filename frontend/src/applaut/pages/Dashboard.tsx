@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { getMyProfile, JOB_ENGINE_LABELS, type Profile } from '../api/profile'
+import { countryNames, getMyProfile, JOB_ENGINE_LABELS, type Profile, WORK_MODE_LABELS } from '../api/profile'
 import { getJobEngine, type EngineCard } from '../api/jobEngine'
 import RoutineEngineCard from '../components/RoutineEngineCard'
 import { getMyResume, type Resume } from '../api/resume'
@@ -245,8 +245,8 @@ export default function Dashboard() {
             ) : (
               <InfoCard title={profile.display_name}>
                 <InfoRow label="Roles" value={profile.target_roles.join(', ')} />
-                <InfoRow label="Countries" value={profile.target_countries.join(', ')} />
-                <InfoRow label="Remote" value={profile.remote_preference} />
+                <InfoRow label="Countries" value={countryNames(profile.target_countries)} />
+                <InfoRow label="Work mode" value={WORK_MODE_LABELS[profile.remote_preference] ?? profile.remote_preference} />
                 <InfoRow label="Job engine" value={JOB_ENGINE_LABELS[profile.job_engine]} />
                 {profile.job_engine === 'basic' && <InfoRow label="Discovery" value={`every ${profile.discovery_frequency_hours}h`} />}
                 <Link to="/applaut/onboarding" style={{ fontSize: '0.8rem', color: 'var(--accent)', textDecoration: 'none', marginTop: '0.25rem' }}>Edit profile →</Link>
